@@ -1,17 +1,26 @@
-// Update this page (the content is just a fallback if you fail to update the page)
-
 import { MadeWithDyad } from "@/components/made-with-dyad";
+import { AppHeader } from "@/components/layout/AppHeader";
+import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 
 const Index = () => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-gray-600">
-          Start building your amazing project here!
+    <div className="min-h-screen bg-background">
+      <AppHeader />
+      <main className="mx-auto flex w-full max-w-6xl flex-col items-center justify-center px-4 py-24 text-center">
+        <h1 className="mb-3 text-4xl font-bold">Analyse photo pour rénovation énergétique</h1>
+        <p className="mb-6 max-w-2xl text-muted-foreground">
+          Créez un projet, importez vos images, éditez le prompt et préparez l’orchestration d’analyse.
         </p>
-      </div>
-      <MadeWithDyad />
+        <div className="flex gap-3">
+          <Link to="/projects">
+            <Button>Accéder aux projets</Button>
+          </Link>
+        </div>
+        <div className="mt-12">
+          <MadeWithDyad />
+        </div>
+      </main>
     </div>
   );
 };
