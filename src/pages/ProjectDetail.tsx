@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, Link } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { getProjectById, updateProject, type Project, type ProjectImage, fileToDataUrl, type ImageTag } from "@/utils/storage";
+import { getProjectById, updateProject, type Project, type ProjectImage, fileToDataUrl, type ImageTag, type ProjectStatus } from "@/utils/storage";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,8 +11,9 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Image as ImageIcon, Upload, Trash2, ArrowLeft } from "lucide-react";
+import { Image as ImageIcon, Upload, Trash2, ArrowLeft, ArrowLeftRight, ArrowLeftCircle, ArrowRightCircle } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
+import Dropzone from "@/components/uploader/Dropzone";
 
 const TAGS: { value: ImageTag; label: string }[] = [
   { value: "façade-N", label: "Façade Nord" },
@@ -26,6 +27,8 @@ const TAGS: { value: ImageTag; label: string }[] = [
   { value: "autre", label: "Autre" },
 ];
 
+const STATUSES: ProjectStatus[] = ["Brouillon", "En cours", "Terminé", "Archivé"];
+
 const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 Mo
 
 const ProjectDetail = () => {
@@ -33,12 +36,25 @@ const ProjectDetail = () => {
   const navigate = useNavigate();
   const [project, setProject] = useState<Project | undefined>(undefined);
   const [prompt, setPrompt] = useState("");
+  const [tagFilter, setTagFilter] = useState<"all" | ImageTag>("all");
+
+  // Champs infos projet
+  const [title, setTitle] = useState("");
+  const [address, setAddress] = useState("");
+  const [type, setType] = useState("");
+  const [status, setStatus] = useState<ProjectStatus>("Brouillon");
+  const [notes, setNotes] = useState("");
 
   useEffect(() => {
     if (!id) return;
     const p = getProjectById(id);
     setProject(p);
     setPrompt(p?.prompt ?? "");
+    setTitle(p?.title ?? "");
+    setAddress(p?.address ?? "");
+    setType(p?.type ?? "");
+    setStatus(p?.status ?? "Brouillon");
+    setNotes(p?.notes ?? "");
   }, [id]);
 
   const notFound = !project;
@@ -62,14 +78,17 @@ const ProjectDetail = () => {
     showSuccess("Prompt enregistré");
   };
 
-  const handleFiles = async (files: FileList | null) => {
-    if (!project || !files || files.length === 0) return;
-    const accepted = Array.from(files).filter((f) => {
+  const handleFiles = async (files: FileList | File[] | null) => {
+    if (!project || !files) return;
+    const filesArr = Array.from(files as ArrayLike<File>);
+    if (filesArr.length === 0) return;
+
+    const accepted = filesArr.filter((f) => {
       const okType = ["image/jpeg", "image/png", "image/webp"].includes(f.type);
       const okSize = f.size <= MAX_IMAGE_SIZE;
       return okType && okSize;
     });
-    if (accepted.length !== files.length) {
+    if (accepted.length !== filesArr.length) {
       showError("Certaines images ont été ignorées (format ou taille > 25 Mo).");
     }
     const newImages: ProjectImage[] = [];
@@ -108,6 +127,37 @@ const ProjectDetail = () => {
       },
     )!;
     setProject(updated);
+  };
+
+  const moveImage = (imgId: string, direction: "left" | "right") => {
+    if (!project) return;
+    const idx = project.images.findIndex((i) => i.id === imgId);
+    if (idx === -1) return;
+    const newIndex = direction === "left" ? idx - 1 : idx + 1;
+    if (newIndex < 0 || newIndex >= project.images.length) return;
+    const next = [...project.images];
+    const [moved] = next.splice(idx, 1);
+    next.splice(newIndex, 0, moved);
+    const updated = updateProject(project.id, { images: next })!;
+    setProject(updated);
+  };
+
+  const filteredImages = useMemo(() => {
+    if (!project) return [];
+    return project.images.filter((img) => (tagFilter === "all" ? true : img.tag === tagFilter));
+  }, [project, tagFilter]);
+
+  const handleSaveInfos = () => {
+    if (!project) return;
+    const updated = updateProject(project.id, {
+      title: title.trim() || "Sans titre",
+      address: address.trim() || undefined,
+      type: type.trim() || undefined,
+      status,
+      notes: notes.trim() || undefined,
+    })!;
+    setProject(updated);
+    showSuccess("Informations du projet mises à jour");
   };
 
   if (notFound) {
@@ -153,18 +203,27 @@ const ProjectDetail = () => {
         <Separator className="mb-6" />
 
         <Tabs defaultValue="images" className="w-full">
-          <TabsList>
+          <TabsList className="flex flex-wrap">
             <TabsTrigger value="images">Images</TabsTrigger>
             <TabsTrigger value="prompt">Prompt</TabsTrigger>
+            <TabsTrigger value="infos">Infos</TabsTrigger>
             <TabsTrigger value="runs" disabled>Runs (à venir)</TabsTrigger>
           </TabsList>
 
           <TabsContent value="images" className="mt-4 space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Uploader des images</CardTitle>
+                <CardTitle>Ajouter des images</CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-3">
+                <Dropzone
+                  accept="image/jpeg,image/png,image/webp"
+                  multiple
+                  onFiles={handleFiles}
+                  label="Glissez-déposez vos images ici"
+                  hint="ou cliquez pour sélectionner (JPG/PNG/WebP, 25 Mo max)"
+                  className="w-full"
+                />
                 <div className="flex items-center gap-3">
                   <Input
                     type="file"
@@ -177,7 +236,6 @@ const ProjectDetail = () => {
                     Parcourir
                   </Button>
                 </div>
-                {/* Input caché pour clic bouton si besoin */}
                 <input
                   id="file-input-hidden"
                   type="file"
@@ -186,9 +244,32 @@ const ProjectDetail = () => {
                   className="hidden"
                   onChange={(e) => handleFiles(e.target.files)}
                 />
-                <p className="mt-2 text-xs text-muted-foreground">Formats: JPG/PNG/WebP • max 25 Mo/image</p>
+                <p className="text-xs text-muted-foreground">Formats: JPG/PNG/WebP • max 25 Mo/image</p>
               </CardContent>
             </Card>
+
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-sm text-muted-foreground">
+                {filteredImages.length} image{filteredImages.length > 1 ? "s" : ""} affichée{filteredImages.length > 1 ? "s" : ""}
+                {tagFilter !== "all" ? ` (filtre: ${TAGS.find(t => t.value === tagFilter)?.label})` : ""}
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs">Filtrer par tag</Label>
+                <Select value={tagFilter} onValueChange={(v) => setTagFilter((v as ImageTag) || "all")}>
+                  <SelectTrigger className="w-[220px]">
+                    <SelectValue placeholder="Tous les tags" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous</SelectItem>
+                    {TAGS.map((t) => (
+                      <SelectItem key={t.value} value={t.value}>
+                        {t.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
             {project.images.length === 0 ? (
               <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
@@ -197,50 +278,63 @@ const ProjectDetail = () => {
               </div>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {project.images.map((img) => (
-                  <Card key={img.id} className="overflow-hidden">
-                    <div className="relative aspect-video w-full bg-muted">
-                      <img
-                        src={img.dataUrl}
-                        alt={img.name}
-                        className="h-full w-full object-cover"
-                        draggable={false}
-                      />
-                    </div>
-                    <CardContent className="space-y-2 pt-3">
-                      <div className="flex items-center justify-between">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{img.name}</p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {(img.size / 1024).toFixed(0)} Ko
-                          </p>
+                {filteredImages.map((img) => {
+                  const idx = project.images.findIndex((i) => i.id === img.id);
+                  const canLeft = idx > 0;
+                  const canRight = idx < project.images.length - 1;
+                  return (
+                    <Card key={img.id} className="overflow-hidden">
+                      <div className="relative aspect-video w-full bg-muted">
+                        <img
+                          src={img.dataUrl}
+                          alt={img.name}
+                          className="h-full w-full object-cover"
+                          draggable={false}
+                        />
+                      </div>
+                      <CardContent className="space-y-2 pt-3">
+                        <div className="flex items-center justify-between">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium">{img.name}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {(img.size / 1024).toFixed(0)} Ko • {new Date(img.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button size="icon" variant="ghost" disabled={!canLeft} onClick={() => moveImage(img.id, "left")} title="Déplacer à gauche">
+                              <ArrowLeftCircle className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" disabled={!canRight} onClick={() => moveImage(img.id, "right")} title="Déplacer à droite">
+                              <ArrowRightCircle className="h-4 w-4" />
+                            </Button>
+                            <Button size="icon" variant="ghost" onClick={() => handleDeleteImage(img.id)} title="Supprimer">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
-                        <Button size="icon" variant="ghost" onClick={() => handleDeleteImage(img.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="grid gap-2">
-                        <Label className="text-xs">Tag</Label>
-                        <Select
-                          value={img.tag ?? ""}
-                          onValueChange={(v) => handleUpdateTag(img.id, v as ImageTag)}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Choisir un tag" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {TAGS.map((t) => (
-                              <SelectItem key={t.value} value={t.value}>
-                                {t.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </CardContent>
-                    <CardFooter></CardFooter>
-                  </Card>
-                ))}
+                        <div className="grid gap-2">
+                          <Label className="text-xs">Tag</Label>
+                          <Select
+                            value={img.tag ?? ""}
+                            onValueChange={(v) => handleUpdateTag(img.id, v as ImageTag)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Choisir un tag" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {TAGS.map((t) => (
+                                <SelectItem key={t.value} value={t.value}>
+                                  {t.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </CardContent>
+                      <CardFooter></CardFooter>
+                    </Card>
+                  );
+                })}
               </div>
             )}
           </TabsContent>
@@ -275,6 +369,50 @@ Conformité réglementaire:
               </CardContent>
               <CardFooter className="flex justify-end">
                 <Button onClick={handleSavePrompt}>Enregistrer</Button>
+              </CardFooter>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="infos" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Informations du projet</CardTitle>
+              </CardHeader>
+              <CardContent className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label htmlFor="title">Titre</Label>
+                  <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="status">Statut</Label>
+                  <Select value={status} onValueChange={(v) => setStatus(v as ProjectStatus)}>
+                    <SelectTrigger id="status">
+                      <SelectValue placeholder="Choisir un statut" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {STATUSES.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2 md:col-span-2">
+                  <Label htmlFor="address">Adresse</Label>
+                  <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} />
+                </div>
+                <div className="grid gap-2 md:col-span-2">
+                  <Label htmlFor="type">Type de bâti</Label>
+                  <Input id="type" value={type} onChange={(e) => setType(e.target.value)} placeholder="Pavillon, immeuble, ..." />
+                </div>
+                <div className="grid gap-2 md:col-span-2">
+                  <Label htmlFor="notes">Notes</Label>
+                  <Textarea id="notes" rows={6} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes internes, remarques, contexte..." />
+                </div>
+              </CardContent>
+              <CardFooter className="flex justify-end">
+                <Button onClick={handleSaveInfos}>Enregistrer</Button>
               </CardFooter>
             </Card>
           </TabsContent>
