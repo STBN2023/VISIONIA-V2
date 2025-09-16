@@ -1,5 +1,5 @@
 import { Link, NavLink, useLocation } from "react-router-dom";
-import { FolderClosed, Plus } from "lucide-react";
+import { FolderClosed, Plus, Settings as SettingsIcon, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -41,6 +41,8 @@ export const AppHeader = ({
         </Link>
         <nav className="flex items-center gap-1">
           <NavItem to="/projects" label="Projets" icon={FolderClosed} />
+          <NavItem to="/prompts" label="Prompts" icon={FileText} />
+          <NavItem to="/settings" label="Paramètres" icon={SettingsIcon} />
         </nav>
         <div className="flex items-center gap-2">
           {onCreateProjectClick ? (

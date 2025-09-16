@@ -19,6 +19,7 @@ export type ProjectImage = {
   dataUrl: string;
   createdAt: string;
   tag?: ImageTag;
+  templateId?: string; // override template pour cette image
 };
 
 export type Project = {
@@ -29,7 +30,8 @@ export type Project = {
   status: ProjectStatus;
   createdAt: string;
   updatedAt: string;
-  prompt?: string;
+  prompt?: string; // prompt saisi au niveau projet (peut être issu d’un template)
+  templateId?: string; // template sélectionné au niveau projet
   images: ProjectImage[];
   notes?: string;
 };

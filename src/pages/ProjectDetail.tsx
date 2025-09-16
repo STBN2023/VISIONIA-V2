@@ -11,9 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Image as ImageIcon, Upload, Trash2, ArrowLeft, ArrowLeftRight, ArrowLeftCircle, ArrowRightCircle } from "lucide-react";
+import { Image as ImageIcon, Upload, Trash2, ArrowLeft, ArrowLeftCircle, ArrowRightCircle } from "lucide-react";
 import { showError, showSuccess } from "@/utils/toast";
 import Dropzone from "@/components/uploader/Dropzone";
+import { ensureSeedTemplates, getTemplates, getTemplateById, type PromptTemplate } from "@/utils/prompts";
 
 const TAGS: { value: ImageTag; label: string }[] = [
   { value: "façade-N", label: "Façade Nord" },
@@ -28,7 +29,6 @@ const TAGS: { value: ImageTag; label: string }[] = [
 ];
 
 const STATUSES: ProjectStatus[] = ["Brouillon", "En cours", "Terminé", "Archivé"];
-
 const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 Mo
 
 const ProjectDetail = () => {
@@ -45,6 +45,15 @@ const ProjectDetail = () => {
   const [status, setStatus] = useState<ProjectStatus>("Brouillon");
   const [notes, setNotes] = useState("");
 
+  // Templates
+  const [templates, setTemplates] = useState<PromptTemplate[]>([]);
+  const [projectTemplateId, setProjectTemplateId] = useState<string | undefined>(undefined);
+
+  useEffect(() => {
+    ensureSeedTemplates();
+    setTemplates(getTemplates());
+  }, []);
+
   useEffect(() => {
     if (!id) return;
     const p = getProjectById(id);
@@ -55,6 +64,7 @@ const ProjectDetail = () => {
     setType(p?.type ?? "");
     setStatus(p?.status ?? "Brouillon");
     setNotes(p?.notes ?? "");
+    setProjectTemplateId(p?.templateId);
   }, [id]);
 
   const notFound = !project;
@@ -76,6 +86,21 @@ const ProjectDetail = () => {
     const updated = updateProject(project.id, { prompt });
     setProject(updated);
     showSuccess("Prompt enregistré");
+  };
+
+  const applyTemplateToPrompt = () => {
+    if (!project || !projectTemplateId) return;
+    const tpl = getTemplateById(projectTemplateId);
+    if (!tpl) return;
+    setPrompt(tpl.body);
+    showSuccess("Template appliqué au prompt du projet");
+  };
+
+  const saveProjectTemplateSelection = () => {
+    if (!project) return;
+    const updated = updateProject(project.id, { templateId: projectTemplateId })!;
+    setProject(updated);
+    showSuccess("Template sélectionné au niveau projet");
   };
 
   const handleFiles = async (files: FileList | File[] | null) => {
@@ -122,11 +147,19 @@ const ProjectDetail = () => {
     if (!project) return;
     const updated = updateProject(
       project.id,
-      {
-        images: project.images.map((i) => (i.id === imgId ? { ...i, tag } : i)),
-      },
+      { images: project.images.map((i) => (i.id === imgId ? { ...i, tag } : i)) },
     )!;
     setProject(updated);
+  };
+
+  const handleUpdateImageTemplate = (imgId: string, templateId?: string) => {
+    if (!project) return;
+    const updated = updateProject(
+      project.id,
+      { images: project.images.map((i) => (i.id === imgId ? { ...i, templateId } : i)) },
+    )!;
+    setProject(updated);
+    showSuccess("Template appliqué à l’image");
   };
 
   const moveImage = (imgId: string, direction: "left" | "right") => {
@@ -330,6 +363,26 @@ const ProjectDetail = () => {
                             </SelectContent>
                           </Select>
                         </div>
+
+                        <div className="grid gap-2">
+                          <Label className="text-xs">Template (image)</Label>
+                          <Select
+                            value={img.templateId ?? ""}
+                            onValueChange={(v) => handleUpdateImageTemplate(img.id, v || undefined)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Hérite du template projet" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="">Hériter du projet</SelectItem>
+                              {templates.map((t) => (
+                                <SelectItem key={t.id} value={t.id}>
+                                  {t.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                       </CardContent>
                       <CardFooter></CardFooter>
                     </Card>
@@ -345,6 +398,29 @@ const ProjectDetail = () => {
                 <CardTitle>Prompt maître (projet)</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="grid gap-2">
+                    <Label>Template (projet)</Label>
+                    <Select value={projectTemplateId ?? ""} onValueChange={(v) => setProjectTemplateId(v || undefined)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choisir un template" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">Aucun (libre)</SelectItem>
+                        {templates.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <div className="flex gap-2">
+                      <Button variant="outline" onClick={saveProjectTemplateSelection}>Enregistrer le template</Button>
+                      <Button variant="secondary" onClick={applyTemplateToPrompt}>Appliquer au prompt</Button>
+                    </div>
+                  </div>
+                </div>
+
                 <Textarea
                   value={prompt}
                   onChange={(e) => setPrompt(e.target.value)}
