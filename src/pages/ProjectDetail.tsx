@@ -15,8 +15,10 @@ import { Button } from "@/components/ui/button";
 import { Link, useParams } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
+import { compressImageToBlob, blobToDataUrl } from "@/utils/image-compress";
 
 const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 Mo
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -94,35 +96,111 @@ const ProjectDetail = () => {
     showSuccess("Template sélectionné au niveau projet");
   };
 
-  // Actions images
+  // Actions images (avec compression)
   const handleFiles = async (files: FileList | File[] | null) => {
     if (!project || !files) return;
     const filesArr = Array.from(files as ArrayLike<File>);
     if (filesArr.length === 0) return;
 
-    const accepted = filesArr.filter((f) => {
-      const okType = ["image/jpeg", "image/png", "image/webp"].includes(f.type);
-      const okSize = f.size <= MAX_IMAGE_SIZE;
-      return okType && okSize;
-    });
-    if (accepted.length !== filesArr.length) {
-      showError("Certaines images ont été ignorées (format ou taille > 25 Mo).");
-    }
+    let ignoredWrongType = 0;
+    let ignoredTooLarge = 0;
+    let compressedCount = 0;
+
     const newImages: ProjectImage[] = [];
-    for (const f of accepted) {
-      const dataUrl = await fileToDataUrl(f);
-      newImages.push({
+
+    for (const f of filesArr) {
+      // Type accepté
+      if (!ALLOWED_TYPES.includes(f.type)) {
+        ignoredWrongType++;
+        continue;
+      }
+
+      // Compresse systématiquement (utile même si fichier d'origine est < 25 Mo)
+      let outBlob: Blob;
+      try {
+        outBlob = await compressImageToBlob(f, {
+          maxWidth: 2000,
+          maxHeight: 2000,
+          quality: 0.82,
+          convertTo: "image/webp",
+        });
+      } catch {
+        // Si échec compression, on utilisera l’original
+        outBlob = f;
+      }
+
+      // Choisir la meilleure version:
+      // - si original dépasse 25 Mo, tenter compressé
+      // - sinon on prend la version la plus légère (si compressée plus petite d'au moins 1 Ko)
+      let finalBlob = f as Blob;
+      let usedCompressed = false;
+
+      if (f.size > MAX_IMAGE_SIZE) {
+        if (outBlob.size <= MAX_IMAGE_SIZE) {
+          finalBlob = outBlob;
+          usedCompressed = true;
+        } else {
+          ignoredTooLarge++;
+          continue;
+        }
+      } else {
+        if (outBlob.size + 1024 < f.size) {
+          finalBlob = outBlob;
+          usedCompressed = true;
+        } else {
+          finalBlob = f;
+        }
+      }
+
+      if (finalBlob.size > MAX_IMAGE_SIZE) {
+        // Toujours trop gros après compression
+        ignoredTooLarge++;
+        continue;
+      }
+
+      if (usedCompressed) compressedCount++;
+
+      // Convertit en data URL
+      let dataUrl: string;
+      if (finalBlob === f) {
+        dataUrl = await fileToDataUrl(f);
+      } else {
+        // Préserve le nom; type = finalBlob.type si dispo
+        dataUrl = await blobToDataUrl(finalBlob);
+      }
+
+      // Crée l'objet image du projet
+      const img: ProjectImage = {
         id: crypto.randomUUID(),
         name: f.name,
-        size: f.size,
-        type: f.type,
+        size: finalBlob.size,
+        type: (finalBlob.type as string) || f.type || "image/webp",
         dataUrl,
         createdAt: new Date().toISOString(),
-      });
+      };
+      newImages.push(img);
     }
+
+    if (newImages.length === 0) {
+      if (ignoredWrongType || ignoredTooLarge) {
+        const parts = [];
+        if (ignoredWrongType) parts.push(`${ignoredWrongType} format(s) non supporté(s)`);
+        if (ignoredTooLarge) parts.push(`${ignoredTooLarge} trop lourde(s) après compression`);
+        showError(`Aucune image ajoutée (${parts.join(", ")}).`);
+      }
+      return;
+    }
+
     const updated = await updateProject(project.id, { images: [...project.images, ...newImages] })!;
     setProject(updated);
-    showSuccess(`${newImages.length} image(s) ajoutée(s)`);
+
+    const added = newImages.length;
+    const ignoredMsg =
+      ignoredWrongType || ignoredTooLarge
+        ? ` • ignorées: ${ignoredWrongType} format(s), ${ignoredTooLarge} trop lourde(s)`
+        : "";
+    const compressedMsg = compressedCount ? ` • compressées: ${compressedCount}` : "";
+    showSuccess(`${added} image(s) ajoutée(s)${compressedMsg}${ignoredMsg}`);
   };
 
   const handleDeleteImage = async (imgId: string) => {
