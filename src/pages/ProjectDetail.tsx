@@ -63,17 +63,19 @@ const ProjectDetail = () => {
   }, []);
 
   useEffect(() => {
-    if (!id) return;
-    const p = getProjectById(id);
-    setProject(p);
-    setPrompt(p?.prompt ?? "");
-    setTitle(p?.title ?? "");
-    setAddress(p?.address ?? "");
-    setType(p?.type ?? "");
-    setStatus(p?.status ?? "Brouillon");
-    setNotes(p?.notes ?? "");
-    setProjectTemplateId(p?.templateId);
-    setRuns(p ? getRunsByProjectId(p.id) : []);
+    (async () => {
+      if (!id) return;
+      const p = await getProjectById(id);
+      setProject(p);
+      setPrompt(p?.prompt ?? "");
+      setTitle(p?.title ?? "");
+      setAddress(p?.address ?? "");
+      setType(p?.type ?? "");
+      setStatus(p?.status ?? "Brouillon");
+      setNotes(p?.notes ?? "");
+      setProjectTemplateId(p?.templateId);
+      setRuns(p ? getRunsByProjectId(p.id) : []);
+    })();
   }, [id]);
 
   // Poll simple pour suivre la progression des runs
@@ -95,13 +97,13 @@ const ProjectDetail = () => {
     return errors;
   }, [prompt]);
 
-  const handleSavePrompt = () => {
+  const handleSavePrompt = async () => {
     if (!project) return;
     if (lineErrors.length > 0) {
       showError(`Le prompt contient des lignes > 100 caractères (lignes: ${lineErrors.join(", ")}).`);
       return;
     }
-    const updated = updateProject(project.id, { prompt });
+    const updated = await updateProject(project.id, { prompt });
     setProject(updated);
     showSuccess("Prompt enregistré");
   };
@@ -114,9 +116,9 @@ const ProjectDetail = () => {
     showSuccess("Template appliqué au prompt du projet");
   };
 
-  const saveProjectTemplateSelection = () => {
+  const saveProjectTemplateSelection = async () => {
     if (!project) return;
-    const updated = updateProject(project.id, { templateId: projectTemplateId })!;
+    const updated = await updateProject(project.id, { templateId: projectTemplateId })!;
     setProject(updated);
     showSuccess("Template sélectionné au niveau projet");
   };
@@ -146,14 +148,14 @@ const ProjectDetail = () => {
         createdAt: new Date().toISOString(),
       });
     }
-    const updated = updateProject(project.id, { images: [...project.images, ...newImages] })!;
+    const updated = await updateProject(project.id, { images: [...project.images, ...newImages] })!;
     setProject(updated);
     showSuccess(`${newImages.length} image(s) ajoutée(s)`);
   };
 
-  const handleDeleteImage = (imgId: string) => {
+  const handleDeleteImage = async (imgId: string) => {
     if (!project) return;
-    const updated = updateProject(
+    const updated = await updateProject(
       project.id,
       { images: project.images.filter((i) => i.id !== imgId) },
     )!;
@@ -161,18 +163,18 @@ const ProjectDetail = () => {
     showSuccess("Image supprimée");
   };
 
-  const handleUpdateTag = (imgId: string, tag?: ImageTag) => {
+  const handleUpdateTag = async (imgId: string, tag?: ImageTag) => {
     if (!project) return;
-    const updated = updateProject(
+    const updated = await updateProject(
       project.id,
       { images: project.images.map((i) => (i.id === imgId ? { ...i, tag } : i)) },
     )!;
     setProject(updated);
   };
 
-  const handleUpdateImageTemplate = (imgId: string, templateId?: string) => {
+  const handleUpdateImageTemplate = async (imgId: string, templateId?: string) => {
     if (!project) return;
-    const updated = updateProject(
+    const updated = await updateProject(
       project.id,
       { images: project.images.map((i) => (i.id === imgId ? { ...i, templateId } : i)) },
     )!;
@@ -180,7 +182,7 @@ const ProjectDetail = () => {
     showSuccess("Template appliqué à l’image");
   };
 
-  const moveImage = (imgId: string, direction: "left" | "right") => {
+  const moveImage = async (imgId: string, direction: "left" | "right") => {
     if (!project) return;
     const idx = project.images.findIndex((i) => i.id === imgId);
     if (idx === -1) return;
@@ -189,7 +191,7 @@ const ProjectDetail = () => {
     const next = [...project.images];
     const [moved] = next.splice(idx, 1);
     next.splice(newIndex, 0, moved);
-    const updated = updateProject(project.id, { images: next })!;
+    const updated = await updateProject(project.id, { images: next })!;
     setProject(updated);
   };
 
@@ -198,9 +200,9 @@ const ProjectDetail = () => {
     return project.images.filter((img) => (tagFilter === "all" ? true : img.tag === tagFilter));
   }, [project, tagFilter]);
 
-  const handleSaveInfos = () => {
+  const handleSaveInfos = async () => {
     if (!project) return;
-    const updated = updateProject(project.id, {
+    const updated = await updateProject(project.id, {
       title: title.trim() || "Sans titre",
       address: address.trim() || undefined,
       type: type.trim() || undefined,

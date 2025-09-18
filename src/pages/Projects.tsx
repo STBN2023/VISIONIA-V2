@@ -15,7 +15,10 @@ const Projects = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    setProjects(getProjects());
+    (async () => {
+      const list = await getProjects();
+      setProjects(list);
+    })();
   }, []);
 
   const totalCount = projects.length;
@@ -24,18 +27,19 @@ const Projects = () => {
     [totalCount],
   );
 
-  const handleCreate = (data: { title: string; address?: string; type?: string }) => {
-    const p = createProject(data);
-    setProjects(getProjects());
+  const handleCreate = async (data: { title: string; address?: string; type?: string }) => {
+    const p = await createProject(data);
+    const list = await getProjects();
+    setProjects(list);
     showSuccess("Projet créé");
     navigate(`/projects/${p.id}`);
   };
 
-  const handleDelete = (id: string) => {
-    // Confirmation simple pour éviter les erreurs
+  const handleDelete = async (id: string) => {
     if (!confirm("Supprimer ce projet ?")) return;
-    deleteProject(id);
-    setProjects(getProjects());
+    await deleteProject(id);
+    const list = await getProjects();
+    setProjects(list);
     showSuccess("Projet supprimé");
   };
 

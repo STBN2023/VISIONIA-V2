@@ -19,7 +19,7 @@ export type ProjectImage = {
   dataUrl: string;
   createdAt: string;
   tag?: ImageTag;
-  templateId?: string; // override template pour cette image
+  templateId?: string;
 };
 
 export type Project = {
@@ -30,82 +30,57 @@ export type Project = {
   status: ProjectStatus;
   createdAt: string;
   updatedAt: string;
-  prompt?: string; // prompt saisi au niveau projet (peut être issu d’un template)
-  templateId?: string; // template sélectionné au niveau projet
+  prompt?: string;
+  templateId?: string;
   images: ProjectImage[];
   notes?: string;
 };
 
-const STORAGE_KEY = "projects";
-
-function readAll(): Project[] {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw) as Project[];
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
+export async function getProjects(): Promise<Project[]>{ 
+  const res = await fetch("/api/projects");
+  if (!res.ok) throw new Error(`Erreur chargement projets (${res.status})`);
+  const data = (await res.json()) as Project[];
+  return data;
 }
 
-function writeAll(projects: Project[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
+export async function getProjectById(id: string): Promise<Project | undefined> {
+  const res = await fetch(`/api/projects/${id}`);
+  if (res.status === 404) return undefined;
+  if (!res.ok) throw new Error(`Erreur chargement projet (${res.status})`);
+  return (await res.json()) as Project;
 }
 
-export function getProjects(): Project[] {
-  return readAll().sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  );
-}
-
-export function getProjectById(id: string): Project | undefined {
-  return readAll().find((p) => p.id === id);
-}
-
-export function createProject(input: {
+export async function createProject(input: {
   title: string;
   address?: string;
   type?: string;
-}): Project {
-  const now = new Date().toISOString();
-  const project: Project = {
-    id: crypto.randomUUID(),
-    title: input.title.trim(),
-    address: input.address?.trim(),
-    type: input.type?.trim(),
-    status: "Brouillon",
-    createdAt: now,
-    updatedAt: now,
-    prompt: "",
-    images: [],
-  };
-  const all = readAll();
-  all.push(project);
-  writeAll(all);
-  return project;
+}): Promise<Project> {
+  const res = await fetch("/api/projects", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) throw new Error(`Erreur création projet (${res.status})`);
+  return (await res.json()) as Project;
 }
 
-export function updateProject(
+export async function updateProject(
   id: string,
   patch: Partial<Omit<Project, "id" | "createdAt">>,
-): Project | undefined {
-  const all = readAll();
-  const idx = all.findIndex((p) => p.id === id);
-  if (idx === -1) return undefined;
-  const updated: Project = {
-    ...all[idx],
-    ...patch,
-    updatedAt: new Date().toISOString(),
-  };
-  all[idx] = updated;
-  writeAll(all);
-  return updated;
+): Promise<Project | undefined> {
+  const res = await fetch(`/api/projects/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(patch),
+  });
+  if (res.status === 404) return undefined;
+  if (!res.ok) throw new Error(`Erreur mise à jour projet (${res.status})`);
+  return (await res.json()) as Project;
 }
 
-export function deleteProject(id: string) {
-  const all = readAll().filter((p) => p.id !== id);
-  writeAll(all);
+export async function deleteProject(id: string): Promise<void> {
+  const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error(`Erreur suppression projet (${res.status})`);
 }
 
 export async function fileToDataUrl(file: File): Promise<string> {
