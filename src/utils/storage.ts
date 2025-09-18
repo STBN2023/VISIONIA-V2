@@ -58,26 +58,37 @@ function findLocal(id: string): Project | undefined {
   return readLocal().find((p) => p.id === id);
 }
 
+function isJsonResponse(res: Response) {
+  const ct = res.headers.get("content-type") || "";
+  return ct.toLowerCase().includes("application/json");
+}
+
 // --- API + fallback ---
 export async function getProjects(): Promise<Project[]> {
   const res = await fetch("/api/projects");
-  if (res.ok) {
-    const data = (await res.json()) as Project[];
-    return data;
+  try {
+    if (res.ok && isJsonResponse(res)) {
+      const data = (await res.json()) as Project[];
+      return data;
+    }
+  } catch {
+    // ignore and fallback
   }
-  // Fallback
-  console.warn("API /api/projects indisponible, utilisation du stockage local.");
+  console.warn("API /api/projects indisponible ou non-JSON, utilisation du stockage local.");
   return readLocal();
 }
 
 export async function getProjectById(id: string): Promise<Project | undefined> {
   const res = await fetch(`/api/projects/${id}`);
   if (res.status === 404) return undefined;
-  if (res.ok) {
-    return (await res.json()) as Project;
+  try {
+    if (res.ok && isJsonResponse(res)) {
+      return (await res.json()) as Project;
+    }
+  } catch {
+    // ignore and fallback
   }
-  // Fallback
-  console.warn(`API /api/projects/${id} indisponible, lecture locale.`);
+  console.warn(`API /api/projects/${id} indisponible ou non-JSON, lecture locale.`);
   return findLocal(id);
 }
 
@@ -91,11 +102,15 @@ export async function createProject(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input),
   });
-  if (res.ok) {
-    return (await res.json()) as Project;
+  try {
+    if (res.ok && isJsonResponse(res)) {
+      return (await res.json()) as Project;
+    }
+  } catch {
+    // ignore and fallback
   }
   // Fallback local
-  console.warn("API /api/projects POST indisponible, création en localStorage.");
+  console.warn("API /api/projects POST indisponible ou non-JSON, création en localStorage.");
   const now = new Date().toISOString();
   const proj: Project = {
     id: crypto.randomUUID(),
@@ -125,11 +140,15 @@ export async function updateProject(
     body: JSON.stringify(patch),
   });
   if (res.status === 404) return undefined;
-  if (res.ok) {
-    return (await res.json()) as Project;
+  try {
+    if (res.ok && isJsonResponse(res)) {
+      return (await res.json()) as Project;
+    }
+  } catch {
+    // ignore and fallback
   }
   // Fallback local
-  console.warn(`API /api/projects/${id} PATCH indisponible, mise à jour locale.`);
+  console.warn(`API /api/projects/${id} PATCH indisponible ou non-JSON, mise à jour locale.`);
   const all = readLocal();
   const idx = all.findIndex((p) => p.id === id);
   if (idx === -1) return undefined;
