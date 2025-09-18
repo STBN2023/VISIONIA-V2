@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -63,6 +63,7 @@ const ProjectFormDialog = ({ onCreate, triggerLabel = "Nouveau projet", open: op
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Nouveau projet</DialogTitle>
+          <DialogDescription>Renseignez les informations du projet puis validez pour le créer.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-2">
