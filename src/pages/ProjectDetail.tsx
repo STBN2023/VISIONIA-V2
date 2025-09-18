@@ -367,14 +367,14 @@ const ProjectDetail = () => {
                         <div className="grid gap-2">
                           <Label className="text-xs">Template (image)</Label>
                           <Select
-                            value={img.templateId ?? ""}
-                            onValueChange={(v) => handleUpdateImageTemplate(img.id, v || undefined)}
+                            value={img.templateId ?? "inherit"}
+                            onValueChange={(v) => handleUpdateImageTemplate(img.id, v === "inherit" ? undefined : v)}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Hérite du template projet" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="">Hériter du projet</SelectItem>
+                              <SelectItem value="inherit">Hériter du projet</SelectItem>
                               {templates.map((t) => (
                                 <SelectItem key={t.id} value={t.id}>
                                   {t.name}
@@ -401,12 +401,12 @@ const ProjectDetail = () => {
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div className="grid gap-2">
                     <Label>Template (projet)</Label>
-                    <Select value={projectTemplateId ?? ""} onValueChange={(v) => setProjectTemplateId(v || undefined)}>
+                    <Select value={projectTemplateId ?? "none"} onValueChange={(v) => setProjectTemplateId(v === "none" ? undefined : v)}>
                       <SelectTrigger>
                         <SelectValue placeholder="Choisir un template" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">Aucun (libre)</SelectItem>
+                        <SelectItem value="none">Aucun (libre)</SelectItem>
                         {templates.map((t) => (
                           <SelectItem key={t.id} value={t.id}>
                             {t.name}
