@@ -15,6 +15,8 @@ import { Image as ImageIcon, Upload, Trash2, ArrowLeft, ArrowLeftCircle, ArrowRi
 import { showError, showSuccess } from "@/utils/toast";
 import Dropzone from "@/components/uploader/Dropzone";
 import { ensureSeedTemplates, getTemplates, getTemplateById, type PromptTemplate } from "@/utils/prompts";
+import RunAnalysisDialog from "@/components/runs/RunAnalysisDialog";
+import { getRunsByProjectId, retryFailedItems, cancelRun, type Run, type RunItem } from "@/utils/runs";
 
 const TAGS: { value: ImageTag; label: string }[] = [
   { value: "façade-N", label: "Façade Nord" },
@@ -30,6 +32,9 @@ const TAGS: { value: ImageTag; label: string }[] = [
 
 const STATUSES: ProjectStatus[] = ["Brouillon", "En cours", "Terminé", "Archivé"];
 const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 Mo
+
+const statusVariant = (s: string) =>
+  s === "succeeded" ? "secondary" : s === "running" ? "default" : s === "queued" ? "outline" : s === "failed" ? "destructive" : "outline";
 
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -49,6 +54,9 @@ const ProjectDetail = () => {
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   const [projectTemplateId, setProjectTemplateId] = useState<string | undefined>(undefined);
 
+  // Runs
+  const [runs, setRuns] = useState<Run[]>([]);
+
   useEffect(() => {
     ensureSeedTemplates();
     setTemplates(getTemplates());
@@ -65,7 +73,17 @@ const ProjectDetail = () => {
     setStatus(p?.status ?? "Brouillon");
     setNotes(p?.notes ?? "");
     setProjectTemplateId(p?.templateId);
+    setRuns(p ? getRunsByProjectId(p.id) : []);
   }, [id]);
+
+  // Poll simple pour suivre la progression des runs
+  useEffect(() => {
+    if (!project) return;
+    const interval = setInterval(() => {
+      setRuns(getRunsByProjectId(project.id));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [project?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const notFound = !project;
 
@@ -240,7 +258,7 @@ const ProjectDetail = () => {
             <TabsTrigger value="images">Images</TabsTrigger>
             <TabsTrigger value="prompt">Prompt</TabsTrigger>
             <TabsTrigger value="infos">Infos</TabsTrigger>
-            <TabsTrigger value="runs" disabled>Runs (à venir)</TabsTrigger>
+            <TabsTrigger value="runs">Runs</TabsTrigger>
           </TabsList>
 
           <TabsContent value="images" className="mt-4 space-y-4">
@@ -414,7 +432,7 @@ const ProjectDetail = () => {
                         ))}
                       </SelectContent>
                     </Select>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button variant="outline" onClick={saveProjectTemplateSelection}>Enregistrer le template</Button>
                       <Button variant="secondary" onClick={applyTemplateToPrompt}>Appliquer au prompt</Button>
                     </div>
@@ -443,8 +461,18 @@ Conformité réglementaire:
                   </p>
                 )}
               </CardContent>
-              <CardFooter className="flex justify-end">
-                <Button onClick={handleSavePrompt}>Enregistrer</Button>
+              <CardFooter className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs text-muted-foreground">
+                  Astuce: vérifiez que le prompt correspond bien aux images.
+                </div>
+                <RunAnalysisDialog
+                  projectId={project.id}
+                  prompt={prompt}
+                  images={project.images}
+                  onStarted={() => {}}
+                  disabled={prompt.trim().length === 0 || project.images.length === 0}
+                  triggerLabel="Générer le compte rendu"
+                />
               </CardFooter>
             </Card>
           </TabsContent>
@@ -490,6 +518,79 @@ Conformité réglementaire:
               <CardFooter className="flex justify-end">
                 <Button onClick={handleSaveInfos}>Enregistrer</Button>
               </CardFooter>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="runs" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Historique des analyses</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {runs.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Aucun run pour le moment.</p>
+                ) : (
+                  runs.map((run) => (
+                    <div key={run.id} className="rounded-md border">
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
+                        <div className="flex items-center gap-2">
+                          <Badge variant={statusVariant(run.status)}>{run.status}</Badge>
+                          <span className="text-sm">Mode: {run.mode === "aggregate" ? "Agrégé" : "Par image"}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(run.createdAt).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="p-3 space-y-3">
+                        {run.mode === "aggregate" ? (
+                          <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">{run.outputText || "En cours..."}</pre>
+                        ) : (
+                          <div className="grid gap-3">
+                            {run.items.map((it) => {
+                              const img = project.images.find((i) => i.id === it.imageId);
+                              return (
+                                <div key={it.id} className="rounded-md border p-3">
+                                  <div className="mb-2 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant={statusVariant(it.status)}>{it.status}</Badge>
+                                      <span className="text-sm font-medium truncate max-w-[240px]">{img?.name || it.imageId}</span>
+                                    </div>
+                                    <span className="text-xs text-muted-foreground">{img?.tag || "non taguée"}</span>
+                                  </div>
+                                  {it.outputText ? (
+                                    <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">{it.outputText}</pre>
+                                  ) : it.error ? (
+                                    <p className="text-sm text-destructive">{it.error}</p>
+                                  ) : (
+                                    <p className="text-sm text-muted-foreground">Traitement en cours…</p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {run.status === "running" || run.status === "queued" ? (
+                            <Button variant="outline" size="sm" onClick={() => cancelRun(run.id)}>Annuler</Button>
+                          ) : null}
+                          {run.mode === "per_image" && run.status === "failed" ? (
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => {
+                                retryFailedItems(run.id, project.images);
+                                showSuccess("Relance des items en échec");
+                              }}
+                            >
+                              Relancer les échecs
+                            </Button>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </CardContent>
             </Card>
           </TabsContent>
         </Tabs>
