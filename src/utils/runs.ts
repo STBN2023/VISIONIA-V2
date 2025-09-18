@@ -76,6 +76,7 @@ export function getRunById(id: string): Run | undefined {
   return readAll().find((r) => r.id === id);
 }
 
+// Simulation (legacy) conservée mais non utilisée pour le chemin LLM:
 export function createRun(input: CreateRunInput): Run {
   const now = new Date().toISOString();
   const run: Run = {
@@ -98,10 +99,86 @@ export function createRun(input: CreateRunInput): Run {
         : [],
   };
   write(run);
-
-  // Planifie la simulation asynchrone au prochain tick
   setTimeout(() => simulateRun(run.id, input.images), 0);
   return run;
+}
+
+// Nouveau: crée un run déjà en "running" (sans simulation)
+export function createPendingRun(input: CreateRunInput): Run {
+  const now = new Date().toISOString();
+  const run: Run = {
+    id: crypto.randomUUID(),
+    projectId: input.projectId,
+    mode: input.mode,
+    status: "running",
+    prompt: input.prompt,
+    model: input.model,
+    temperature: input.temperature,
+    createdAt: now,
+    updatedAt: now,
+    items:
+      input.mode === "per_image"
+        ? input.images.map((img) => ({
+            id: crypto.randomUUID(),
+            imageId: img.id,
+            status: "running",
+            startedAt: new Date().toISOString(),
+          }))
+        : [],
+  };
+  write(run);
+  return run;
+}
+
+// Nouveau: complète un run avec les résultats venus du serveur LLM
+export function completeRunWithServer(runId: string, payload:
+  | { mode: "aggregate"; outputText: string }
+  | { mode: "per_image"; items: { imageId?: string; outputText: string }[] }
+) {
+  const run = getRunById(runId);
+  if (!run) return;
+  if (run.mode === "aggregate" && "outputText" in payload) {
+    run.outputText = payload.outputText;
+  } else if (run.mode === "per_image" && "items" in payload) {
+    run.items = run.items.map((it) => {
+      const match = payload.items.find((x) => x.imageId === it.imageId);
+      if (match?.outputText) {
+        return {
+          ...it,
+          status: "succeeded",
+          outputText: match.outputText,
+          finishedAt: new Date().toISOString(),
+        };
+      }
+      return it;
+    });
+  }
+  // Déterminer le statut final
+  if (run.mode === "aggregate") {
+    run.status = "succeeded";
+  } else {
+    const allHaveOutput = run.items.every((i) => i.status === "succeeded");
+    run.status = allHaveOutput ? "succeeded" : "failed";
+  }
+  run.updatedAt = new Date().toISOString();
+  write(run);
+}
+
+// Nouveau: marque un run comme échec avec message
+export function failRun(runId: string, error: string) {
+  const run = getRunById(runId);
+  if (!run) return;
+  if (run.mode === "per_image") {
+    run.items = run.items.map((it) =>
+      it.status === "running" || it.status === "queued"
+        ? { ...it, status: "failed", error, finishedAt: new Date().toISOString() }
+        : it,
+    );
+  }
+  run.status = "failed";
+  run.error = error;
+  run.updatedAt = new Date().toISOString();
+  write(run);
 }
 
 export function cancelRun(runId: string) {
@@ -136,6 +213,7 @@ export function retryFailedItems(runId: string, images: ProjectImage[]) {
   }
 }
 
+// --- Simulation (legacy) ---
 function simulateRun(runId: string, images: ProjectImage[]) {
   const run = getRunById(runId);
   if (!run) return;
@@ -145,7 +223,6 @@ function simulateRun(runId: string, images: ProjectImage[]) {
   write(run);
 
   if (run.mode === "aggregate") {
-    // Une seule sortie agrégée
     const delay = 800 + Math.floor(Math.random() * 700);
     setTimeout(() => {
       const finalRun = getRunById(runId);
@@ -156,7 +233,6 @@ function simulateRun(runId: string, images: ProjectImage[]) {
       write(finalRun);
     }, delay);
   } else {
-    // Par image: lance chaque item avec un petit décalage
     const items = run.items;
     items.forEach((item, idx) => {
       const startDelay = 300 + idx * 400;
@@ -182,7 +258,6 @@ function simulateRun(runId: string, images: ProjectImage[]) {
           const ii = r2.items.findIndex((it) => it.id === item.id);
           if (ii === -1) return;
 
-          // Simulation: 90% succès, 10% échec
           const ok = Math.random() < 0.9;
           if (ok) {
             r2.items[ii] = {
@@ -199,7 +274,6 @@ function simulateRun(runId: string, images: ProjectImage[]) {
               finishedAt: new Date().toISOString(),
             };
           }
-          // Si tous terminés (pas queued/running), calcule le statut global
           const allDone = r2.items.every((it) => ["succeeded", "failed", "cancelled"].includes(it.status));
           if (allDone) {
             const allOk = r2.items.every((it) => it.status === "succeeded");

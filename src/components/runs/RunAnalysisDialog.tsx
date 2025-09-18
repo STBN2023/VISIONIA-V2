@@ -4,9 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { ProjectImage } from "@/utils/storage";
-import { createRun, type RunMode } from "@/utils/runs";
+import { createPendingRun, completeRunWithServer, failRun, type RunMode } from "@/utils/runs";
 import { showError, showSuccess } from "@/utils/toast";
 import { getSettings } from "@/utils/settings";
+import { analyzeLLM } from "@/utils/analyze-client";
 
 type Props = {
   projectId: string;
@@ -23,13 +24,15 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
 
   const canStart = !disabled && prompt.trim().length > 0 && images.length > 0;
 
-  const onStart = () => {
+  const onStart = async () => {
     if (!canStart) {
       showError("Ajoutez un prompt et au moins une image.");
       return;
     }
     const s = getSettings();
-    const run = createRun({
+
+    // 1) Crée un run en 'running'
+    const run = createPendingRun({
       projectId,
       mode,
       prompt,
@@ -37,9 +40,34 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
       model: s.model,
       temperature: s.temperature,
     });
+
     setOpen(false);
     showSuccess("Analyse démarrée");
+
     onStarted?.(run.id);
+
+    // 2) Appelle l'API serveur (Vercel -> OpenAI)
+    const result = await analyzeLLM({
+      mode,
+      prompt,
+      images,
+      model: s.model,
+      temperature: s.temperature,
+      max_tokens: s.maxTokens,
+    });
+
+    // 3) Met à jour le run selon la réponse
+    if (result.ok) {
+      if (result.mode === "aggregate") {
+        completeRunWithServer(run.id, { mode: "aggregate", outputText: result.outputText });
+      } else {
+        completeRunWithServer(run.id, { mode: "per_image", items: result.items });
+      }
+      showSuccess("Analyse terminée");
+    } else {
+      failRun(run.id, result.error);
+      showError(result.error);
+    }
   };
 
   return (
@@ -68,7 +96,7 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
           </div>
           <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
             <p>
-              Cette démonstration simule l’analyse et génère un rendu à partir du prompt saisi. Pour une intégration LLM réelle, ajoutez un backend (ex: Supabase).
+              L’analyse utilise votre clé OpenAI côté serveur (Vercel). Assurez-vous d’avoir configuré OPENAI_API_KEY dans les variables d’environnement du projet.
             </p>
           </div>
           <div className="flex justify-end gap-2">
