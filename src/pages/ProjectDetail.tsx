@@ -1,44 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams, Link } from "react-router-dom";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { getProjectById, updateProject, type Project, type ProjectImage, fileToDataUrl, type ImageTag, type ProjectStatus } from "@/utils/storage";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Image as ImageIcon, Upload, Trash2, ArrowLeft, ArrowLeftCircle, ArrowRightCircle } from "lucide-react";
-import { showError, showSuccess } from "@/utils/toast";
-import Dropzone from "@/components/uploader/Dropzone";
+import ProjectHeader from "@/components/projects/ProjectHeader";
+import ImagesTab from "@/components/projects/tabs/ImagesTab";
+import PromptTab from "@/components/projects/tabs/PromptTab";
+import InfoTab from "@/components/projects/tabs/InfoTab";
+import RunsTab from "@/components/runs/RunsTab";
+import { getProjectById, updateProject, type Project, type ProjectImage, fileToDataUrl, type ImageTag, type ProjectStatus } from "@/utils/storage";
 import { ensureSeedTemplates, getTemplates, getTemplateById, type PromptTemplate } from "@/utils/prompts";
-import RunAnalysisDialog from "@/components/runs/RunAnalysisDialog";
-import { getRunsByProjectId, retryFailedItems, cancelRun, type Run, type RunItem } from "@/utils/runs";
+import { getRunsByProjectId, type Run } from "@/utils/runs";
+import { showError, showSuccess } from "@/utils/toast";
+import { Button } from "@/components/ui/button";
+import { Link, useParams } from "react-router-dom";
+import { Card } from "@/components/ui/card";
+import { ArrowLeft } from "lucide-react";
 
-const TAGS: { value: ImageTag; label: string }[] = [
-  { value: "façade-N", label: "Façade Nord" },
-  { value: "façade-S", label: "Façade Sud" },
-  { value: "façade-E", label: "Façade Est" },
-  { value: "façade-O", label: "Façade Ouest" },
-  { value: "toiture", label: "Toiture" },
-  { value: "menuiseries", label: "Menuiseries" },
-  { value: "réseaux", label: "Réseaux" },
-  { value: "pathologies", label: "Pathologies" },
-  { value: "autre", label: "Autre" },
-];
-
-const STATUSES: ProjectStatus[] = ["Brouillon", "En cours", "Terminé", "Archivé"];
 const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 Mo
-
-const statusVariant = (s: string) =>
-  s === "succeeded" ? "secondary" : s === "running" ? "default" : s === "queued" ? "outline" : s === "failed" ? "destructive" : "outline";
 
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const [project, setProject] = useState<Project | undefined>(undefined);
   const [prompt, setPrompt] = useState("");
   const [tagFilter, setTagFilter] = useState<"all" | ImageTag>("all");
@@ -97,17 +78,7 @@ const ProjectDetail = () => {
     return errors;
   }, [prompt]);
 
-  const handleSavePrompt = async () => {
-    if (!project) return;
-    if (lineErrors.length > 0) {
-      showError(`Le prompt contient des lignes > 100 caractères (lignes: ${lineErrors.join(", ")}).`);
-      return;
-    }
-    const updated = await updateProject(project.id, { prompt });
-    setProject(updated);
-    showSuccess("Prompt enregistré");
-  };
-
+  // Actions prompt/template
   const applyTemplateToPrompt = () => {
     if (!project || !projectTemplateId) return;
     const tpl = getTemplateById(projectTemplateId);
@@ -123,6 +94,7 @@ const ProjectDetail = () => {
     showSuccess("Template sélectionné au niveau projet");
   };
 
+  // Actions images
   const handleFiles = async (files: FileList | File[] | null) => {
     if (!project || !files) return;
     const filesArr = Array.from(files as ArrayLike<File>);
@@ -155,29 +127,24 @@ const ProjectDetail = () => {
 
   const handleDeleteImage = async (imgId: string) => {
     if (!project) return;
-    const updated = await updateProject(
-      project.id,
-      { images: project.images.filter((i) => i.id !== imgId) },
-    )!;
+    const updated = await updateProject(project.id, { images: project.images.filter((i) => i.id !== imgId) })!;
     setProject(updated);
     showSuccess("Image supprimée");
   };
 
   const handleUpdateTag = async (imgId: string, tag?: ImageTag) => {
     if (!project) return;
-    const updated = await updateProject(
-      project.id,
-      { images: project.images.map((i) => (i.id === imgId ? { ...i, tag } : i)) },
-    )!;
+    const updated = await updateProject(project.id, {
+      images: project.images.map((i) => (i.id === imgId ? { ...i, tag } : i)),
+    })!;
     setProject(updated);
   };
 
   const handleUpdateImageTemplate = async (imgId: string, templateId?: string) => {
     if (!project) return;
-    const updated = await updateProject(
-      project.id,
-      { images: project.images.map((i) => (i.id === imgId ? { ...i, templateId } : i)) },
-    )!;
+    const updated = await updateProject(project.id, {
+      images: project.images.map((i) => (i.id === imgId ? { ...i, templateId } : i)),
+    })!;
     setProject(updated);
     showSuccess("Template appliqué à l’image");
   };
@@ -195,11 +162,7 @@ const ProjectDetail = () => {
     setProject(updated);
   };
 
-  const filteredImages = useMemo(() => {
-    if (!project) return [];
-    return project.images.filter((img) => (tagFilter === "all" ? true : img.tag === tagFilter));
-  }, [project, tagFilter]);
-
+  // Actions infos projet
   const handleSaveInfos = async () => {
     if (!project) return;
     const updated = await updateProject(project.id, {
@@ -218,7 +181,7 @@ const ProjectDetail = () => {
       <div className="min-h-screen bg-background">
         <AppHeader />
         <main className="mx-auto w-full max-w-6xl px-4 py-6">
-          <div className="rounded-lg border bg-card p-6">
+          <Card className="p-6">
             <p className="mb-4">Projet introuvable.</p>
             <Link to="/projects">
               <Button variant="secondary">
@@ -226,7 +189,7 @@ const ProjectDetail = () => {
                 Retour aux projets
               </Button>
             </Link>
-          </div>
+          </Card>
         </main>
       </div>
     );
@@ -236,25 +199,8 @@ const ProjectDetail = () => {
     <div className="min-h-screen bg-background">
       <AppHeader />
       <main className="mx-auto w-full max-w-6xl px-4 py-6">
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <div className="mb-1 flex items-center gap-2">
-              <h1 className="text-2xl font-semibold">{project.title}</h1>
-              <Badge variant="secondary">{project.status}</Badge>
-              {project.type ? <Badge variant="outline">{project.type}</Badge> : null}
-            </div>
-            <p className="text-sm text-muted-foreground">{project.address || "Adresse non renseignée"}</p>
-          </div>
-          <Link to="/projects">
-            <Button variant="secondary" size="sm">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Tous les projets
-            </Button>
-          </Link>
-        </div>
-
+        <ProjectHeader project={project} />
         <Separator className="mb-6" />
-
         <Tabs defaultValue="images" className="w-full">
           <TabsList className="flex flex-wrap">
             <TabsTrigger value="images">Images</TabsTrigger>
@@ -263,337 +209,53 @@ const ProjectDetail = () => {
             <TabsTrigger value="runs">Runs</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="images" className="mt-4 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Ajouter des images</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <Dropzone
-                  accept="image/jpeg,image/png,image/webp"
-                  multiple
-                  onFiles={handleFiles}
-                  label="Glissez-déposez vos images ici"
-                  hint="ou cliquez pour sélectionner (JPG/PNG/WebP, 25 Mo max)"
-                  className="w-full"
-                />
-                <div className="flex items-center gap-3">
-                  <Input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    multiple
-                    onChange={(e) => handleFiles(e.target.files)}
-                  />
-                  <Button type="button" variant="outline" onClick={() => document.getElementById("file-input-hidden")?.click()}>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Parcourir
-                  </Button>
-                </div>
-                <input
-                  id="file-input-hidden"
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => handleFiles(e.target.files)}
-                />
-                <p className="text-xs text-muted-foreground">Formats: JPG/PNG/WebP • max 25 Mo/image</p>
-              </CardContent>
-            </Card>
-
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-sm text-muted-foreground">
-                {filteredImages.length} image{filteredImages.length > 1 ? "s" : ""} affichée{filteredImages.length > 1 ? "s" : ""}
-                {tagFilter !== "all" ? ` (filtre: ${TAGS.find(t => t.value === tagFilter)?.label})` : ""}
-              </div>
-              <div className="flex items-center gap-2">
-                <Label className="text-xs">Filtrer par tag</Label>
-                <Select value={tagFilter} onValueChange={(v) => setTagFilter((v as ImageTag) || "all")}>
-                  <SelectTrigger className="w-[220px]">
-                    <SelectValue placeholder="Tous les tags" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Tous</SelectItem>
-                    {TAGS.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {project.images.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
-                <ImageIcon className="mb-3 h-8 w-8 text-muted-foreground" />
-                <p className="text-muted-foreground">Aucune image pour le moment.</p>
-              </div>
-            ) : (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredImages.map((img) => {
-                  const idx = project.images.findIndex((i) => i.id === img.id);
-                  const canLeft = idx > 0;
-                  const canRight = idx < project.images.length - 1;
-                  return (
-                    <Card key={img.id} className="overflow-hidden">
-                      <div className="relative aspect-video w-full bg-muted">
-                        <img
-                          src={img.dataUrl}
-                          alt={img.name}
-                          className="h-full w-full object-cover"
-                          draggable={false}
-                        />
-                      </div>
-                      <CardContent className="space-y-2 pt-3">
-                        <div className="flex items-center justify-between">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-medium">{img.name}</p>
-                            <p className="truncate text-xs text-muted-foreground">
-                              {(img.size / 1024).toFixed(0)} Ko • {new Date(img.createdAt).toLocaleDateString()}
-                            </p>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <Button size="icon" variant="ghost" disabled={!canLeft} onClick={() => moveImage(img.id, "left")} title="Déplacer à gauche">
-                              <ArrowLeftCircle className="h-4 w-4" />
-                            </Button>
-                            <Button size="icon" variant="ghost" disabled={!canRight} onClick={() => moveImage(img.id, "right")} title="Déplacer à droite">
-                              <ArrowRightCircle className="h-4 w-4" />
-                            </Button>
-                            <Button size="icon" variant="ghost" onClick={() => handleDeleteImage(img.id)} title="Supprimer">
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="grid gap-2">
-                          <Label className="text-xs">Tag</Label>
-                          <Select
-                            value={img.tag ?? ""}
-                            onValueChange={(v) => handleUpdateTag(img.id, v as ImageTag)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Choisir un tag" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {TAGS.map((t) => (
-                                <SelectItem key={t.value} value={t.value}>
-                                  {t.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="grid gap-2">
-                          <Label className="text-xs">Template (image)</Label>
-                          <Select
-                            value={img.templateId ?? "inherit"}
-                            onValueChange={(v) => handleUpdateImageTemplate(img.id, v === "inherit" ? undefined : v)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Hérite du template projet" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="inherit">Hériter du projet</SelectItem>
-                              {templates.map((t) => (
-                                <SelectItem key={t.id} value={t.id}>
-                                  {t.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </CardContent>
-                      <CardFooter></CardFooter>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
+          <TabsContent value="images">
+            <ImagesTab
+              project={project}
+              templates={templates}
+              tagFilter={tagFilter}
+              setTagFilter={setTagFilter}
+              onAddFiles={handleFiles}
+              onDeleteImage={handleDeleteImage}
+              onUpdateTag={handleUpdateTag}
+              onUpdateImageTemplate={handleUpdateImageTemplate}
+              onMoveImage={moveImage}
+            />
           </TabsContent>
 
-          <TabsContent value="prompt" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Prompt maître (projet)</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <div className="grid gap-2">
-                    <Label>Template (projet)</Label>
-                    <Select value={projectTemplateId ?? "none"} onValueChange={(v) => setProjectTemplateId(v === "none" ? undefined : v)}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choisir un template" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">Aucun (libre)</SelectItem>
-                        {templates.map((t) => (
-                          <SelectItem key={t.id} value={t.id}>
-                            {t.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" onClick={saveProjectTemplateSelection}>Enregistrer le template</Button>
-                      <Button variant="secondary" onClick={applyTemplateToPrompt}>Appliquer au prompt</Button>
-                    </div>
-                  </div>
-                </div>
-
-                <Textarea
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  placeholder={`Exemple de structure:
-Constat technique:
-- ...
-Solutions correctives:
-- ...
-Conformité réglementaire:
-- ...`}
-                  rows={12}
-                />
-                {lineErrors.length > 0 ? (
-                  <p className="text-sm text-destructive">
-                    Lignes trop longues (&gt; 100 caractères) : {lineErrors.join(", ")}
-                  </p>
-                ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Règle: chaque ligne ≤ 100 caractères.
-                  </p>
-                )}
-              </CardContent>
-              <CardFooter className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-xs text-muted-foreground">
-                  Astuce: vérifiez que le prompt correspond bien aux images.
-                </div>
-                <RunAnalysisDialog
-                  projectId={project.id}
-                  prompt={prompt}
-                  images={project.images}
-                  onStarted={() => {}}
-                  disabled={prompt.trim().length === 0 || project.images.length === 0}
-                  triggerLabel="Générer le compte rendu"
-                />
-              </CardFooter>
-            </Card>
+          <TabsContent value="prompt">
+            <PromptTab
+              projectId={project.id}
+              images={project.images}
+              prompt={prompt}
+              setPrompt={setPrompt}
+              templates={templates}
+              projectTemplateId={projectTemplateId}
+              setProjectTemplateId={setProjectTemplateId}
+              lineErrors={lineErrors}
+              onApplyTemplateToPrompt={applyTemplateToPrompt}
+              onSaveProjectTemplateSelection={saveProjectTemplateSelection}
+            />
           </TabsContent>
 
-          <TabsContent value="infos" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Informations du projet</CardTitle>
-              </CardHeader>
-              <CardContent className="grid gap-4 md:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label htmlFor="title">Titre</Label>
-                  <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="status">Statut</Label>
-                  <Select value={status} onValueChange={(v) => setStatus(v as ProjectStatus)}>
-                    <SelectTrigger id="status">
-                      <SelectValue placeholder="Choisir un statut" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {STATUSES.map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {s}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="grid gap-2 md:col-span-2">
-                  <Label htmlFor="address">Adresse</Label>
-                  <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} />
-                </div>
-                <div className="grid gap-2 md:col-span-2">
-                  <Label htmlFor="type">Type de bâti</Label>
-                  <Input id="type" value={type} onChange={(e) => setType(e.target.value)} placeholder="Pavillon, immeuble, ..." />
-                </div>
-                <div className="grid gap-2 md:col-span-2">
-                  <Label htmlFor="notes">Notes</Label>
-                  <Textarea id="notes" rows={6} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes internes, remarques, contexte..." />
-                </div>
-              </CardContent>
-              <CardFooter className="flex justify-end">
-                <Button onClick={handleSaveInfos}>Enregistrer</Button>
-              </CardFooter>
-            </Card>
+          <TabsContent value="infos">
+            <InfoTab
+              title={title}
+              setTitle={setTitle}
+              status={status}
+              setStatus={setStatus}
+              address={address}
+              setAddress={setAddress}
+              type={type}
+              setType={setType}
+              notes={notes}
+              setNotes={setNotes}
+              onSaveInfos={handleSaveInfos}
+            />
           </TabsContent>
 
-          <TabsContent value="runs" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Historique des analyses</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {runs.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Aucun run pour le moment.</p>
-                ) : (
-                  runs.map((run) => (
-                    <div key={run.id} className="rounded-md border">
-                      <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
-                        <div className="flex items-center gap-2">
-                          <Badge variant={statusVariant(run.status)}>{run.status}</Badge>
-                          <span className="text-sm">Mode: {run.mode === "aggregate" ? "Agrégé" : "Par image"}</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {new Date(run.createdAt).toLocaleString()}
-                        </div>
-                      </div>
-                      <div className="p-3 space-y-3">
-                        {run.mode === "aggregate" ? (
-                          <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">{run.outputText || "En cours..."}</pre>
-                        ) : (
-                          <div className="grid gap-3">
-                            {run.items.map((it) => {
-                              const img = project.images.find((i) => i.id === it.imageId);
-                              return (
-                                <div key={it.id} className="rounded-md border p-3">
-                                  <div className="mb-2 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                      <Badge variant={statusVariant(it.status)}>{it.status}</Badge>
-                                      <span className="text-sm font-medium truncate max-w-[240px]">{img?.name || it.imageId}</span>
-                                    </div>
-                                    <span className="text-xs text-muted-foreground">{img?.tag || "non taguée"}</span>
-                                  </div>
-                                  {it.outputText ? (
-                                    <pre className="whitespace-pre-wrap rounded-md bg-muted p-3 text-sm">{it.outputText}</pre>
-                                  ) : it.error ? (
-                                    <p className="text-sm text-destructive">{it.error}</p>
-                                  ) : (
-                                    <p className="text-sm text-muted-foreground">Traitement en cours…</p>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                        <div className="flex flex-wrap justify-end gap-2">
-                          {run.status === "running" || run.status === "queued" ? (
-                            <Button variant="outline" size="sm" onClick={() => cancelRun(run.id)}>Annuler</Button>
-                          ) : null}
-                          {run.mode === "per_image" && run.status === "failed" ? (
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={() => {
-                                retryFailedItems(run.id, project.images);
-                                showSuccess("Relance des items en échec");
-                              }}
-                            >
-                              Relancer les échecs
-                            </Button>
-                          ) : null}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </CardContent>
-            </Card>
+          <TabsContent value="runs">
+            <RunsTab runs={runs} images={project.images} />
           </TabsContent>
         </Tabs>
       </main>
