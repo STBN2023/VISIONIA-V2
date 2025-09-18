@@ -5,8 +5,10 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Plus } from "lucide-react";
 
+type CreatePayload = { title: string; address?: string; type?: string };
+
 type Props = {
-  onCreate: (data: { title: string; address?: string; type?: string }) => void;
+  onCreate: (data: CreatePayload) => void | Promise<void>;
   triggerLabel?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -21,17 +23,33 @@ const ProjectFormDialog = ({ onCreate, triggerLabel = "Nouveau projet", open: op
   const [title, setTitle] = useState("");
   const [address, setAddress] = useState("");
   const [type, setType] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const canSubmit = title.trim().length > 2;
+  const canSubmit = title.trim().length > 2 && !submitting;
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!canSubmit) return;
-    onCreate({ title: title.trim(), address: address.trim() || undefined, type: type.trim() || undefined });
-    setOpen(false);
+  const resetForm = () => {
     setTitle("");
     setAddress("");
     setType("");
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
+    try {
+      await Promise.resolve(
+        onCreate({
+          title: title.trim(),
+          address: address.trim() || undefined,
+          type: type.trim() || undefined,
+        }),
+      );
+      setOpen(false);
+      resetForm();
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -60,11 +78,11 @@ const ProjectFormDialog = ({ onCreate, triggerLabel = "Nouveau projet", open: op
             <Input id="type" value={type} onChange={(e) => setType(e.target.value)} placeholder="Pavillon, immeuble, ..." />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={() => setOpen(false)}>
+            <Button type="button" variant="secondary" onClick={() => setOpen(false)} disabled={submitting}>
               Annuler
             </Button>
             <Button type="submit" disabled={!canSubmit}>
-              Créer
+              {submitting ? "Création..." : "Créer"}
             </Button>
           </div>
         </form>

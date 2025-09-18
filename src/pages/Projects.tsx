@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { FolderClosed, Trash2 } from "lucide-react";
-import { showSuccess } from "@/utils/toast";
+import { showSuccess, showError } from "@/utils/toast";
 
 const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -29,12 +29,19 @@ const Projects = () => {
   );
 
   const handleCreate = async (data: { title: string; address?: string; type?: string }) => {
-    const p = await createProject(data);
-    const list = await getProjects();
-    setProjects(list);
-    showSuccess("Projet créé");
-    setCreateOpen(false);
-    navigate(`/projects/${p.id}`);
+    try {
+      const p = await createProject(data);
+      const list = await getProjects();
+      setProjects(list);
+      showSuccess("Projet créé");
+      setCreateOpen(false);
+      navigate(`/projects/${p.id}`);
+    } catch (e: any) {
+      const msg = e?.message || "Erreur lors de la création du projet";
+      showError(msg);
+      // Rejeter pour que le dialog sache qu'il ne doit pas se fermer
+      throw e;
+    }
   };
 
   const handleDelete = async (id: string) => {
