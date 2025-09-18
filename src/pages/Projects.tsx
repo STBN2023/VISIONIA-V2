@@ -12,6 +12,7 @@ import { showSuccess } from "@/utils/toast";
 
 const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -32,6 +33,7 @@ const Projects = () => {
     const list = await getProjects();
     setProjects(list);
     showSuccess("Projet créé");
+    setCreateOpen(false);
     navigate(`/projects/${p.id}`);
   };
 
@@ -45,14 +47,14 @@ const Projects = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader onCreateProjectClick={() => { /* ouvert via dialog dédié plus bas */ }} />
+      <AppHeader onCreateProjectClick={() => setCreateOpen(true)} />
       <main className="mx-auto w-full max-w-6xl px-4 py-6">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Projets</h1>
             <p className="text-sm text-muted-foreground">{subtitle}</p>
           </div>
-          <ProjectFormDialog onCreate={handleCreate} />
+          <ProjectFormDialog open={createOpen} onOpenChange={setCreateOpen} onCreate={handleCreate} />
         </div>
         <Separator className="mb-6" />
         {projects.length === 0 ? (

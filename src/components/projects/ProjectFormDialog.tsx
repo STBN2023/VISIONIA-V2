@@ -8,10 +8,16 @@ import { Plus } from "lucide-react";
 type Props = {
   onCreate: (data: { title: string; address?: string; type?: string }) => void;
   triggerLabel?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
-const ProjectFormDialog = ({ onCreate, triggerLabel = "Nouveau projet" }: Props) => {
-  const [open, setOpen] = useState(false);
+const ProjectFormDialog = ({ onCreate, triggerLabel = "Nouveau projet", open: openProp, onOpenChange }: Props) => {
+  const [localOpen, setLocalOpen] = useState(false);
+  const controlled = typeof openProp === "boolean";
+  const open = controlled ? (openProp as boolean) : localOpen;
+  const setOpen = controlled ? onOpenChange ?? (() => {}) : setLocalOpen;
+
   const [title, setTitle] = useState("");
   const [address, setAddress] = useState("");
   const [type, setType] = useState("");
