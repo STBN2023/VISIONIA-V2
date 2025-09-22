@@ -66,7 +66,11 @@ const PromptTab = ({
                 </SelectContent>
               </Select>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={onSaveProjectTemplateSelection} className="border-white/30 text-white hover:bg-white/10">
+                <Button
+                  variant="ghost"
+                  onClick={onSaveProjectTemplateSelection}
+                  className="border border-white/30 bg-white/10 text-white hover:bg-white/20 backdrop-blur-sm"
+                >
                   Enregistrer le template
                 </Button>
                 <Button variant="secondary" onClick={onApplyTemplateToPrompt} className="backdrop-blur-sm">
