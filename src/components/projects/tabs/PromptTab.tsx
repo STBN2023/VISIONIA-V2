@@ -44,7 +44,7 @@ const PromptTab = ({
 
   return (
     <div className="mt-4">
-      <Card>
+      <Card className="rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
         <CardHeader>
           <CardTitle>Prompt maître (projet)</CardTitle>
         </CardHeader>
@@ -53,7 +53,7 @@ const PromptTab = ({
             <div className="grid gap-2">
               <Label>Template (projet)</Label>
               <Select value={projectTemplateId ?? "none"} onValueChange={(v) => setProjectTemplateId(v === "none" ? undefined : v)}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-white/10 text-white">
                   <SelectValue placeholder="Choisir un template" />
                 </SelectTrigger>
                 <SelectContent>
@@ -66,10 +66,10 @@ const PromptTab = ({
                 </SelectContent>
               </Select>
               <div className="flex flex-wrap gap-2">
-                <Button variant="outline" onClick={onSaveProjectTemplateSelection}>
+                <Button variant="outline" onClick={onSaveProjectTemplateSelection} className="border-white/30 text-white hover:bg-white/10">
                   Enregistrer le template
                 </Button>
-                <Button variant="secondary" onClick={onApplyTemplateToPrompt}>
+                <Button variant="secondary" onClick={onApplyTemplateToPrompt} className="backdrop-blur-sm">
                   Appliquer au prompt
                 </Button>
               </div>
@@ -78,7 +78,7 @@ const PromptTab = ({
             <div className="grid gap-2">
               <Label>Filtrer les images analysées</Label>
               <Select value={analysisTag} onValueChange={(v) => setAnalysisTag(v)}>
-                <SelectTrigger>
+                <SelectTrigger className="bg-white/10 text-white">
                   <SelectValue placeholder="Toutes les images" />
                 </SelectTrigger>
                 <SelectContent>
@@ -90,7 +90,7 @@ const PromptTab = ({
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-xs text-white/70">
                 {analysisTag === "all"
                   ? `${images.length} image(s) seront analysées.`
                   : `${imagesForRun.length} image(s) avec le tag “${analysisTag}” seront analysées.`}
@@ -109,15 +109,16 @@ Solutions correctives:
 Conformité réglementaire:
 - ...`}
             rows={12}
+            className="bg-white/10 text-white placeholder:text-white/60"
           />
           {lineErrors.length > 0 ? (
-            <p className="text-sm text-destructive">Lignes trop longues (&gt; 100 caractères) : {lineErrors.join(", ")}</p>
+            <p className="text-sm text-red-300">Lignes trop longues (&gt; 100 caractères) : {lineErrors.join(", ")}</p>
           ) : (
-            <p className="text-xs text-muted-foreground">Règle: chaque ligne ≤ 100 caractères.</p>
+            <p className="text-xs text-white/70">Règle: chaque ligne ≤ 100 caractères.</p>
           )}
         </CardContent>
         <CardFooter className="flex flex-wrap items-center justify-between gap-2">
-          <div className="text-xs text-muted-foreground">Astuce: vérifiez que le prompt correspond bien aux images.</div>
+          <div className="text-xs text-white/70">Astuce: vérifiez que le prompt correspond bien aux images.</div>
           <RunAnalysisDialog
             projectId={projectId}
             prompt={prompt}

@@ -50,8 +50,8 @@ const ImageCard = ({
 
   return (
     <>
-      <Card className="overflow-hidden">
-        <div className="relative aspect-[4/3] w-full bg-muted">
+      <Card className="overflow-hidden rounded-3xl border-white/20 bg-white/10 text-white shadow-2xl backdrop-blur-2xl">
+        <div className="relative aspect-[4/3] w-full bg-white/5">
           <img
             src={img.dataUrl}
             alt={img.name}
@@ -65,7 +65,7 @@ const ImageCard = ({
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">{img.name}</p>
-              <p className="truncate text-[11px] text-muted-foreground">
+              <p className="truncate text-[11px] text-white/70">
                 {(img.size / 1024).toFixed(0)} Ko • {new Date(img.createdAt).toLocaleDateString()}
               </p>
             </div>
@@ -76,6 +76,7 @@ const ImageCard = ({
                 disabled={!canLeft}
                 onClick={() => onMoveImage(img.id, "left")}
                 title="Déplacer à gauche"
+                className="hover:bg-white/10"
               >
                 <ArrowLeftCircle className="h-4 w-4" />
               </Button>
@@ -85,6 +86,7 @@ const ImageCard = ({
                 disabled={!canRight}
                 onClick={() => onMoveImage(img.id, "right")}
                 title="Déplacer à droite"
+                className="hover:bg-white/10"
               >
                 <ArrowRightCircle className="h-4 w-4" />
               </Button>
@@ -93,6 +95,7 @@ const ImageCard = ({
                 variant="ghost"
                 onClick={() => onDeleteImage(img.id)}
                 title="Supprimer"
+                className="hover:bg-white/10"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -107,7 +110,7 @@ const ImageCard = ({
                   value={img.tag ?? "none"}
                   onValueChange={(v) => onUpdateTag(img.id, v === "none" ? undefined : (v as ImageTag))}
                 >
-                  <SelectTrigger className="h-8">
+                  <SelectTrigger className="h-8 bg-white/10 text-white">
                     <SelectValue placeholder="Choisir un tag" />
                   </SelectTrigger>
                   <SelectContent>
@@ -124,7 +127,7 @@ const ImageCard = ({
                     placeholder="Nouveau tag"
                     value={newTag}
                     onChange={(e) => setNewTag(e.target.value)}
-                    className="h-8"
+                    className="h-8 bg-white/10 text-white placeholder:text-white/60"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
@@ -132,7 +135,7 @@ const ImageCard = ({
                       }
                     }}
                   />
-                  <Button type="button" size="sm" variant="outline" onClick={addTag}>
+                  <Button type="button" size="sm" variant="outline" onClick={addTag} className="border-white/30 text-white hover:bg-white/10">
                     <Plus className="mr-1 h-4 w-4" />
                     Ajouter
                   </Button>
@@ -147,7 +150,7 @@ const ImageCard = ({
                     onUpdateImageTemplate(img.id, v === "inherit" ? undefined : v)
                   }
                 >
-                  <SelectTrigger className="h-8">
+                  <SelectTrigger className="h-8 bg-white/10 text-white">
                     <SelectValue placeholder="Hériter du projet" />
                   </SelectTrigger>
                   <SelectContent>
@@ -167,7 +170,7 @@ const ImageCard = ({
         <CardFooter className="p-2">
           <Button
             variant="secondary"
-            className="w-full justify-between"
+            className="w-full justify-between backdrop-blur-sm"
             onClick={() => setOpenOptions((v) => !v)}
           >
             {openOptions ? "Masquer les options" : "Afficher les options"}

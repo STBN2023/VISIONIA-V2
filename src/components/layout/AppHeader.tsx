@@ -18,10 +18,10 @@ const NavItem = ({
     <NavLink
       to={to}
       className={cn(
-        "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+        "inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition-colors",
         active
-          ? "bg-white/50 text-foreground shadow-sm backdrop-blur-md dark:bg-white/10"
-          : "text-muted-foreground hover:text-foreground hover:bg-white/40 backdrop-blur-sm dark:hover:bg-white/10",
+          ? "bg-white/20 text-white shadow-sm backdrop-blur-md"
+          : "text-white/80 hover:text-white hover:bg-white/15 backdrop-blur-sm",
       )}
     >
       {Icon ? <Icon className="h-4 w-4" /> : null}
@@ -36,30 +36,32 @@ export const AppHeader = ({
   onCreateProjectClick?: () => void;
 }) => {
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-white/20 bg-background/60 backdrop-blur-md supports-[backdrop-filter]:bg-background/50">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-        <Link to="/" className="text-base font-semibold">
-          Rénov’ IA
-        </Link>
-        <nav className="flex items-center gap-1">
-          <NavItem to="/projects" label="Projets" icon={FolderClosed} />
-          <NavItem to="/prompts" label="Prompts" icon={FileText} />
-          <NavItem to="/settings" label="Paramètres" icon={SettingsIcon} />
-        </nav>
-        <div className="flex items-center gap-2">
-          {onCreateProjectClick ? (
-            <Button size="sm" className="backdrop-blur-sm">
-              <Plus className="mr-2 h-4 w-4" />
-              <span onClick={onCreateProjectClick}>Nouveau projet</span>
-            </Button>
-          ) : (
-            <Link to="/projects">
+    <header className="sticky top-0 z-40">
+      <div className="mx-auto max-w-6xl px-4 py-4">
+        <div className="flex items-center justify-between rounded-3xl border border-white/20 bg-white/10 px-4 py-3 shadow-2xl backdrop-blur-2xl">
+          <Link to="/" className="text-base font-semibold text-white">
+            Rénov’ IA
+          </Link>
+          <nav className="flex items-center gap-1">
+            <NavItem to="/projects" label="Projets" icon={FolderClosed} />
+            <NavItem to="/prompts" label="Prompts" icon={FileText} />
+            <NavItem to="/settings" label="Paramètres" icon={SettingsIcon} />
+          </nav>
+          <div className="flex items-center gap-2">
+            {onCreateProjectClick ? (
               <Button size="sm" className="backdrop-blur-sm">
-                <FolderClosed className="mr-2 h-4 w-4" />
-                Voir les projets
+                <Plus className="mr-2 h-4 w-4" />
+                <span onClick={onCreateProjectClick}>Nouveau projet</span>
               </Button>
-            </Link>
-          )}
+            ) : (
+              <Link to="/projects">
+                <Button size="sm" className="backdrop-blur-sm">
+                  <FolderClosed className="mr-2 h-4 w-4" />
+                  Voir les projets
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     </header>

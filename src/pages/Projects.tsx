@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { FolderClosed, Trash2 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
+import { GlassShell } from "@/components/layout/GlassShell";
 
 const Projects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -39,7 +40,6 @@ const Projects = () => {
     } catch (e: any) {
       const msg = e?.message || "Erreur lors de la création du projet";
       showError(msg);
-      // Rejeter pour que le dialog sache qu'il ne doit pas se fermer
       throw e;
     }
   };
@@ -53,34 +53,32 @@ const Projects = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <GlassShell>
       <AppHeader onCreateProjectClick={() => setCreateOpen(true)} />
       <main className="mx-auto w-full max-w-6xl px-4 py-6">
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex items-center justify-between text-white">
           <div>
             <h1 className="text-2xl font-semibold">Projets</h1>
-            <p className="text-sm text-muted-foreground">{subtitle}</p>
+            <p className="text-sm text-white/70">{subtitle}</p>
           </div>
           <ProjectFormDialog open={createOpen} onOpenChange={setCreateOpen} onCreate={handleCreate} />
         </div>
-        <Separator className="mb-6" />
+        <Separator className="mb-6 border-white/20" />
         {projects.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
-            <FolderClosed className="mb-3 h-8 w-8 text-muted-foreground" />
-            <p className="mb-4 text-muted-foreground">
-              Créez votre premier projet pour démarrer l’analyse.
-            </p>
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/20 bg-white/5 py-16 text-center backdrop-blur-xl">
+            <FolderClosed className="mb-3 h-8 w-8 text-white/70" />
+            <p className="mb-4 text-white/80">Créez votre premier projet pour démarrer l’analyse.</p>
             <ProjectFormDialog onCreate={handleCreate} triggerLabel="Créer un projet" />
           </div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {projects.map((p) => (
-              <Card key={p.id} className="flex flex-col">
+              <Card key={p.id} className="flex flex-col rounded-3xl border-white/20 bg-white/10 text-white shadow-2xl backdrop-blur-2xl">
                 <CardHeader className="pb-2">
                   <CardTitle className="line-clamp-1">{p.title}</CardTitle>
                 </CardHeader>
                 <CardContent className="flex-1 space-y-2">
-                  <div className="text-sm text-muted-foreground line-clamp-2">{p.address || "Adresse non renseignée"}</div>
+                  <div className="text-sm text-white/80 line-clamp-2">{p.address || "Adresse non renseignée"}</div>
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary">{p.status}</Badge>
                     {p.type ? <Badge variant="outline">{p.type}</Badge> : null}
@@ -88,9 +86,9 @@ const Projects = () => {
                 </CardContent>
                 <CardFooter className="flex items-center justify-between">
                   <Link to={`/projects/${p.id}`}>
-                    <Button size="sm">Ouvrir</Button>
+                    <Button size="sm" className="backdrop-blur-sm">Ouvrir</Button>
                   </Link>
-                  <Button size="sm" variant="ghost" onClick={() => handleDelete(p.id)}>
+                  <Button size="sm" variant="ghost" onClick={() => handleDelete(p.id)} className="text-white/90 hover:bg-white/10">
                     <Trash2 className="mr-2 h-4 w-4" />
                     Supprimer
                   </Button>
@@ -100,7 +98,7 @@ const Projects = () => {
           </div>
         )}
       </main>
-    </div>
+    </GlassShell>
   );
 };
 

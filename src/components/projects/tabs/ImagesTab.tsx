@@ -54,10 +54,10 @@ const ImagesTab = ({
   };
 
   return (
-    <div className="mt-4 space-y-4">
-      <Card>
+    <div className="mt-4 text-white space-y-4">
+      <Card className="rounded-3xl border-white/20 bg-white/10 backdrop-blur-2xl">
         <CardHeader>
-          <CardTitle>Ajouter des images</CardTitle>
+          <CardTitle className="text-white">Ajouter des images</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <Dropzone
@@ -74,8 +74,9 @@ const ImagesTab = ({
               accept="image/jpeg,image/png,image/webp"
               multiple
               onChange={(e) => onAddFiles(e.target.files)}
+              className="bg-white/10 text-white file:mr-2 file:rounded file:border-0 file:bg-white/20 file:px-3 file:py-2 file:text-white"
             />
-            <Button type="button" variant="outline" onClick={() => document.getElementById("file-input-hidden")?.click()}>
+            <Button type="button" variant="outline" onClick={() => document.getElementById("file-input-hidden")?.click()} className="border-white/30 text-white hover:bg-white/10">
               <Upload className="mr-2 h-4 w-4" />
               Parcourir
             </Button>
@@ -88,18 +89,18 @@ const ImagesTab = ({
             className="hidden"
             onChange={(e) => onAddFiles(e.target.files)}
           />
-          <p className="text-xs text-muted-foreground">Formats: JPG/PNG/WebP • max 25 Mo/image</p>
+          <p className="text-xs text-white/70">Formats: JPG/PNG/WebP • max 25 Mo/image</p>
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
         <CardHeader>
           <CardTitle>Tags du projet</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             {project.tags.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aucun tag pour le moment.</p>
+              <p className="text-sm text-white/80">Aucun tag pour le moment.</p>
             ) : (
               project.tags.map((t) => (
                 <Badge key={t} variant="secondary" className="flex items-center gap-1">
@@ -107,7 +108,7 @@ const ImagesTab = ({
                   <Button
                     size="icon"
                     variant="ghost"
-                    className="h-5 w-5"
+                    className="h-5 w-5 hover:bg-white/10"
                     title="Supprimer le tag"
                     onClick={() => onDeleteTag(t)}
                   >
@@ -128,21 +129,22 @@ const ImagesTab = ({
                   addTag();
                 }
               }}
+              className="bg-white/10 text-white placeholder:text-white/60"
             />
-            <Button type="button" onClick={addTag}>Ajouter</Button>
+            <Button type="button" onClick={addTag} className="backdrop-blur-sm">Ajouter</Button>
           </div>
         </CardContent>
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="text-sm text-muted-foreground">
+        <div className="text-sm text-white/80">
           {filteredImages.length} image{filteredImages.length > 1 ? "s" : ""} affichée{filteredImages.length > 1 ? "s" : ""}
           {tagFilter !== "all" ? ` (filtre: ${tagFilter})` : ""}
         </div>
         <div className="flex items-center gap-2">
-          <Label className="text-xs">Filtrer par tag</Label>
+          <Label className="text-xs text-white/80">Filtrer par tag</Label>
           <Select value={tagFilter} onValueChange={(v) => setTagFilter((v as ImageTag) || "all")}>
-            <SelectTrigger className="w-[240px]">
+            <SelectTrigger className="w-[240px] bg-white/10 text-white">
               <SelectValue placeholder="Tous les tags" />
             </SelectTrigger>
             <SelectContent>
@@ -158,9 +160,9 @@ const ImagesTab = ({
       </div>
 
       {project.images.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-lg border border-dashed py-16 text-center">
-          <ImageIcon className="mb-3 h-8 w-8 text-muted-foreground" />
-          <p className="text-muted-foreground">Aucune image pour le moment.</p>
+        <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/20 bg-white/5 py-16 text-center backdrop-blur-xl">
+          <ImageIcon className="mb-3 h-8 w-8 text-white/70" />
+          <p className="text-white/80">Aucune image pour le moment.</p>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">

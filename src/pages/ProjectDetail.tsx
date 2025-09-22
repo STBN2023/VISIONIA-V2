@@ -16,6 +16,7 @@ import { Link, useParams } from "react-router-dom";
 import { Card } from "@/components/ui/card";
 import { ArrowLeft } from "lucide-react";
 import { compressImageToBlob, blobToDataUrl } from "@/utils/image-compress";
+import { GlassShell } from "@/components/layout/GlassShell";
 
 const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 Mo
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -270,31 +271,31 @@ const ProjectDetail = () => {
 
   if (notFound) {
     return (
-      <div className="min-h-screen bg-background">
+      <GlassShell>
         <AppHeader />
-        <main className="mx-auto w-full max-w-6xl px-4 py-6">
-          <Card className="p-6">
+        <main className="mx-auto w-full max-w-6xl px-4 py-6 text-white">
+          <Card className="rounded-3xl border-white/20 bg-white/10 p-6 backdrop-blur-2xl">
             <p className="mb-4">Projet introuvable.</p>
             <Link to="/projects">
-              <Button variant="secondary">
+              <Button variant="secondary" className="backdrop-blur-sm">
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Retour aux projets
               </Button>
             </Link>
           </Card>
         </main>
-      </div>
+      </GlassShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <GlassShell>
       <AppHeader />
-      <main className="mx-auto w-full max-w-6xl px-4 py-6">
+      <main className="mx-auto w-full max-w-6xl px-4 py-6 text-white">
         <ProjectHeader project={project} />
-        <Separator className="mb-6" />
+        <Separator className="mb-6 border-white/20" />
         <Tabs defaultValue="images" className="w-full">
-          <TabsList className="flex flex-wrap">
+          <TabsList className="flex flex-wrap bg-white/10 text-white">
             <TabsTrigger value="images">Images</TabsTrigger>
             <TabsTrigger value="prompt">Prompt</TabsTrigger>
             <TabsTrigger value="infos">Infos</TabsTrigger>
@@ -354,7 +355,7 @@ const ProjectDetail = () => {
           </TabsContent>
         </Tabs>
       </main>
-    </div>
+    </GlassShell>
   );
 };
 

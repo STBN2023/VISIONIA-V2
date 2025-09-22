@@ -19,6 +19,7 @@ import {
   type PromptTemplate,
   getPromptLineErrors,
 } from "@/utils/prompts";
+import { GlassShell } from "@/components/layout/GlassShell";
 
 const Prompts = () => {
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
@@ -102,26 +103,26 @@ const Prompts = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <GlassShell>
       <AppHeader />
-      <main className="mx-auto w-full max-w-6xl px-4 py-6">
+      <main className="mx-auto w-full max-w-6xl px-4 py-6 text-white">
         <div className="mb-4 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold">Templates de prompt</h1>
-            <p className="text-sm text-muted-foreground">
+            <p className="text-sm text-white/70">
               Définissez des styles globaux de prompt, choisissez un défaut et appliquez-les aux projets et aux images.
             </p>
           </div>
-          <Button onClick={handleNew}>Nouveau template</Button>
+          <Button onClick={handleNew} className="backdrop-blur-sm">Nouveau template</Button>
         </div>
-        <Separator className="mb-6" />
+        <Separator className="mb-6 border-white/20" />
 
         <div className="grid gap-6 md:grid-cols-3">
           <div className="space-y-2 md:col-span-1">
             {templates.map((t) => (
               <Card
                 key={t.id}
-                className={`cursor-pointer ${selectedId === t.id ? "ring-2 ring-primary" : ""}`}
+                className={`cursor-pointer rounded-3xl border-white/20 bg-white/10 text-white shadow-2xl backdrop-blur-2xl ${selectedId === t.id ? "ring-2 ring-white/40" : ""}`}
                 onClick={() => setSelectedId(t.id)}
               >
                 <CardHeader className="pb-2">
@@ -131,36 +132,38 @@ const Prompts = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <p className="line-clamp-3 whitespace-pre-wrap text-sm text-muted-foreground">{t.body}</p>
+                  <p className="line-clamp-3 whitespace-pre-wrap text-sm text-white/80">{t.body}</p>
                 </CardContent>
-                <CardFooter className="text-xs text-muted-foreground">
+                <CardFooter className="text-xs text-white/70">
                   v{t.version} • {new Date(t.updatedAt).toLocaleDateString()}
                 </CardFooter>
               </Card>
             ))}
             {templates.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Aucun template pour le moment.</p>
+              <p className="text-sm text-white/80">Aucun template pour le moment.</p>
             ) : null}
           </div>
 
           <div className="md:col-span-2">
             {!selected ? (
-              <Card className="p-6 text-sm text-muted-foreground">Sélectionnez un template pour l’éditer.</Card>
+              <Card className="rounded-3xl border-white/20 bg-white/10 p-6 text-sm text-white/80 backdrop-blur-2xl">
+                Sélectionnez un template pour l’éditer.
+              </Card>
             ) : (
-              <Card>
+              <Card className="rounded-3xl border-white/20 bg-white/10 text-white shadow-2xl backdrop-blur-2xl">
                 <CardHeader className="pb-2">
                   <div className="flex items-center justify-between gap-3">
                     <CardTitle>Édition du template</CardTitle>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={handleDuplicate}>
+                      <Button variant="outline" size="sm" onClick={handleDuplicate} className="border-white/30 text-white hover:bg-white/10">
                         <Copy className="mr-2 h-4 w-4" />
                         Dupliquer
                       </Button>
-                      <Button variant="outline" size="sm" onClick={markDefault}>
+                      <Button variant="outline" size="sm" onClick={markDefault} className="border-white/30 text-white hover:bg-white/10">
                         <Star className="mr-2 h-4 w-4" />
                         Définir par défaut
                       </Button>
-                      <Button variant="ghost" size="sm" onClick={handleDelete}>
+                      <Button variant="ghost" size="sm" onClick={handleDelete} className="text-white hover:bg-white/10">
                         <Trash2 className="mr-2 h-4 w-4" />
                         Supprimer
                       </Button>
@@ -170,20 +173,20 @@ const Prompts = () => {
                 <CardContent className="space-y-4">
                   <div className="grid gap-2">
                     <Label htmlFor="name">Nom</Label>
-                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+                    <Input id="name" value={name} onChange={(e) => setName(e.target.value)} className="bg-white/10 text-white placeholder:text-white/60" />
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="body">Contenu</Label>
-                    <Textarea id="body" rows={14} value={body} onChange={(e) => setBody(e.target.value)} />
+                    <Textarea id="body" rows={14} value={body} onChange={(e) => setBody(e.target.value)} className="bg-white/10 text-white placeholder:text-white/60" />
                     {lineErrors.length > 0 ? (
-                      <p className="text-sm text-destructive">Lignes trop longues (&gt; 100 caractères) : {lineErrors.join(", ")}</p>
+                      <p className="text-sm text-red-300">Lignes trop longues (> 100 caractères) : {lineErrors.join(", ")}</p>
                     ) : (
-                      <p className="text-xs text-muted-foreground">Règle: chaque ligne ≤ 100 caractères.</p>
+                      <p className="text-xs text-white/70">Règle: chaque ligne ≤ 100 caractères.</p>
                     )}
                   </div>
                 </CardContent>
                 <CardFooter className="flex justify-end">
-                  <Button onClick={handleSave}>
+                  <Button onClick={handleSave} className="backdrop-blur-sm">
                     <Save className="mr-2 h-4 w-4" />
                     Enregistrer
                   </Button>
@@ -193,7 +196,7 @@ const Prompts = () => {
           </div>
         </div>
       </main>
-    </div>
+    </GlassShell>
   );
 };
 

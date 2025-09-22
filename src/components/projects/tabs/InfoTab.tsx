@@ -37,19 +37,19 @@ const InfoTab = ({
 }: Props) => {
   return (
     <div className="mt-4">
-      <Card>
+      <Card className="rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
         <CardHeader>
           <CardTitle>Informations du projet</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="grid gap-2">
             <Label htmlFor="title">Titre</Label>
-            <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
+            <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} className="bg-white/10 text-white placeholder:text-white/60" />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="status">Statut</Label>
             <Select value={status} onValueChange={(v) => setStatus(v as ProjectStatus)}>
-              <SelectTrigger id="status">
+              <SelectTrigger id="status" className="bg-white/10 text-white">
                 <SelectValue placeholder="Choisir un statut" />
               </SelectTrigger>
               <SelectContent>
@@ -63,19 +63,19 @@ const InfoTab = ({
           </div>
           <div className="grid gap-2 md:col-span-2">
             <Label htmlFor="address">Adresse</Label>
-            <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} />
+            <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} className="bg-white/10 text-white placeholder:text-white/60" />
           </div>
           <div className="grid gap-2 md:col-span-2">
             <Label htmlFor="type">Type de bâti</Label>
-            <Input id="type" value={type} onChange={(e) => setType(e.target.value)} placeholder="Pavillon, immeuble, ..." />
+            <Input id="type" value={type} onChange={(e) => setType(e.target.value)} placeholder="Pavillon, immeuble, ..." className="bg-white/10 text-white placeholder:text-white/60" />
           </div>
           <div className="grid gap-2 md:col-span-2">
             <Label htmlFor="notes">Notes</Label>
-            <Textarea id="notes" rows={6} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes internes, remarques, contexte..." />
+            <Textarea id="notes" rows={6} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes internes, remarques, contexte..." className="bg-white/10 text-white placeholder:text-white/60" />
           </div>
         </CardContent>
         <CardFooter className="flex justify-end">
-          <Button onClick={onSaveInfos}>Enregistrer</Button>
+          <Button onClick={onSaveInfos} className="backdrop-blur-sm">Enregistrer</Button>
         </CardFooter>
       </Card>
     </div>
