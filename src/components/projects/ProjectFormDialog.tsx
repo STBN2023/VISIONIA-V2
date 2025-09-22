@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Dialog, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import GlassDialogContent from "@/components/glass/GlassDialogContent";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -63,34 +64,34 @@ const ProjectFormDialog = ({ onCreate, triggerLabel = "Nouveau projet", open: op
           </Button>
         </DialogTrigger>
       ) : null}
-      <DialogContent className="sm:max-w-md">
+      <GlassDialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>Nouveau projet</DialogTitle>
           <DialogDescription>Renseignez les informations du projet puis validez pour le créer.</DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="grid gap-2">
             <Label htmlFor="title">Titre</Label>
-            <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Maison individuelle - Dupont" required />
+            <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Maison individuelle - Dupont" className="bg-white/10 text-white placeholder:text-white/60" required />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="address">Adresse</Label>
-            <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="12 rue des Fleurs, Lyon" />
+            <Input id="address" value={address} onChange={(e) => setAddress(e.target.value)} placeholder="12 rue des Fleurs, Lyon" className="bg-white/10 text-white placeholder:text-white/60" />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="type">Type de bâti</Label>
-            <Input id="type" value={type} onChange={(e) => setType(e.target.value)} placeholder="Pavillon, immeuble, ..." />
+            <Input id="type" value={type} onChange={(e) => setType(e.target.value)} placeholder="Pavillon, immeuble, ..." className="bg-white/10 text-white placeholder:text-white/60" />
           </div>
           <div className="flex justify-end gap-2 pt-2">
-            <Button type="button" variant="secondary" onClick={() => setOpen(false)} disabled={submitting}>
+            <Button type="button" variant="secondary" onClick={() => setOpen(false)} disabled={submitting} className="backdrop-blur-sm">
               Annuler
             </Button>
-            <Button type="submit" disabled={!canSubmit}>
+            <Button type="submit" disabled={!canSubmit} className="backdrop-blur-sm">
               {submitting ? "Création..." : "Créer"}
             </Button>
           </div>
         </form>
-      </DialogContent>
+      </GlassDialogContent>
     </Dialog>
   );
 };

@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import GlassDialogContent from "@/components/glass/GlassDialogContent";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -78,7 +79,7 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
       <DialogTrigger asChild>
         <Button disabled={disabled}>{triggerLabel}</Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <GlassDialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Lancer l’analyse</DialogTitle>
           <DialogDescription>Choisissez le mode d’exécution et validez.</DialogDescription>
@@ -97,19 +98,19 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
               </div>
             </RadioGroup>
           </div>
-          <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
+          <div className="rounded-md border border-white/20 bg-white/10 p-3 text-sm text-white/80">
             <p>
               L’analyse utilise votre clé OpenAI stockée localement (Paramètres). Aucune base de données ni secret côté serveur.
             </p>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="secondary" onClick={() => setOpen(false)}>
+            <Button variant="secondary" onClick={() => setOpen(false)} className="backdrop-blur-sm">
               Annuler
             </Button>
-            <Button onClick={onStart} disabled={!canStart}>Démarrer</Button>
+            <Button onClick={onStart} disabled={!canStart} className="backdrop-blur-sm">Démarrer</Button>
           </div>
         </div>
-      </DialogContent>
+      </GlassDialogContent>
     </Dialog>
   );
 };

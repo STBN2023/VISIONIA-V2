@@ -3,7 +3,8 @@ import { Card, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog } from "@/components/ui/dialog";
+import GlassDialogContent from "@/components/glass/GlassDialogContent";
 import { Input } from "@/components/ui/input";
 import { ArrowLeftCircle, ArrowRightCircle, Trash2, ChevronDown, ChevronUp, Plus } from "lucide-react";
 import type { ImageTag, ProjectImage } from "@/utils/storage";
@@ -180,14 +181,14 @@ const ImageCard = ({
       </Card>
 
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-5xl border-0 p-0">
+        <GlassDialogContent className="max-w-5xl p-0">
           <img
             src={img.dataUrl}
             alt={img.name}
-            className="h-[80vh] w-full object-contain"
+            className="h-[80vh] w-full rounded-3xl object-contain"
             onClick={() => setPreviewOpen(false)}
           />
-        </DialogContent>
+        </GlassDialogContent>
       </Dialog>
     </>
   );
