@@ -3,14 +3,16 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   className?: string;
-  size?: number; // pixels
+  height?: number; // hauteur en px (largeur auto pour respecter le ratio)
+  width?: number; // optionnel: si fourni, force la largeur
   alt?: string;
-  src?: string; // permet de surcharger la source si besoin
+  src?: string; // source personnalisable
 };
 
 const BrandLogo: React.FC<Props> = ({
   className,
-  size = 28,
+  height = 32,
+  width,
   alt = "Logo ISOEDRE",
   src: initialSrc = "/logo-isoedre.png",
 }) => {
@@ -21,12 +23,7 @@ const BrandLogo: React.FC<Props> = ({
     <img
       src={src}
       alt={alt}
-      width={size}
-      height={size}
-      className={cn(
-        "rounded-md object-contain drop-shadow",
-        className
-      )}
+      className={cn("object-contain drop-shadow", className)}
       draggable={false}
       decoding="async"
       loading="eager"
@@ -34,7 +31,11 @@ const BrandLogo: React.FC<Props> = ({
         console.warn("[BrandLogo] Impossible de charger", src, "→ fallback placeholder.svg");
         setSrc("/placeholder.svg");
       }}
-      style={{ width: size, height: size }}
+      style={{
+        height,
+        width: width ?? "auto",
+        display: "block",
+      }}
     />
   );
 };
