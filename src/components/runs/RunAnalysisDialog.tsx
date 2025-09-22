@@ -30,6 +30,10 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
       return;
     }
     const s = getSettings();
+    if (!s.apiKey || s.apiKey.trim().length < 10) {
+      showError("Aucune clé API détectée. Renseignez votre clé dans Paramètres.");
+      return;
+    }
 
     // 1) Crée un run en 'running'
     const run = createPendingRun({
@@ -43,10 +47,9 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
 
     setOpen(false);
     showSuccess("Analyse démarrée");
-
     onStarted?.(run.id);
 
-    // 2) Appelle l'API serveur (Vercel -> OpenAI)
+    // 2) Appel direct OpenAI (clé locale)
     const result = await analyzeLLM({
       mode,
       prompt,
@@ -96,7 +99,7 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
           </div>
           <div className="rounded-md border bg-muted/30 p-3 text-sm text-muted-foreground">
             <p>
-              L’analyse utilise votre clé OpenAI côté serveur (Vercel). Assurez-vous d’avoir configuré OPENAI_API_KEY dans les variables d’environnement du projet.
+              L’analyse utilise votre clé OpenAI stockée localement (Paramètres). Aucune base de données ni secret côté serveur.
             </p>
           </div>
           <div className="flex justify-end gap-2">

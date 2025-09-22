@@ -36,7 +36,7 @@ export type Project = {
   notes?: string;
 };
 
-// --- Fallback local (navigateur) ---
+// --- Stockage 100% local (navigateur) ---
 const LOCAL_KEY = "projects_local_fallback_v1";
 
 function readLocal(): Project[] {
@@ -58,37 +58,20 @@ function findLocal(id: string): Project | undefined {
   return readLocal().find((p) => p.id === id);
 }
 
-function isJsonResponse(res: Response) {
-  const ct = res.headers.get("content-type") || "";
-  return ct.toLowerCase().includes("application/json");
+function touchUpdatedAt(p: Project): Project {
+  return { ...p, updatedAt: new Date().toISOString() };
 }
 
-// --- API + fallback ---
+// --- API locale ---
 export async function getProjects(): Promise<Project[]> {
-  const res = await fetch("/api/projects");
-  try {
-    if (res.ok && isJsonResponse(res)) {
-      const data = (await res.json()) as Project[];
-      return data;
-    }
-  } catch {
-    // ignore and fallback
-  }
-  console.warn("API /api/projects indisponible ou non-JSON, utilisation du stockage local.");
-  return readLocal();
+  // Tri par updatedAt desc
+  return readLocal().sort(
+    (a, b) =>
+      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+  );
 }
 
 export async function getProjectById(id: string): Promise<Project | undefined> {
-  const res = await fetch(`/api/projects/${id}`);
-  if (res.status === 404) return undefined;
-  try {
-    if (res.ok && isJsonResponse(res)) {
-      return (await res.json()) as Project;
-    }
-  } catch {
-    // ignore and fallback
-  }
-  console.warn(`API /api/projects/${id} indisponible ou non-JSON, lecture locale.`);
   return findLocal(id);
 }
 
@@ -97,20 +80,6 @@ export async function createProject(input: {
   address?: string;
   type?: string;
 }): Promise<Project> {
-  const res = await fetch("/api/projects", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  try {
-    if (res.ok && isJsonResponse(res)) {
-      return (await res.json()) as Project;
-    }
-  } catch {
-    // ignore and fallback
-  }
-  // Fallback local
-  console.warn("API /api/projects POST indisponible ou non-JSON, création en localStorage.");
   const now = new Date().toISOString();
   const proj: Project = {
     id: crypto.randomUUID(),
@@ -134,40 +103,20 @@ export async function updateProject(
   id: string,
   patch: Partial<Omit<Project, "id" | "createdAt">>,
 ): Promise<Project | undefined> {
-  const res = await fetch(`/api/projects/${id}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(patch),
-  });
-  if (res.status === 404) return undefined;
-  try {
-    if (res.ok && isJsonResponse(res)) {
-      return (await res.json()) as Project;
-    }
-  } catch {
-    // ignore and fallback
-  }
-  // Fallback local
-  console.warn(`API /api/projects/${id} PATCH indisponible ou non-JSON, mise à jour locale.`);
   const all = readLocal();
   const idx = all.findIndex((p) => p.id === id);
   if (idx === -1) return undefined;
   const prev = all[idx];
-  const next: Project = {
+  const next = touchUpdatedAt({
     ...prev,
     ...patch,
-    updatedAt: new Date().toISOString(),
-  };
+  });
   all[idx] = next;
   writeLocal(all);
   return next;
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
-  if (res.ok) return;
-  // Fallback local
-  console.warn(`API /api/projects/${id} DELETE indisponible, suppression locale.`);
   const all = readLocal().filter((p) => p.id !== id);
   writeLocal(all);
 }
