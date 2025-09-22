@@ -76,7 +76,12 @@ const ImagesTab = ({
               onChange={(e) => onAddFiles(e.target.files)}
               className="bg-white/10 text-white file:mr-2 file:rounded file:border-0 file:bg-white/20 file:px-3 file:py-2 file:text-white"
             />
-            <Button type="button" variant="outline" onClick={() => document.getElementById("file-input-hidden")?.click()} className="border-white/30 text-white hover:bg-white/10">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => document.getElementById("file-input-hidden")?.click()}
+              className="bg-white/10 border-white/30 text-white hover:bg-white/20 backdrop-blur-sm"
+            >
               <Upload className="mr-2 h-4 w-4" />
               Parcourir
             </Button>
