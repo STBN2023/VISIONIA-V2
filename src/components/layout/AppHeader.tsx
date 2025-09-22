@@ -39,8 +39,14 @@ export const AppHeader = ({
     <header className="sticky top-0 z-40">
       <div className="mx-auto max-w-6xl px-4 py-4">
         <div className="flex items-center justify-between rounded-3xl border border-white/20 bg-white/10 px-4 py-3 shadow-2xl backdrop-blur-2xl">
-          <Link to="/" className="text-base font-semibold text-white">
-            ISOEDRE Vision IA
+          <Link to="/" className="flex items-center gap-2 text-base font-semibold text-white">
+            <img
+              src="/logo-isoedre.png"
+              alt="Logo ISOEDRE"
+              className="h-6 w-6 rounded-md"
+              draggable={false}
+            />
+            <span>ISOEDRE Vision IA</span>
           </Link>
           <nav className="flex items-center gap-1">
             <NavItem to="/projects" label="Projets" icon={FolderClosed} />
