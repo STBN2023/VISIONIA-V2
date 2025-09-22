@@ -3,10 +3,10 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   className?: string;
-  height?: number; // hauteur en px (largeur auto)
+  height?: number; // hauteur en px (largeur auto pour respecter le ratio)
   width?: number; // optionnel: force la largeur
   alt?: string;
-  src?: string; // pour surcharger si besoin
+  src?: string; // permet de surcharger la source
 };
 
 const BrandLogo: React.FC<Props> = ({
@@ -14,7 +14,7 @@ const BrandLogo: React.FC<Props> = ({
   height = 32,
   width,
   alt = "Logo",
-  src: initialSrc = "/web-app-manifest-512x512.png",
+  src: initialSrc = "/favicon-96x96.png",
 }) => {
   const [src, setSrc] = React.useState<string>(initialSrc);
 
