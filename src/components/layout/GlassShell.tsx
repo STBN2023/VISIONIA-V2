@@ -9,16 +9,27 @@ type Props = {
 
 export const GlassShell = ({ children, className }: Props) => {
   const initial = getSettings();
+
+  const [mode, setMode] = React.useState<"image" | "color">(
+    initial.backgroundMode ?? "image",
+  );
   const [bgUrl, setBgUrl] = React.useState<string>(
     initial.backgroundImage ||
       "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=2400&auto=format&fit=crop",
   );
-  const [dim, setDim] = React.useState<number>(typeof initial.backgroundDim === "number" ? initial.backgroundDim : 20);
+  const [bgColor, setBgColor] = React.useState<string>(
+    initial.backgroundColor || "#0b1220",
+  );
+  const [dim, setDim] = React.useState<number>(
+    typeof initial.backgroundDim === "number" ? initial.backgroundDim : 20,
+  );
 
   React.useEffect(() => {
     const onUpdated = () => {
       const s = getSettings();
+      setMode((s.backgroundMode as "image" | "color") ?? "image");
       setBgUrl(s.backgroundImage || "");
+      setBgColor(s.backgroundColor || "#0b1220");
       setDim(typeof s.backgroundDim === "number" ? s.backgroundDim : 20);
     };
     window.addEventListener("settings:updated", onUpdated);
@@ -35,15 +46,22 @@ export const GlassShell = ({ children, className }: Props) => {
         <div className="absolute inset-0 bg-gradient-to-br from-indigo-950 via-purple-950 to-slate-950" />
       </div>
 
-      {/* Image de fond paramétrable */}
+      {/* Couche arrière-plan: image ou couleur */}
       <div className="fixed inset-0 -z-20">
-        <div
-          className="absolute inset-0 bg-cover bg-center"
-          style={{
-            backgroundImage: bgUrl ? `url('${bgUrl}')` : undefined,
-            opacity: 0.2,
-          }}
-        />
+        {mode === "image" ? (
+          <div
+            className="absolute inset-0 bg-cover bg-center"
+            style={{
+              backgroundImage: bgUrl ? `url('${bgUrl}')` : undefined,
+              opacity: 0.2,
+            }}
+          />
+        ) : (
+          <div
+            className="absolute inset-0"
+            style={{ backgroundColor: bgColor || "#0b1220" }}
+          />
+        )}
       </div>
 
       {/* Voile sombre (contraste) */}

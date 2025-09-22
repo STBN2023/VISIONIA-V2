@@ -7,8 +7,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { showSuccess } from "@/utils/toast";
-import { getSettings, saveSettings, type APIProvider } from "@/utils/settings";
+import { getSettings, saveSettings, type APIProvider, type BackgroundMode } from "@/utils/settings";
+import { fileToDataUrl } from "@/utils/storage";
 import { GlassShell } from "@/components/layout/GlassShell";
 
 const Settings = () => {
@@ -21,7 +23,9 @@ const Settings = () => {
   const [azureDeployment, setAzureDeployment] = useState("");
 
   // Apparence
+  const [backgroundMode, setBackgroundMode] = useState<BackgroundMode>("image");
   const [backgroundImage, setBackgroundImage] = useState("");
+  const [backgroundColor, setBackgroundColor] = useState("#0b1220");
   const [backgroundDim, setBackgroundDim] = useState<number>(20);
 
   useEffect(() => {
@@ -33,7 +37,9 @@ const Settings = () => {
     setMaxTokens(s.maxTokens ?? 2000);
     setEndpoint(s.endpoint ?? "");
     setAzureDeployment(s.azureDeployment ?? "");
+    setBackgroundMode((s.backgroundMode as BackgroundMode) ?? "image");
     setBackgroundImage(s.backgroundImage ?? "");
+    setBackgroundColor(s.backgroundColor ?? "#0b1220");
     setBackgroundDim(typeof s.backgroundDim === "number" ? s.backgroundDim : 20);
   }, []);
 
@@ -46,10 +52,14 @@ const Settings = () => {
       maxTokens: Number(maxTokens),
       endpoint: endpoint.trim() || undefined,
       azureDeployment: azureDeployment.trim() || undefined,
-      backgroundImage: backgroundImage.trim() || undefined,
+      backgroundMode,
+      backgroundImage: backgroundMode === "image" ? (backgroundImage.trim() || undefined) : undefined,
+      backgroundColor: backgroundMode === "color" ? (backgroundColor || "#0b1220") : undefined,
       backgroundDim: Math.max(0, Math.min(100, Number(backgroundDim))),
     });
+    setBackgroundMode((next.backgroundMode as BackgroundMode) ?? "image");
     setBackgroundImage(next.backgroundImage ?? "");
+    setBackgroundColor(next.backgroundColor ?? "#0b1220");
     setBackgroundDim(next.backgroundDim ?? 20);
     showSuccess("Paramètres enregistrés");
   };
@@ -60,7 +70,7 @@ const Settings = () => {
       <main className="mx-auto w-full max-w-6xl px-4 py-6 text-white">
         <div className="mb-4">
           <h1 className="text-2xl font-semibold">Paramètres</h1>
-          <p className="text-sm text-white/70">Configurer l’API LLM et l’apparence du fond (contraste).</p>
+          <p className="text-sm text-white/70">Configurer l’API LLM et l’apparence du fond (image, couleur et contraste).</p>
         </div>
         <Separator className="mb-6 border-white/20" />
 
@@ -135,17 +145,89 @@ const Settings = () => {
           </CardHeader>
           <CardContent className="grid gap-4">
             <div className="grid gap-2">
-              <Label>Image de fond (URL)</Label>
-              <Input
-                value={backgroundImage}
-                onChange={(e) => setBackgroundImage(e.target.value)}
-                placeholder="https://… (Unsplash, CDN interne, etc.)"
-                className="bg-white/10 text-white placeholder:text-white/60"
-              />
-              <p className="text-xs text-white/70">
-                Utilisez une image large (≥ 1920px). L’URL peut pointer vers votre CDN pour de meilleures perfs.
-              </p>
+              <Label>Mode d’arrière-plan</Label>
+              <RadioGroup value={backgroundMode} onValueChange={(v) => setBackgroundMode(v as BackgroundMode)}>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="mode-image" value="image" />
+                  <Label htmlFor="mode-image">Image</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <RadioGroupItem id="mode-color" value="color" />
+                  <Label htmlFor="mode-color">Couleur</Label>
+                </div>
+              </RadioGroup>
             </div>
+
+            {backgroundMode === "image" ? (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-2">
+                  <Label>Image de fond (URL)</Label>
+                  <Input
+                    value={backgroundImage}
+                    onChange={(e) => setBackgroundImage(e.target.value)}
+                    placeholder="https://… (Unsplash, CDN interne, etc.)"
+                    className="bg-white/10 text-white placeholder:text-white/60"
+                  />
+                  <p className="text-xs text-white/70">
+                    Vous pouvez saisir une URL ou choisir un fichier ci‑dessous.
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Choisir un fichier (ordinateur)</Label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      if (!f) return;
+                      const dataUrl = await fileToDataUrl(f);
+                      setBackgroundImage(dataUrl);
+                    }}
+                    className="bg-white/10 text-white file:mr-2 file:rounded file:border-0 file:bg-white/20 file:px-3 file:py-2 file:text-white"
+                  />
+                  {backgroundImage ? (
+                    <div className="mt-1 flex items-center gap-3">
+                      <div className="h-12 w-20 overflow-hidden rounded-xl border border-white/20 bg-white/10">
+                        {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                        <img src={backgroundImage} className="h-full w-full object-cover" />
+                      </div>
+                      <Button
+                        variant="ghost"
+                        className="text-white/90 hover:bg-white/10"
+                        onClick={() => setBackgroundImage("")}
+                      >
+                        Retirer l’image
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-2 md:grid-cols-[auto,1fr] md:items-center">
+                <Label>Couleur d’arrière-plan</Label>
+                <div className="flex items-center gap-4">
+                  <input
+                    type="color"
+                    value={backgroundColor}
+                    onChange={(e) => setBackgroundColor(e.target.value)}
+                    aria-label="Choisir une couleur"
+                    className="h-10 w-14 cursor-pointer rounded-lg border border-white/20 bg-transparent p-0"
+                  />
+                  <Input
+                    value={backgroundColor}
+                    onChange={(e) => setBackgroundColor(e.target.value)}
+                    placeholder="#0b1220"
+                    className="max-w-[160px] bg-white/10 text-white placeholder:text-white/60"
+                  />
+                  <div
+                    className="h-10 w-16 rounded-lg border border-white/20"
+                    style={{ backgroundColor: backgroundColor }}
+                    aria-hidden
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="grid gap-2">
               <Label>Contraste du fond (voile sombre): {Math.round(backgroundDim)}%</Label>
               <div className="px-2">
