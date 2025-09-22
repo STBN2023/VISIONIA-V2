@@ -2,6 +2,7 @@ import { Link, NavLink, useLocation } from "react-router-dom";
 import { FolderClosed, Plus, Settings as SettingsIcon, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import BrandLogo from "@/components/branding/BrandLogo";
 
 const NavItem = ({
   to,
@@ -40,12 +41,7 @@ export const AppHeader = ({
       <div className="mx-auto max-w-6xl px-4 py-4">
         <div className="flex items-center justify-between rounded-3xl border border-white/20 bg-white/10 px-4 py-3 shadow-2xl backdrop-blur-2xl">
           <Link to="/" className="flex items-center gap-2 text-base font-semibold text-white">
-            <img
-              src="/logo-isoedre.png"
-              alt="Logo ISOEDRE"
-              className="h-6 w-6 rounded-md"
-              draggable={false}
-            />
+            <BrandLogo size={24} />
             <span>ISOEDRE Vision IA</span>
           </Link>
           <nav className="flex items-center gap-1">
