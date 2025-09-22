@@ -9,7 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { showSuccess } from "@/utils/toast";
-import { getSettings, saveSettings, type APIProvider, type BackgroundMode } from "@/utils/settings";
+import { getSettings, saveSettings, type APIProvider, type BackgroundMode, type ThemePreset } from "@/utils/settings";
 import { fileToDataUrl } from "@/utils/storage";
 import { GlassShell } from "@/components/layout/GlassShell";
 
@@ -27,6 +27,7 @@ const Settings = () => {
   const [backgroundImage, setBackgroundImage] = useState("");
   const [backgroundColor, setBackgroundColor] = useState("#0b1220");
   const [backgroundDim, setBackgroundDim] = useState<number>(20);
+  const [themePreset, setThemePreset] = useState<ThemePreset>("violet");
 
   useEffect(() => {
     const s = getSettings();
@@ -41,6 +42,7 @@ const Settings = () => {
     setBackgroundImage(s.backgroundImage ?? "");
     setBackgroundColor(s.backgroundColor ?? "#0b1220");
     setBackgroundDim(typeof s.backgroundDim === "number" ? s.backgroundDim : 20);
+    setThemePreset((s.themePreset as ThemePreset) ?? "violet");
   }, []);
 
   const handleSave = () => {
@@ -56,11 +58,13 @@ const Settings = () => {
       backgroundImage: backgroundMode === "image" ? (backgroundImage.trim() || undefined) : undefined,
       backgroundColor: backgroundMode === "color" ? (backgroundColor || "#0b1220") : undefined,
       backgroundDim: Math.max(0, Math.min(100, Number(backgroundDim))),
+      themePreset,
     });
     setBackgroundMode((next.backgroundMode as BackgroundMode) ?? "image");
     setBackgroundImage(next.backgroundImage ?? "");
     setBackgroundColor(next.backgroundColor ?? "#0b1220");
     setBackgroundDim(next.backgroundDim ?? 20);
+    setThemePreset((next.themePreset as ThemePreset) ?? "violet");
     showSuccess("Paramètres enregistrés");
   };
 
@@ -70,7 +74,7 @@ const Settings = () => {
       <main className="mx-auto w-full max-w-6xl px-4 py-6 text-white">
         <div className="mb-4">
           <h1 className="text-2xl font-semibold">Paramètres</h1>
-          <p className="text-sm text-white/70">Configurer l’API LLM et l’apparence du fond (image, couleur et contraste).</p>
+          <p className="text-sm text-white/70">Configurer l’API LLM et l’apparence du fond (image, couleur, contraste, palette).</p>
         </div>
         <Separator className="mb-6 border-white/20" />
 
@@ -144,6 +148,22 @@ const Settings = () => {
             <CardTitle>Apparence</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4">
+            <div className="grid gap-2 md:grid-cols-3 md:items-center">
+              <Label>Palette d’accent</Label>
+              <div className="md:col-span-2">
+                <Select value={themePreset} onValueChange={(v) => setThemePreset(v as ThemePreset)}>
+                  <SelectTrigger className="bg-white/10 text-white">
+                    <SelectValue placeholder="Choisir une palette" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="violet">Violet (par défaut)</SelectItem>
+                    <SelectItem value="blue">Bleu</SelectItem>
+                    <SelectItem value="neutral">Neutre</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
             <div className="grid gap-2">
               <Label>Mode d’arrière-plan</Label>
               <RadioGroup value={backgroundMode} onValueChange={(v) => setBackgroundMode(v as BackgroundMode)}>

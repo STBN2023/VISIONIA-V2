@@ -1,5 +1,6 @@
 export type APIProvider = "openai" | "anthropic" | "google" | "azure";
 export type BackgroundMode = "image" | "color";
+export type ThemePreset = "violet" | "blue" | "neutral";
 
 export type APISettings = {
   provider: APIProvider;
@@ -14,6 +15,7 @@ export type APISettings = {
   backgroundImage?: string;
   backgroundColor?: string; // hex
   backgroundDim?: number; // 0..100 (voile sombre)
+  themePreset?: ThemePreset; // palette d’accent globale
   updatedAt: string;
 };
 
@@ -30,6 +32,7 @@ export function getDefaultSettings(): APISettings {
       "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=2400&auto=format&fit=crop",
     backgroundColor: "#0b1220",
     backgroundDim: 20,
+    themePreset: "violet",
     updatedAt: new Date().toISOString(),
   };
 }

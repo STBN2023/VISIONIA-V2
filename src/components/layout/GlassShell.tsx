@@ -23,6 +23,9 @@ export const GlassShell = ({ children, className }: Props) => {
   const [dim, setDim] = React.useState<number>(
     typeof initial.backgroundDim === "number" ? initial.backgroundDim : 20,
   );
+  const [theme, setTheme] = React.useState<"violet" | "blue" | "neutral">(
+    (initial.themePreset as any) || "violet",
+  );
 
   React.useEffect(() => {
     const onUpdated = () => {
@@ -31,6 +34,7 @@ export const GlassShell = ({ children, className }: Props) => {
       setBgUrl(s.backgroundImage || "");
       setBgColor(s.backgroundColor || "#0b1220");
       setDim(typeof s.backgroundDim === "number" ? s.backgroundDim : 20);
+      setTheme((s.themePreset as any) || "violet");
     };
     window.addEventListener("settings:updated", onUpdated);
     return () => window.removeEventListener("settings:updated", onUpdated);
@@ -39,11 +43,29 @@ export const GlassShell = ({ children, className }: Props) => {
   const dimClamped = Math.max(0, Math.min(100, Number.isFinite(dim) ? dim : 20));
   const alpha = (dimClamped / 100) * 0.7; // voile sombre max ~70%
 
+  const themeConf = {
+    violet: {
+      base: "from-indigo-950 via-purple-950 to-slate-950",
+      halo1: "from-blue-400/25",
+      halo2: "from-fuchsia-400/25",
+    },
+    blue: {
+      base: "from-slate-950 via-blue-950 to-slate-950",
+      halo1: "from-sky-400/25",
+      halo2: "from-cyan-400/25",
+    },
+    neutral: {
+      base: "from-slate-950 via-gray-950 to-slate-950",
+      halo1: "from-gray-400/25",
+      halo2: "from-gray-400/25",
+    },
+  }[theme];
+
   return (
     <div className={cn("relative min-h-screen overflow-hidden text-white", className)}>
-      {/* Dégradé sombre de base */}
+      {/* Dégradé sombre de base (teinte selon le thème) */}
       <div className="fixed inset-0 -z-30">
-        <div className="absolute inset-0 bg-gradient-to-br from-indigo-950 via-purple-950 to-slate-950" />
+        <div className={cn("absolute inset-0 bg-gradient-to-br", themeConf.base)} />
       </div>
 
       {/* Couche arrière-plan: image ou couleur */}
@@ -70,9 +92,9 @@ export const GlassShell = ({ children, className }: Props) => {
         style={{ backgroundColor: `rgba(0,0,0,${alpha.toFixed(3)})` }}
       />
 
-      {/* Halos lumineux */}
-      <div className="pointer-events-none fixed -top-24 -right-24 -z-10 h-[34rem] w-[34rem] rounded-full bg-gradient-to-br from-blue-400/25 to-transparent blur-3xl" />
-      <div className="pointer-events-none fixed -bottom-24 -left-24 -z-10 h-[30rem] w-[30rem] rounded-full bg-gradient-to-br from-fuchsia-400/25 to-transparent blur-3xl" />
+      {/* Halos lumineux (couleurs selon le thème) */}
+      <div className={cn("pointer-events-none fixed -top-24 -right-24 -z-10 h-[34rem] w-[34rem] rounded-full bg-gradient-to-br to-transparent blur-3xl", themeConf.halo1)} />
+      <div className={cn("pointer-events-none fixed -bottom-24 -left-24 -z-10 h-[30rem] w-[30rem] rounded-full bg-gradient-to-br to-transparent blur-3xl", themeConf.halo2)} />
 
       {/* Trame discrète */}
       <div className="pointer-events-none fixed inset-0 -z-10 opacity-30">
