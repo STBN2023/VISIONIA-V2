@@ -19,7 +19,9 @@ const NavItem = ({
       to={to}
       className={cn(
         "inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
-        active ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground",
+        active
+          ? "bg-white/50 text-foreground shadow-sm backdrop-blur-md dark:bg-white/10"
+          : "text-muted-foreground hover:text-foreground hover:bg-white/40 backdrop-blur-sm dark:hover:bg-white/10",
       )}
     >
       {Icon ? <Icon className="h-4 w-4" /> : null}
@@ -34,7 +36,7 @@ export const AppHeader = ({
   onCreateProjectClick?: () => void;
 }) => {
   return (
-    <header className="w-full border-b bg-background">
+    <header className="sticky top-0 z-40 w-full border-b border-white/20 bg-background/60 backdrop-blur-md supports-[backdrop-filter]:bg-background/50">
       <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
         <Link to="/" className="text-base font-semibold">
           Rénov’ IA
@@ -46,13 +48,13 @@ export const AppHeader = ({
         </nav>
         <div className="flex items-center gap-2">
           {onCreateProjectClick ? (
-            <Button size="sm" onClick={onCreateProjectClick}>
+            <Button size="sm" className="backdrop-blur-sm">
               <Plus className="mr-2 h-4 w-4" />
-              Nouveau projet
+              <span onClick={onCreateProjectClick}>Nouveau projet</span>
             </Button>
           ) : (
             <Link to="/projects">
-              <Button size="sm">
+              <Button size="sm" className="backdrop-blur-sm">
                 <FolderClosed className="mr-2 h-4 w-4" />
                 Voir les projets
               </Button>
