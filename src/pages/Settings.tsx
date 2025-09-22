@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Slider } from "@/components/ui/slider";
 import { showSuccess } from "@/utils/toast";
 import { getSettings, saveSettings, type APIProvider } from "@/utils/settings";
 import { GlassShell } from "@/components/layout/GlassShell";
@@ -19,6 +20,10 @@ const Settings = () => {
   const [endpoint, setEndpoint] = useState("");
   const [azureDeployment, setAzureDeployment] = useState("");
 
+  // Apparence
+  const [backgroundImage, setBackgroundImage] = useState("");
+  const [backgroundDim, setBackgroundDim] = useState<number>(20);
+
   useEffect(() => {
     const s = getSettings();
     setProvider(s.provider);
@@ -28,10 +33,12 @@ const Settings = () => {
     setMaxTokens(s.maxTokens ?? 2000);
     setEndpoint(s.endpoint ?? "");
     setAzureDeployment(s.azureDeployment ?? "");
+    setBackgroundImage(s.backgroundImage ?? "");
+    setBackgroundDim(typeof s.backgroundDim === "number" ? s.backgroundDim : 20);
   }, []);
 
   const handleSave = () => {
-    saveSettings({
+    const next = saveSettings({
       provider,
       apiKey: apiKey.trim() || undefined,
       model: model.trim() || undefined,
@@ -39,8 +46,12 @@ const Settings = () => {
       maxTokens: Number(maxTokens),
       endpoint: endpoint.trim() || undefined,
       azureDeployment: azureDeployment.trim() || undefined,
+      backgroundImage: backgroundImage.trim() || undefined,
+      backgroundDim: Math.max(0, Math.min(100, Number(backgroundDim))),
     });
-    showSuccess("Paramètres API enregistrés");
+    setBackgroundImage(next.backgroundImage ?? "");
+    setBackgroundDim(next.backgroundDim ?? 20);
+    showSuccess("Paramètres enregistrés");
   };
 
   return (
@@ -48,14 +59,14 @@ const Settings = () => {
       <AppHeader />
       <main className="mx-auto w-full max-w-6xl px-4 py-6 text-white">
         <div className="mb-4">
-          <h1 className="text-2xl font-semibold">Paramètres API</h1>
-          <p className="text-sm text-white/70">Configurer le provider LLM et les paramètres par défaut.</p>
+          <h1 className="text-2xl font-semibold">Paramètres</h1>
+          <p className="text-sm text-white/70">Configurer l’API LLM et l’apparence du fond (contraste).</p>
         </div>
         <Separator className="mb-6 border-white/20" />
 
         <Card className="rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
           <CardHeader>
-            <CardTitle>Configuration</CardTitle>
+            <CardTitle>Configuration API</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
             <div className="grid gap-2">
@@ -120,13 +131,40 @@ const Settings = () => {
 
         <Card className="mt-6 rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
           <CardHeader>
-            <CardTitle>Sécurité des clés</CardTitle>
+            <CardTitle>Apparence</CardTitle>
           </CardHeader>
-          <CardContent className="text-sm text-white/80 space-y-2">
-            <p>
-              Pour un usage en production, évitez de stocker des clés côté client. Ajoutez un backend (ex: Supabase) pour gérer les secrets côté serveur.
-            </p>
+          <CardContent className="grid gap-4">
+            <div className="grid gap-2">
+              <Label>Image de fond (URL)</Label>
+              <Input
+                value={backgroundImage}
+                onChange={(e) => setBackgroundImage(e.target.value)}
+                placeholder="https://… (Unsplash, CDN interne, etc.)"
+                className="bg-white/10 text-white placeholder:text-white/60"
+              />
+              <p className="text-xs text-white/70">
+                Utilisez une image large (≥ 1920px). L’URL peut pointer vers votre CDN pour de meilleures perfs.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label>Contraste du fond (voile sombre): {Math.round(backgroundDim)}%</Label>
+              <div className="px-2">
+                <Slider
+                  value={[backgroundDim]}
+                  min={0}
+                  max={100}
+                  step={1}
+                  onValueChange={(v) => setBackgroundDim(v[0] ?? 0)}
+                />
+              </div>
+              <p className="text-xs text-white/70">
+                Augmenter la valeur assombrit le fond pour améliorer la lisibilité des contenus.
+              </p>
+            </div>
           </CardContent>
+          <CardFooter className="flex justify-end">
+            <Button onClick={handleSave} className="backdrop-blur-sm">Enregistrer</Button>
+          </CardFooter>
         </Card>
       </main>
     </GlassShell>

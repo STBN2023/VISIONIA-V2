@@ -8,6 +8,9 @@ export type APISettings = {
   maxTokens?: number;
   endpoint?: string; // custom endpoint (ex: Azure/OpenAI proxy)
   azureDeployment?: string; // nom du déploiement Azure OpenAI si provider=azure
+  // Apparence
+  backgroundImage?: string;
+  backgroundDim?: number; // 0..100 (voile sombre)
   updatedAt: string;
 };
 
@@ -19,6 +22,10 @@ export function getDefaultSettings(): APISettings {
     model: "gpt-4o-mini",
     temperature: 0.2,
     maxTokens: 2000,
+    // Valeurs par défaut alignées sur le GlassShell actuel
+    backgroundImage:
+      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=2400&auto=format&fit=crop",
+    backgroundDim: 20,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -45,5 +52,13 @@ export function saveSettings(patch: Partial<APISettings>): APISettings {
     updatedAt: new Date().toISOString(),
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  // Notifier l'app (update dynamique du fond)
+  try {
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("settings:updated", { detail: next }));
+    }
+  } catch {
+    // no-op
+  }
   return next;
 }
