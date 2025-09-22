@@ -1,11 +1,12 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import Dropzone from "@/components/uploader/Dropzone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Image as ImageIcon, Upload } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Image as ImageIcon, Upload, X } from "lucide-react";
 import type { ImageTag, Project } from "@/utils/storage";
 import type { PromptTemplate } from "@/utils/prompts";
 import ImageCard from "@/components/uploader/ImageCard";
@@ -20,6 +21,8 @@ type Props = {
   onUpdateTag: (imgId: string, tag?: ImageTag) => void;
   onUpdateImageTemplate: (imgId: string, templateId?: string) => void;
   onMoveImage: (imgId: string, direction: "left" | "right") => void;
+  onCreateTag: (label: string) => void;
+  onDeleteTag: (label: string) => void;
 };
 
 const ImagesTab = ({
@@ -32,10 +35,23 @@ const ImagesTab = ({
   onUpdateTag,
   onUpdateImageTemplate,
   onMoveImage,
+  onCreateTag,
+  onDeleteTag,
 }: Props) => {
   const filteredImages = useMemo(() => {
     return project.images.filter((img) => (tagFilter === "all" ? true : img.tag === tagFilter));
   }, [project.images, tagFilter]);
+
+  const [newTag, setNewTag] = useState("");
+
+  const addTag = () => {
+    const label = newTag.trim();
+    if (!label) return;
+    if (!project.tags.includes(label)) {
+      onCreateTag(label);
+    }
+    setNewTag("");
+  };
 
   return (
     <div className="mt-4 space-y-4">
@@ -76,28 +92,66 @@ const ImagesTab = ({
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle>Tags du projet</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {project.tags.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Aucun tag pour le moment.</p>
+            ) : (
+              project.tags.map((t) => (
+                <Badge key={t} variant="secondary" className="flex items-center gap-1">
+                  {t}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-5 w-5"
+                    title="Supprimer le tag"
+                    onClick={() => onDeleteTag(t)}
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                </Badge>
+              ))
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Nouveau tag (ex: façade N, toiture...)"
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addTag();
+                }
+              }}
+            />
+            <Button type="button" onClick={addTag}>Ajouter</Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-muted-foreground">
           {filteredImages.length} image{filteredImages.length > 1 ? "s" : ""} affichée{filteredImages.length > 1 ? "s" : ""}
-          {tagFilter !== "all" ? ` (filtre actif)` : ""}
+          {tagFilter !== "all" ? ` (filtre: ${tagFilter})` : ""}
         </div>
         <div className="flex items-center gap-2">
           <Label className="text-xs">Filtrer par tag</Label>
           <Select value={tagFilter} onValueChange={(v) => setTagFilter((v as ImageTag) || "all")}>
-            <SelectTrigger className="w-[220px]">
+            <SelectTrigger className="w-[240px]">
               <SelectValue placeholder="Tous les tags" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous</SelectItem>
-              <SelectItem value="façade-N">Façade Nord</SelectItem>
-              <SelectItem value="façade-S">Façade Sud</SelectItem>
-              <SelectItem value="façade-E">Façade Est</SelectItem>
-              <SelectItem value="façade-O">Façade Ouest</SelectItem>
-              <SelectItem value="toiture">Toiture</SelectItem>
-              <SelectItem value="menuiseries">Menuiseries</SelectItem>
-              <SelectItem value="réseaux">Réseaux</SelectItem>
-              <SelectItem value="pathologies">Pathologies</SelectItem>
-              <SelectItem value="autre">Autre</SelectItem>
+              {project.tags.map((t) => (
+                <SelectItem key={t} value={t}>
+                  {t}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -121,10 +175,12 @@ const ImagesTab = ({
                 canLeft={canLeft}
                 canRight={canRight}
                 templates={templates}
+                availableTags={project.tags}
                 onMoveImage={onMoveImage}
                 onDeleteImage={onDeleteImage}
                 onUpdateTag={onUpdateTag}
                 onUpdateImageTemplate={onUpdateImageTemplate}
+                onCreateTag={onCreateTag}
               />
             );
           })}

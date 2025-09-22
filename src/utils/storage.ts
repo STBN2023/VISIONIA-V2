@@ -1,13 +1,4 @@
-export type ImageTag =
-  | "façade-N"
-  | "façade-S"
-  | "façade-E"
-  | "façade-O"
-  | "toiture"
-  | "menuiseries"
-  | "réseaux"
-  | "pathologies"
-  | "autre";
+export type ImageTag = string; // tags libres
 
 export type ProjectStatus = "Brouillon" | "En cours" | "Terminé" | "Archivé";
 
@@ -18,7 +9,7 @@ export type ProjectImage = {
   type: string;
   dataUrl: string;
   createdAt: string;
-  tag?: ImageTag;
+  tag?: ImageTag; // libre
   templateId?: string;
 };
 
@@ -34,6 +25,7 @@ export type Project = {
   templateId?: string;
   images: ProjectImage[];
   notes?: string;
+  tags: string[]; // tags définis au niveau projet
 };
 
 // --- Stockage 100% local (navigateur) ---
@@ -44,7 +36,12 @@ function readLocal(): Project[] {
     const raw = localStorage.getItem(LOCAL_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as Project[]) : [];
+    const arr: any[] = Array.isArray(parsed) ? parsed : [];
+    // Migration douce: ensure tags array
+    return arr.map((p) => ({
+      ...p,
+      tags: Array.isArray(p.tags) ? p.tags : [],
+    })) as Project[];
   } catch {
     return [];
   }
@@ -93,6 +90,7 @@ export async function createProject(input: {
     templateId: undefined,
     images: [],
     notes: undefined,
+    tags: [],
   };
   const all = readLocal();
   writeLocal([proj, ...all]);
@@ -110,6 +108,8 @@ export async function updateProject(
   const next = touchUpdatedAt({
     ...prev,
     ...patch,
+    // sécurité: ensure tags array
+    tags: Array.isArray(patch.tags) ? patch.tags : prev.tags,
   });
   all[idx] = next;
   writeLocal(all);

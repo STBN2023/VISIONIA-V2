@@ -4,31 +4,22 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { ArrowLeftCircle, ArrowRightCircle, Trash2, ChevronDown, ChevronUp } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ArrowLeftCircle, ArrowRightCircle, Trash2, ChevronDown, ChevronUp, Plus } from "lucide-react";
 import type { ImageTag, ProjectImage } from "@/utils/storage";
 import type { PromptTemplate } from "@/utils/prompts";
-
-const TAGS: { value: ImageTag; label: string }[] = [
-  { value: "façade-N", label: "Façade Nord" },
-  { value: "façade-S", label: "Façade Sud" },
-  { value: "façade-E", label: "Façade Est" },
-  { value: "façade-O", label: "Façade Ouest" },
-  { value: "toiture", label: "Toiture" },
-  { value: "menuiseries", label: "Menuiseries" },
-  { value: "réseaux", label: "Réseaux" },
-  { value: "pathologies", label: "Pathologies" },
-  { value: "autre", label: "Autre" },
-];
 
 type Props = {
   img: ProjectImage;
   canLeft: boolean;
   canRight: boolean;
   templates: PromptTemplate[];
+  availableTags: string[];
   onMoveImage: (imgId: string, direction: "left" | "right") => void;
   onDeleteImage: (imgId: string) => void;
   onUpdateTag: (imgId: string, tag?: ImageTag) => void;
   onUpdateImageTemplate: (imgId: string, templateId?: string) => void;
+  onCreateTag: (label: string) => void;
 };
 
 const ImageCard = ({
@@ -36,13 +27,26 @@ const ImageCard = ({
   canLeft,
   canRight,
   templates,
+  availableTags,
   onMoveImage,
   onDeleteImage,
   onUpdateTag,
   onUpdateImageTemplate,
+  onCreateTag,
 }: Props) => {
   const [openOptions, setOpenOptions] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [newTag, setNewTag] = useState("");
+
+  const addTag = () => {
+    const label = newTag.trim();
+    if (!label) return;
+    if (!availableTags.includes(label)) {
+      onCreateTag(label);
+    }
+    onUpdateTag(img.id, label);
+    setNewTag("");
+  };
 
   return (
     <>
@@ -100,20 +104,39 @@ const ImageCard = ({
               <div className="grid gap-2">
                 <Label className="text-xs">Tag</Label>
                 <Select
-                  value={img.tag ?? ""}
-                  onValueChange={(v) => onUpdateTag(img.id, v as ImageTag)}
+                  value={img.tag ?? "none"}
+                  onValueChange={(v) => onUpdateTag(img.id, v === "none" ? undefined : (v as ImageTag))}
                 >
                   <SelectTrigger className="h-8">
                     <SelectValue placeholder="Choisir un tag" />
                   </SelectTrigger>
                   <SelectContent>
-                    {TAGS.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
+                    <SelectItem value="none">Aucun</SelectItem>
+                    {availableTags.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <div className="flex items-center gap-2">
+                  <Input
+                    placeholder="Nouveau tag"
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    className="h-8"
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        addTag();
+                      }
+                    }}
+                  />
+                  <Button type="button" size="sm" variant="outline" onClick={addTag}>
+                    <Plus className="mr-1 h-4 w-4" />
+                    Ajouter
+                  </Button>
+                </div>
               </div>
 
               <div className="grid gap-2">

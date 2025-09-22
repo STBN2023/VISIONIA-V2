@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import RunAnalysisDialog from "@/components/runs/RunAnalysisDialog";
 import type { ProjectImage } from "@/utils/storage";
 import type { PromptTemplate } from "@/utils/prompts";
+import { useMemo, useState } from "react";
 
 type Props = {
   projectId: string;
@@ -18,6 +19,7 @@ type Props = {
   lineErrors: number[];
   onApplyTemplateToPrompt: () => void;
   onSaveProjectTemplateSelection: () => void;
+  tags: string[];
 };
 
 const PromptTab = ({
@@ -31,7 +33,15 @@ const PromptTab = ({
   lineErrors,
   onApplyTemplateToPrompt,
   onSaveProjectTemplateSelection,
+  tags,
 }: Props) => {
+  const [analysisTag, setAnalysisTag] = useState<string>("all");
+
+  const imagesForRun = useMemo(() => {
+    if (analysisTag === "all") return images;
+    return images.filter((i) => i.tag === analysisTag);
+  }, [images, analysisTag]);
+
   return (
     <div className="mt-4">
       <Card>
@@ -64,6 +74,28 @@ const PromptTab = ({
                 </Button>
               </div>
             </div>
+
+            <div className="grid gap-2">
+              <Label>Filtrer les images analysées</Label>
+              <Select value={analysisTag} onValueChange={(v) => setAnalysisTag(v)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Toutes les images" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Toutes les images</SelectItem>
+                  {tags.map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {analysisTag === "all"
+                  ? `${images.length} image(s) seront analysées.`
+                  : `${imagesForRun.length} image(s) avec le tag “${analysisTag}” seront analysées.`}
+              </p>
+            </div>
           </div>
 
           <Textarea
@@ -89,9 +121,9 @@ Conformité réglementaire:
           <RunAnalysisDialog
             projectId={projectId}
             prompt={prompt}
-            images={images}
+            images={imagesForRun}
             onStarted={() => {}}
-            disabled={prompt.trim().length === 0 || images.length === 0}
+            disabled={prompt.trim().length === 0 || imagesForRun.length === 0}
             triggerLabel="Générer le compte rendu"
           />
         </CardFooter>

@@ -96,6 +96,28 @@ const ProjectDetail = () => {
     showSuccess("Template sélectionné au niveau projet");
   };
 
+  // Actions tags projet
+  const handleCreateTag = async (label: string) => {
+    if (!project) return;
+    const nextTags = Array.from(new Set([...(project.tags || []), label])).sort((a, b) =>
+      a.localeCompare(b),
+    );
+    const updated = await updateProject(project.id, { tags: nextTags })!;
+    setProject(updated);
+    showSuccess(`Tag “${label}” ajouté au projet`);
+  };
+
+  const handleDeleteTag = async (label: string) => {
+    if (!project) return;
+    const nextTags = (project.tags || []).filter((t) => t !== label);
+    // Enlever le tag des images qui l'utilisent
+    const nextImages = project.images.map((i) => (i.tag === label ? { ...i, tag: undefined } : i));
+    const updated = await updateProject(project.id, { tags: nextTags, images: nextImages })!;
+    setProject(updated);
+    if (tagFilter === label) setTagFilter("all");
+    showSuccess(`Tag “${label}” supprimé`);
+  };
+
   // Actions images (avec compression)
   const handleFiles = async (files: FileList | File[] | null) => {
     if (!project || !files) return;
@@ -115,7 +137,7 @@ const ProjectDetail = () => {
         continue;
       }
 
-      // Compresse systématiquement (utile même si fichier d'origine est < 25 Mo)
+      // Compresse systématiquement
       let outBlob: Blob;
       try {
         outBlob = await compressImageToBlob(f, {
@@ -125,13 +147,9 @@ const ProjectDetail = () => {
           convertTo: "image/webp",
         });
       } catch {
-        // Si échec compression, on utilisera l’original
         outBlob = f;
       }
 
-      // Choisir la meilleure version:
-      // - si original dépasse 25 Mo, tenter compressé
-      // - sinon on prend la version la plus légère (si compressée plus petite d'au moins 1 Ko)
       let finalBlob = f as Blob;
       let usedCompressed = false;
 
@@ -153,23 +171,19 @@ const ProjectDetail = () => {
       }
 
       if (finalBlob.size > MAX_IMAGE_SIZE) {
-        // Toujours trop gros après compression
         ignoredTooLarge++;
         continue;
       }
 
       if (usedCompressed) compressedCount++;
 
-      // Convertit en data URL
       let dataUrl: string;
       if (finalBlob === f) {
         dataUrl = await fileToDataUrl(f);
       } else {
-        // Préserve le nom; type = finalBlob.type si dispo
         dataUrl = await blobToDataUrl(finalBlob);
       }
 
-      // Crée l'objet image du projet
       const img: ProjectImage = {
         id: crypto.randomUUID(),
         name: f.name,
@@ -298,6 +312,8 @@ const ProjectDetail = () => {
               onUpdateTag={handleUpdateTag}
               onUpdateImageTemplate={handleUpdateImageTemplate}
               onMoveImage={moveImage}
+              onCreateTag={handleCreateTag}
+              onDeleteTag={handleDeleteTag}
             />
           </TabsContent>
 
@@ -313,6 +329,7 @@ const ProjectDetail = () => {
               lineErrors={lineErrors}
               onApplyTemplateToPrompt={applyTemplateToPrompt}
               onSaveProjectTemplateSelection={saveProjectTemplateSelection}
+              tags={project.tags || []}
             />
           </TabsContent>
 
