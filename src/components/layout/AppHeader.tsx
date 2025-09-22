@@ -40,7 +40,7 @@ export const AppHeader = ({
       <div className="mx-auto max-w-6xl px-4 py-4">
         <div className="flex items-center justify-between rounded-3xl border border-white/20 bg-white/10 px-4 py-3 shadow-2xl backdrop-blur-2xl">
           <Link to="/" className="text-base font-semibold text-white">
-            Rénov’ IA
+            ISOEDRE Vision IA
           </Link>
           <nav className="flex items-center gap-1">
             <NavItem to="/projects" label="Projets" icon={FolderClosed} />
