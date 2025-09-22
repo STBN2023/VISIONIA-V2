@@ -76,6 +76,12 @@ export function getRunById(id: string): Run | undefined {
   return readAll().find((r) => r.id === id);
 }
 
+export function deleteRun(runId: string) {
+  const all = readAll();
+  const next = all.filter((r) => r.id !== runId);
+  writeAll(next);
+}
+
 // Simulation (legacy) conservée mais non utilisée pour le chemin LLM:
 export function createRun(input: CreateRunInput): Run {
   const now = new Date().toISOString();

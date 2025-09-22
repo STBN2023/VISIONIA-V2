@@ -3,8 +3,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ProjectImage } from "@/utils/storage";
 import type { Run } from "@/utils/runs";
-import { cancelRun, retryFailedItems } from "@/utils/runs";
+import { cancelRun, retryFailedItems, deleteRun } from "@/utils/runs";
 import { showSuccess } from "@/utils/toast";
+import { FileText, Trash2 } from "lucide-react";
+import { exportRunToPdf } from "@/utils/pdf";
 
 const statusVariant = (s: string) =>
   s === "succeeded" ? "secondary" : s === "running" ? "default" : s === "queued" ? "outline" : s === "failed" ? "destructive" : "outline";
@@ -31,6 +33,36 @@ const RunsTab = ({ runs, images }: Props) => {
                   <div className="flex items-center gap-2">
                     <Badge variant={statusVariant(run.status)}>{run.status}</Badge>
                     <span className="text-sm">Mode: {run.mode === "aggregate" ? "Agrégé" : "Par image"}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {/* Export PDF (actif si réussi) */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={run.status !== "succeeded"}
+                      onClick={() => exportRunToPdf(run, images)}
+                      className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm"
+                      title={run.status === "succeeded" ? "Exporter en PDF" : "Disponible lorsque le run est terminé"}
+                    >
+                      <FileText className="mr-2 h-4 w-4" />
+                      Export PDF
+                    </Button>
+
+                    {/* Supprimer le run */}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => {
+                        if (confirm("Supprimer ce run ?")) {
+                          deleteRun(run.id);
+                          showSuccess("Run supprimé");
+                        }
+                      }}
+                      className="hover:bg-white/10"
+                      title="Supprimer le run"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                   <div className="text-xs text-white/70">{new Date(run.createdAt).toLocaleString()}</div>
                 </div>
