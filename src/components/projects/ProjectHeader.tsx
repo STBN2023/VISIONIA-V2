@@ -15,7 +15,11 @@ const ProjectHeader = ({ project }: Props) => {
         <div className="mb-1 flex items-center gap-2">
           <h1 className="text-2xl font-semibold">{project.title}</h1>
           <Badge variant="secondary">{project.status}</Badge>
-          {project.type ? <Badge variant="outline">{project.type}</Badge> : null}
+          {project.type ? (
+            <Badge variant="outline" className="bg-white/10 text-white border-white/30">
+              {project.type}
+            </Badge>
+          ) : null}
         </div>
         <p className="text-sm text-muted-foreground">{project.address || "Adresse non renseignée"}</p>
       </div>

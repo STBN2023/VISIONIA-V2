@@ -83,7 +83,14 @@ const Projects = () => {
                   <div className="text-sm text-white/80 line-clamp-2">{p.address || "Adresse non renseignée"}</div>
                   <div className="flex items-center gap-2">
                     <Badge variant="secondary">{p.status}</Badge>
-                    {p.type ? <Badge variant="outline">{p.type}</Badge> : null}
+                    {p.type ? (
+                      <Badge
+                        variant="outline"
+                        className="bg-white/10 text-white border-white/40"
+                      >
+                        {p.type}
+                      </Badge>
+                    ) : null}
                   </div>
                 </CardContent>
                 <CardFooter className="flex items-center justify-between">
