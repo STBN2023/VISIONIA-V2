@@ -12,9 +12,10 @@ type Props = {
   triggerLabel?: string;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean; // nouveau: permet de ne pas afficher le bouton interne
 };
 
-const ProjectFormDialog = ({ onCreate, triggerLabel = "Nouveau projet", open: openProp, onOpenChange }: Props) => {
+const ProjectFormDialog = ({ onCreate, triggerLabel = "Nouveau projet", open: openProp, onOpenChange, hideTrigger = false }: Props) => {
   const [localOpen, setLocalOpen] = useState(false);
   const controlled = typeof openProp === "boolean";
   const open = controlled ? (openProp as boolean) : localOpen;
@@ -54,12 +55,14 @@ const ProjectFormDialog = ({ onCreate, triggerLabel = "Nouveau projet", open: op
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          {triggerLabel}
-        </Button>
-      </DialogTrigger>
+      {!hideTrigger ? (
+        <DialogTrigger asChild>
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            {triggerLabel}
+          </Button>
+        </DialogTrigger>
+      ) : null}
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Nouveau projet</DialogTitle>

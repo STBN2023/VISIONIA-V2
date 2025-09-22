@@ -61,13 +61,15 @@ const Projects = () => {
             <h1 className="text-2xl font-semibold">Projets</h1>
             <p className="text-sm text-white/70">{subtitle}</p>
           </div>
-          <ProjectFormDialog open={createOpen} onOpenChange={setCreateOpen} onCreate={handleCreate} />
+          {/* Dialog contrôlé par le bouton du header, sans bouton interne ici */}
+          <ProjectFormDialog open={createOpen} onOpenChange={setCreateOpen} onCreate={handleCreate} hideTrigger />
         </div>
         <Separator className="mb-6 border-white/20" />
         {projects.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/20 bg-white/5 py-16 text-center backdrop-blur-xl">
             <FolderClosed className="mb-3 h-8 w-8 text-white/70" />
-            <p className="mb-4 text-white/80">Créez votre premier projet pour démarrer l’analyse.</p>
+            <p className="text-white/80">Créez votre premier projet pour démarrer l’analyse.</p>
+            {/* Ce bouton reste affiché dans l'état vide */}
             <ProjectFormDialog onCreate={handleCreate} triggerLabel="Créer un projet" />
           </div>
         ) : (
