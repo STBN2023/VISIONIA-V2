@@ -138,7 +138,12 @@ const ImageCard = ({
                       }
                     }}
                   />
-                  <Button type="button" size="sm" variant="outline" onClick={addTag} className="border-white/30 text-white hover:bg-white/10">
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={addTag}
+                    className="border border-white/20 bg-black/60 text-white shadow hover:bg-black/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 backdrop-blur-sm"
+                  >
                     <Plus className="mr-1 h-4 w-4" />
                     Ajouter
                   </Button>
