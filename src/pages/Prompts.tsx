@@ -155,11 +155,21 @@ const Prompts = () => {
                   <div className="flex items-center justify-between gap-3">
                     <CardTitle>Édition du template</CardTitle>
                     <div className="flex items-center gap-2">
-                      <Button variant="outline" size="sm" onClick={handleDuplicate} className="border-white/30 text-white hover:bg-white/10">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleDuplicate}
+                        className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm"
+                      >
                         <Copy className="mr-2 h-4 w-4" />
                         Dupliquer
                       </Button>
-                      <Button variant="outline" size="sm" onClick={markDefault} className="border-white/30 text-white hover:bg-white/10">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={markDefault}
+                        className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm"
+                      >
                         <Star className="mr-2 h-4 w-4" />
                         Définir par défaut
                       </Button>
