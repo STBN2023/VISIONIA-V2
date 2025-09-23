@@ -8,10 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { showSuccess } from "@/utils/toast";
+import { showSuccess, showError } from "@/utils/toast";
 import { getSettings, saveSettings, type APIProvider, type BackgroundMode, type ThemePreset } from "@/utils/settings";
-import { fileToDataUrl } from "@/utils/storage";
 import { GlassShell } from "@/components/layout/GlassShell";
+import { compressImageToBlob, blobToDataUrl } from "@/utils/image-compress";
+
+const MAX_BG_BYTES = 2.5 * 1024 * 1024; // ~2.5 Mo pour rester sous la limite de localStorage
 
 const Settings = () => {
   const [provider, setProvider] = useState<APIProvider>("openai");
@@ -46,6 +48,15 @@ const Settings = () => {
   }, []);
 
   const handleSave = () => {
+    if (backgroundMode === "image" && backgroundImage.startsWith("data:")) {
+      // Rough guard: si l'image encodée est trop grande, éviter d'enregistrer
+      const approxBytes = backgroundImage.length * 0.75; // approximation base64
+      if (approxBytes > MAX_BG_BYTES) {
+        showError("L’image de fond est trop lourde pour être enregistrée (quota localStorage). Choisissez une image plus légère.");
+        return;
+      }
+    }
+
     const next = saveSettings({
       provider,
       apiKey: apiKey.trim() || undefined,
@@ -66,6 +77,36 @@ const Settings = () => {
     setBackgroundDim(next.backgroundDim ?? 20);
     setThemePreset((next.themePreset as ThemePreset) ?? "violet");
     showSuccess("Paramètres enregistrés");
+  };
+
+  // Compression contrôlée de l’image choisie avant stockage
+  const handlePickBackgroundFile = async (file: File) => {
+    // 1er essai: taille confortable
+    let out = await compressImageToBlob(file, {
+      maxWidth: 2000,
+      maxHeight: 1500,
+      quality: 0.82,
+      convertTo: "image/webp",
+    });
+
+    // Si encore trop lourd, 2e essai plus agressif
+    if (out.size > MAX_BG_BYTES) {
+      out = await compressImageToBlob(file, {
+        maxWidth: 1600,
+        maxHeight: 1200,
+        quality: 0.7,
+        convertTo: "image/webp",
+      });
+    }
+
+    if (out.size > MAX_BG_BYTES) {
+      showError("Image trop lourde même après compression. Essayez une image plus petite.");
+      return;
+    }
+
+    const dataUrl = await blobToDataUrl(out);
+    setBackgroundImage(dataUrl);
+    showSuccess("Image compressée et chargée");
   };
 
   return (
@@ -189,7 +230,7 @@ const Settings = () => {
                     className="bg-white/10 text-white placeholder:text-white/60"
                   />
                   <p className="text-xs text-white/70">
-                    Vous pouvez saisir une URL ou choisir un fichier ci‑dessous.
+                    Vous pouvez saisir une URL ou choisir un fichier ci‑dessous. Les fichiers locaux sont compressés automatiquement pour respecter le quota du navigateur.
                   </p>
                 </div>
                 <div className="grid gap-2">
@@ -200,8 +241,7 @@ const Settings = () => {
                     onChange={async (e) => {
                       const f = e.target.files?.[0];
                       if (!f) return;
-                      const dataUrl = await fileToDataUrl(f);
-                      setBackgroundImage(dataUrl);
+                      await handlePickBackgroundFile(f);
                     }}
                     className="bg-white/10 text-white file:mr-2 file:rounded file:border-0 file:bg-white/20 file:px-3 file:py-2 file:text-white"
                   />
