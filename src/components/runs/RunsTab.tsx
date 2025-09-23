@@ -64,7 +64,9 @@ const RunsTab = ({ runs, images }: Props) => {
                       size="sm"
                       variant="outline"
                       disabled={run.status !== "succeeded"}
-                      onClick={() => exportRunToPdf(run, images)}
+                      onClick={async () => {
+                        await exportRunToPdf(run, images);
+                      }}
                       className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm disabled:opacity-50"
                       title={run.status === "succeeded" ? "Exporter en PDF" : "Disponible lorsque le run est terminé"}
                     >
@@ -164,7 +166,7 @@ const RunsTab = ({ runs, images }: Props) => {
         </CardContent>
       </Card>
 
-      <RunLogDialog run={logRun} open={!!logRunId} onOpenChange={(o) => !o ? setLogRunId(null) : null} />
+      <RunLogDialog run={logRun} open={!!logRunId} onOpenChange={(o) => (!o ? setLogRunId(null) : null)} />
     </div>
   );
 };
