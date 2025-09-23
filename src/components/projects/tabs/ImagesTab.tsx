@@ -97,7 +97,7 @@ const ImagesTab = ({
       toApply = undefined; // retirer le tag
     }
 
-    // Applique à toutes les images sélectionnées en un seul patch
+    // Patch unique pour toutes les images sélectionnées
     onBulkUpdateTags(selectedIds, toApply);
     showSuccess(
       toApply ? `Tag “${toApply}” appliqué à ${selectedCount} image(s)` : `Tag retiré sur ${selectedCount} image(s)`,
@@ -237,7 +237,7 @@ const ImagesTab = ({
         </div>
       </div>
 
-      {/* Barre d’actions en masse, visible en mode sélection */}
+      {/* Barre d’actions en masse */}
       {selectMode ? (
         <Card className="rounded-2xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
           <CardContent className="flex flex-col gap-3 py-4">
