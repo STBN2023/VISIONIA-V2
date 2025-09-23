@@ -33,7 +33,6 @@ async function toJpegDataUrl(dataUrl: string, quality = 0.9): Promise<string> {
   const mime = getMimeFromDataUrl(dataUrl);
   if (mime === "image/jpeg" || mime === "image/jpg") return dataUrl;
   if (mime === "image/png") return dataUrl; // jsPDF sait gérer PNG directement
-  // Convertit tout le reste (ex: webp) en JPEG via canvas
   const img = await loadImage(dataUrl);
   const canvas = document.createElement("canvas");
   canvas.width = img.naturalWidth || img.width;
@@ -57,12 +56,10 @@ async function addImageBlock(doc: jsPDF, dataUrl: string, x: number, y: number, 
   const iw = img.naturalWidth || img.width;
   const ih = img.naturalHeight || img.height;
 
-  // Échelle pour tenir dans la zone
   const scale = Math.min(maxWidth / iw, maxHeight / ih, 1);
   const w = Math.max(10, Math.round(iw * scale));
   const h = Math.max(10, Math.round(ih * scale));
 
-  // Saut de page si nécessaire
   let drawY = y;
   if (drawY + h > 280) {
     doc.addPage();
@@ -88,6 +85,31 @@ function hexToRgb(hex: string): [number, number, number] {
   return [r, g, b];
 }
 
+function drawRotatedRect(doc: jsPDF, x: number, y: number, w: number, h: number, angleDeg: number, color: [number, number, number]) {
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const rad = (angleDeg * Math.PI) / 180;
+
+  const corners: [number, number][] = [
+    [-w / 2, -h / 2],
+    [w / 2, -h / 2],
+    [w / 2, h / 2],
+    [-w / 2, h / 2],
+  ].map(([dx, dy]) => {
+    const rx = dx * Math.cos(rad) - dy * Math.sin(rad);
+    const ry = dx * Math.sin(rad) + dy * Math.cos(rad);
+    return [cx + rx, cy + ry];
+  });
+
+  doc.setDrawColor(color[0], color[1], color[2]);
+  doc.setLineWidth(0.8);
+  for (let i = 0; i < 4; i++) {
+    const [x1, y1] = corners[i];
+    const [x2, y2] = corners[(i + 1) % 4];
+    doc.line(x1, y1, x2, y2);
+  }
+}
+
 export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const margin = 15;
@@ -109,6 +131,40 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
   doc.line(margin, y, margin + contentWidth, y);
   y += 8;
 
+  // Helper pour dessiner les boxes (orientées si angle)
+  function drawBoxesOnPlaced(placed: PlacedImage, boxes: NonNullable<Run["items"][number]["boxes"]>) {
+    boxes.forEach((b) => {
+      const px = placed.x + b.x * placed.w;
+      const py = placed.y + b.y * placed.h;
+      const pw = b.w * placed.w;
+      const ph = b.h * placed.h;
+
+      let r = 34, g = 197, bcol = 94;
+      const col = b.color || "#22C55E";
+      try {
+        const rgb = hexToRgb(col);
+        r = rgb[0]; g = rgb[1]; bcol = rgb[2];
+      } catch {
+        // fallback
+      }
+
+      if (typeof b.angle === "number" && Math.abs(b.angle) > 0.01) {
+        drawRotatedRect(doc, px, py, pw, ph, b.angle, [r, g, bcol]);
+      } else {
+        doc.setDrawColor(r, g, bcol);
+        doc.setLineWidth(0.8);
+        doc.rect(px, py, pw, ph);
+      }
+
+      if (b.label) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        // Place le label légèrement au-dessus du coin gauche
+        doc.text(b.label, px + 1.5, Math.max(py - 1, 10));
+      }
+    });
+  }
+
   if (run.mode === "aggregate") {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
@@ -120,7 +176,6 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
     const text = run.outputText?.trim() || "Aucun contenu disponible (run non terminé).";
     y = addWrappedText(doc, text, margin, y, contentWidth, 6);
 
-    // Si des items existent, ajouter les détails par image
     if (run.items && run.items.length > 0) {
       y += 6;
       doc.setFont("helvetica", "bold");
@@ -146,30 +201,7 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
 
           const boxes = item.boxes || [];
           if (boxes.length > 0) {
-            boxes.forEach((b) => {
-              const px = placedRes.placed.x + b.x * placedRes.placed.w;
-              const py = placedRes.placed.y + b.y * placedRes.placed.h;
-              const pw = b.w * placedRes.placed.w;
-              const ph = b.h * placedRes.placed.h;
-
-              let r = 34, g = 197, bcol = 94;
-              const col = b.color || "#22C55E";
-              try {
-                const rgb = hexToRgb(col);
-                r = rgb[0]; g = rgb[1]; bcol = rgb[2];
-              } catch {
-                // fallback défaut
-              }
-              doc.setDrawColor(r, g, bcol);
-              doc.setLineWidth(0.8);
-              doc.rect(px, py, pw, ph);
-
-              if (b.label) {
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(9);
-                doc.text(b.label, px + 1.5, Math.max(py - 1, 10));
-              }
-            });
+            drawBoxesOnPlaced(placedRes.placed, boxes);
           }
         }
 
@@ -208,30 +240,7 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
 
         const boxes = item.boxes || [];
         if (boxes.length > 0) {
-          boxes.forEach((b) => {
-            const px = placedRes.placed.x + b.x * placedRes.placed.w;
-            const py = placedRes.placed.y + b.y * placedRes.placed.h;
-            const pw = b.w * placedRes.placed.w;
-            const ph = b.h * placedRes.placed.h;
-
-            let r = 34, g = 197, bcol = 94;
-            const col = b.color || "#22C55E";
-            try {
-              const rgb = hexToRgb(col);
-              r = rgb[0]; g = rgb[1]; bcol = rgb[2];
-            } catch {
-              // fallback défaut
-            }
-            doc.setDrawColor(r, g, bcol);
-            doc.setLineWidth(0.8);
-            doc.rect(px, py, pw, ph);
-
-            if (b.label) {
-              doc.setFont("helvetica", "normal");
-              doc.setFontSize(9);
-              doc.text(b.label, px + 1.5, Math.max(py - 1, 10));
-            }
-          });
+          drawBoxesOnPlaced(placedRes.placed, boxes);
         }
       }
 

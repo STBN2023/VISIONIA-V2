@@ -101,20 +101,17 @@ type ParsedBox = {
   color?: string;
   type?: string;
   confidence?: number;
+  angle?: number; // degrés
 };
 
 function canonRect(x: number, y: number, w: number, h: number): { x: number; y: number; w: number; h: number } | null {
   if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w) || !Number.isFinite(h)) return null;
-  // Convertit pourcentage 0..100 → 0..1 si détecté
   const vals = [x, y, w, h].map((v) => (v > 1.5 && v <= 100 ? v / 100 : v));
   let [nx, ny, nw, nh] = vals;
-  // x2/y2 → w/h si nécessaire (si w/h semblent être des coordonnées droites)
   if (nw > 1 && nh > 1) {
-    // Probablement x2/y2 en 0..100
     nw = (nw > 1.5 && nw <= 100 ? nw / 100 : nw) - (nx > 1.5 && nx <= 100 ? nx / 100 : nx);
     nh = (nh > 1.5 && nh <= 100 ? nh / 100 : nh) - (ny > 1.5 && ny <= 100 ? ny / 100 : ny);
   }
-  // Si w/h négatifs, normalise
   if (nw < 0) {
     nx = nx + nw;
     nw = Math.abs(nw);
@@ -123,7 +120,6 @@ function canonRect(x: number, y: number, w: number, h: number): { x: number; y: 
     ny = ny + nh;
     nh = Math.abs(nh);
   }
-  // Clamp dans 0..1
   nx = clamp01(nx);
   ny = clamp01(ny);
   nw = clamp01(nw);
@@ -160,6 +156,22 @@ function extractFirstJsonObject(text: string): any | null {
 
 function toTitle(s: string) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+}
+
+function parseAngleAny(a: any): number | undefined {
+  const raw = a?.angle ?? a?.rotation ?? a?.theta;
+  if (raw === undefined || raw === null) return undefined;
+  let val = parseNumAny(raw);
+  if (!Number.isFinite(val)) return undefined;
+  // Si ça ressemble à des radians (petite valeur), convertir en degrés
+  if (Math.abs(val) <= Math.PI + 0.01) {
+    // heuristique: theta en radians
+    val = (val * 180) / Math.PI;
+  }
+  // Clamp raisonnable
+  if (val < -180) val = ((val + 180) % 360) - 180;
+  if (val > 180) val = ((val - 180) % 360) - 180;
+  return val;
 }
 
 function parseAnomalyToParsedBox(a: any): ParsedBox | null {
@@ -208,7 +220,6 @@ function parseAnomalyToParsedBox(a: any): ParsedBox | null {
     }
   }
 
-  // Canonise si encore valide
   const canon = canonRect(x, y, w, h);
   if (!canon) return null;
 
@@ -217,6 +228,7 @@ function parseAnomalyToParsedBox(a: any): ParsedBox | null {
   const conf = Number.isFinite(a?.confidence) ? Number(a.confidence) : undefined;
   const inferredType = (typeRaw as string) || guessType(lbl);
   const col = colorFor({ type: inferredType, label: lbl, color: a?.color });
+  const angle = parseAngleAny(a);
 
   return {
     x: canon.x,
@@ -227,6 +239,7 @@ function parseAnomalyToParsedBox(a: any): ParsedBox | null {
     color: col,
     type: inferredType,
     confidence: conf,
+    angle,
   };
 }
 
@@ -266,7 +279,6 @@ function postProcessBoxes(
     iouThreshold = 0.5,
   } = {},
 ): ParsedBox[] {
-  // Clamp + filtre de base
   let filtered = boxes
     .map((b) => ({
       ...b,
@@ -278,7 +290,6 @@ function postProcessBoxes(
     }))
     .filter((b) => b.w > 0 && b.h > 0);
 
-  // Filtres taille/aire
   filtered = filtered.filter((b) => {
     const area = b.w * b.h;
     const okSide = b.w >= minSide && b.h >= minSide;
@@ -286,10 +297,8 @@ function postProcessBoxes(
     return okSide && okArea;
   });
 
-  // Seuil de confiance (si présent)
   filtered = filtered.filter((b) => (b.confidence === undefined ? true : b.confidence >= minConfidence));
 
-  // Déduplication par IoU
   const deduped: ParsedBox[] = [];
   for (const b of filtered) {
     let keep = true;
@@ -306,7 +315,6 @@ function postProcessBoxes(
     if (keep) deduped.push(b);
   }
 
-  // Limite max
   if (deduped.length > maxCount) {
     deduped.sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5));
     return deduped.slice(0, maxCount);
@@ -323,10 +331,8 @@ function toBoxes(obj: any): { boxes: Box[]; summary?: string } {
     if (pb) parsedRaw.push(pb);
   }
 
-  // Premier passage (normal)
   let refined = postProcessBoxes(parsedRaw);
 
-  // Fallback plus tolérant si aucun rectangle ne passe
   if (refined.length === 0 && parsedRaw.length > 0) {
     refined = postProcessBoxes(parsedRaw, {
       minSide: 0.015,
@@ -346,6 +352,7 @@ function toBoxes(obj: any): { boxes: Box[]; summary?: string } {
     h: b.h,
     color: b.color || "#22C55E",
     label: b.label,
+    angle: b.angle,
   }));
 
   const summary = typeof obj?.summary === "string" ? obj.summary : undefined;
@@ -360,6 +367,7 @@ function buildDetectionInstruction(userPrompt: string): string {
     '      "type": "fissure",',
     '      "label": "Fissure verticale en rive de baie",',
     '      "confidence": 0.82,',
+    '      "angle": -12,',
     '      "box": { "x": 0.12, "y": 0.34, "w": 0.22, "h": 0.15 }',
     "    }",
     "  ],",
@@ -368,22 +376,18 @@ function buildDetectionInstruction(userPrompt: string): string {
   ].join("\n");
 
   return [
-    "Détecte UNIQUEMENT les anomalies VISIBLES sur l’image (fissure, infiltration, humidite, isolation, pont_thermique, menuiserie, toiture, moisissure, structure, electrique, plomberie, vegetation, autre).",
+    "Détecte UNIQUEMENT les anomalies VISIBLES (fissure, infiltration, humidite, isolation, pont_thermique, menuiserie, toiture, moisissure, structure, electrique, plomberie, vegetation, autre).",
     "Réponds STRICTEMENT en JSON valide (aucun texte avant/après, pas de markdown).",
-    "Coordonnées normalisées 0..1 avec décimales pointées (x,y,w,h). Alias acceptés: {left,top,width,height} ou {x1,y1,x2,y2}. Si tu fournis des pourcentages, utilise 0..100 et/ou convertis en 0..1.",
-    "Contraintes:",
-    "  - Si aucune anomalie certaine: anomalies: [].",
-    "  - Boîtes serrées autour de la zone visible; éviter les boîtes minuscules ou englobant toute l’image sans raison.",
-    "  - Max 6 anomalies pertinentes.",
-    "Schéma attendu + exemple:",
+    "Coordonnées normalisées 0..1 (x,y,w,h). Alias acceptés: {left,top,width,height} ou {x1,y1,x2,y2}. Pourcentages acceptés (0..100).",
+    "Optionnel: angle (en degrés, -90..90 recommandé) pour orienter le rectangle autour de son centre (champ: angle ou rotation).",
+    "Contraintes: anomalies: [] si aucune certaine; boîtes serrées; max 6 anomalies pertinentes.",
+    "Exemple:",
     example,
     "",
     "Contexte utilisateur:",
     userPrompt || "(aucun)",
   ].join("\n");
 }
-
-/* ---------- Entrée principale ---------- */
 
 export async function analyzeLLM(input: {
   mode: RunMode;
@@ -409,7 +413,6 @@ export async function analyzeLLM(input: {
 
   try {
     if (input.mode === "aggregate") {
-      // 1) Texte global
       const aggregateText = await callOpenAI({
         apiKey: s.apiKey!,
         model,
@@ -419,13 +422,11 @@ export async function analyzeLLM(input: {
         max_tokens,
       });
 
-      // 2) Par image: annotations (température faible) + texte prompt classique
       const detectionInstruction = buildDetectionInstruction(input.prompt);
-      const detectionTemp = 0.2; // un peu plus haut pour éviter les “0” trop conservateurs
+      const detectionTemp = 0.2;
 
       const items = await Promise.all(
         input.images.map(async (img) => {
-          // Détection/annotations
           const detectionRaw = await callOpenAI({
             apiKey: s.apiKey!,
             model,
@@ -437,7 +438,6 @@ export async function analyzeLLM(input: {
           const parsed = extractFirstJsonObject(detectionRaw);
           const { boxes, summary } = parsed ? toBoxes(parsed) : { boxes: [], summary: undefined };
 
-          // Texte par image avec le prompt utilisateur
           const perImageText = await callOpenAI({
             apiKey: s.apiKey!,
             model,
@@ -457,7 +457,6 @@ export async function analyzeLLM(input: {
 
       return { ok: true, mode: "aggregate", outputText: aggregateText, items };
     } else {
-      // Mode par image: détection stricte + résumé
       const instruction = buildDetectionInstruction(input.prompt);
       const detectionTemp = 0.2;
       const items = await Promise.all(

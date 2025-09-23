@@ -95,23 +95,35 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
     return { x: nx, y: ny };
   }
 
-  // Convertit une box normalisée (0..1) en style pixels
-  function normBoxToStyle(b: { x: number; y: number; w: number; h: number }): React.CSSProperties {
+  function normBoxToCenterStyle(b: { x: number; y: number; w: number; h: number; angle?: number }): React.CSSProperties {
     const r = getRenderRect();
+    const angle = typeof b.angle === "number" ? b.angle : 0;
     if (!r) {
-      // Fallback (moins précis)
+      const left = `${(b.x + b.w / 2) * 100}%`;
+      const top = `${(b.y + b.h / 2) * 100}%`;
+      const width = `${b.w * 100}%`;
+      const height = `${b.h * 100}%`;
       return {
-        left: `${b.x * 100}%`,
-        top: `${b.y * 100}%`,
-        width: `${b.w * 100}%`,
-        height: `${b.h * 100}%`,
+        left,
+        top,
+        width,
+        height,
+        transformOrigin: "center",
+        transform: `translate(-50%, -50%) rotate(${angle}deg)`,
       };
     }
-    const left = r.offsetX + b.x * r.drawW;
-    const top = r.offsetY + b.y * r.drawH;
-    const width = b.w * r.drawW;
-    const height = b.h * r.drawH;
-    return { left, top, width, height };
+    const leftPx = r.offsetX + (b.x + b.w / 2) * r.drawW;
+    const topPx = r.offsetY + (b.y + b.h / 2) * r.drawH;
+    const widthPx = b.w * r.drawW;
+    const heightPx = b.h * r.drawH;
+    return {
+      left: leftPx,
+      top: topPx,
+      width: widthPx,
+      height: heightPx,
+      transformOrigin: "center",
+      transform: `translate(-50%, -50%) rotate(${angle}deg)`,
+    };
   }
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -157,14 +169,13 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
 
     setBoxes((prev) => [
       ...prev,
-      { id: crypto.randomUUID(), x, y, w, h, color: defaultColor, label: "" },
+      { id: crypto.randomUUID(), x, y, w, h, color: defaultColor, label: "", angle: 0 },
     ]);
     setStart(null);
     setPreview(null);
   };
 
   const onPointerLeave = () => {
-    // Ne rien faire si on dessine (pointer capture gère la suite)
     if (!drawing) {
       setStart(null);
       setPreview(null);
@@ -194,7 +205,7 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
         <DialogHeader>
           <DialogTitle>Annoter l’image</DialogTitle>
           <DialogDescription>
-            Cliquer-glisser à l’intérieur de l’image (les bordures sombres sont ignorées). Un aperçu en pointillé se dessine pendant le tracé.
+            Cliquer-glisser pour créer un rectangle. Ajustez ensuite sa rotation pour épouser l’anomalie.
           </DialogDescription>
         </DialogHeader>
 
@@ -221,17 +232,18 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
                 key={b.id}
                 className="absolute rounded-md"
                 style={{
-                  ...normBoxToStyle(b),
+                  ...normBoxToCenterStyle(b),
                   border: `2px solid ${b.color || defaultColor}`,
                 }}
               >
                 {b.label ? (
                   <div
-                    className="pointer-events-none absolute -top-6 left-0 rounded-md px-2 py-0.5 text-xs"
+                    className="absolute -top-6 left-0 rounded-md px-2 py-0.5 text-xs"
                     style={{
                       backgroundColor: `${(b.color || defaultColor)}33`,
                       color: "#fff",
                       border: `1px solid ${b.color || defaultColor}`,
+                      transform: "rotate(0deg)",
                     }}
                   >
                     {b.label}
@@ -240,14 +252,14 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
               </div>
             ))}
 
-            {/* Aperçu en cours de tracé (pointillé) */}
+            {/* Aperçu en cours de tracé (rect non pivoté) */}
             {preview ? (
               <div
                 className="absolute rounded-md"
                 style={{
-                  ...normBoxToStyle(preview),
-                  border: `2px dashed ${defaultColor}`,
+                  ...normBoxToCenterStyle({ ...preview, angle: 0 }),
                   boxShadow: "inset 0 0 0 9999px rgba(34, 197, 94, 0.12)",
+                  border: `2px dashed ${defaultColor}`,
                 }}
               />
             ) : null}
@@ -261,7 +273,7 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
             <p className="text-sm text-white/70">Aucun rectangle pour le moment. Dessinez-en un sur l’image.</p>
           ) : (
             boxes.map((b) => (
-              <div key={b.id} className="grid gap-2 rounded-xl border border-white/20 bg-white/5 p-3 md:grid-cols-[1fr,160px,auto] md:items-center">
+              <div key={b.id} className="grid gap-2 rounded-xl border border-white/20 bg-white/5 p-3 md:grid-cols-[1fr,160px,160px,auto] md:items-center">
                 <div className="grid gap-1">
                   <Label htmlFor={`label-${b.id}`}>Libellé</Label>
                   <Input
@@ -281,6 +293,27 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
                     onChange={(e) => updateBox(b.id, { color: e.target.value })}
                     className="h-10 w-16 cursor-pointer rounded-md border border-white/20 bg-transparent p-0"
                   />
+                </div>
+                <div className="grid gap-1">
+                  <Label htmlFor={`angle-${b.id}`}>Rotation (°)</Label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id={`angle-${b.id}`}
+                      type="range"
+                      min={-90}
+                      max={90}
+                      step={1}
+                      value={typeof b.angle === "number" ? b.angle : 0}
+                      onChange={(e) => updateBox(b.id, { angle: Number(e.target.value) })}
+                      className="w-full"
+                    />
+                    <Input
+                      type="number"
+                      value={typeof b.angle === "number" ? b.angle : 0}
+                      onChange={(e) => updateBox(b.id, { angle: Number(e.target.value) })}
+                      className="w-16 bg-white/10 text-white"
+                    />
+                  </div>
                 </div>
                 <div className="flex items-end md:justify-end">
                   <Button variant="ghost" className="text-white/90 hover:bg-white/10" onClick={() => removeBox(b.id)}>

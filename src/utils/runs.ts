@@ -13,6 +13,8 @@ export type Box = {
   h: number;
   color: string; // hex (#22C55E) ou css color
   label?: string;
+  // Nouvel attribut: angle en degrés (rotation autour du centre du rectangle)
+  angle?: number;
 };
 
 export type RunItem = {

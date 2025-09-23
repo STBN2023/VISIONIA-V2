@@ -60,22 +60,36 @@ const AnomalyPreview: React.FC<Props> = ({ src, alt = "", boxes = [], className,
     return { offsetX, offsetY, drawW, drawH, contRect: rect };
   }
 
-  function normBoxToStyle(b: { x: number; y: number; w: number; h: number }): React.CSSProperties {
+  function normBoxToCenterStyle(b: { x: number; y: number; w: number; h: number; angle?: number }): React.CSSProperties {
     const r = getRenderRect();
+    const angle = typeof b.angle === "number" ? b.angle : 0;
     if (!r) {
-      // Fallback: en pourcentage, approximatif si bandes
+      // Fallback en pourcentage, rotation autour du centre via translate(-50%,-50%)
+      const left = `${(clamp01(b.x) + clamp01(b.w) / 2) * 100}%`;
+      const top = `${(clamp01(b.y) + clamp01(b.h) / 2) * 100}%`;
+      const width = `${clamp01(b.w) * 100}%`;
+      const height = `${clamp01(b.h) * 100}%`;
       return {
-        left: `${clamp01(b.x) * 100}%`,
-        top: `${clamp01(b.y) * 100}%`,
-        width: `${clamp01(b.w) * 100}%`,
-        height: `${clamp01(b.h) * 100}%`,
+        left,
+        top,
+        width,
+        height,
+        transformOrigin: "center",
+        transform: `translate(-50%, -50%) rotate(${angle}deg)`,
       };
     }
-    const left = r.offsetX + clamp01(b.x) * r.drawW;
-    const top = r.offsetY + clamp01(b.y) * r.drawH;
-    const width = clamp01(b.w) * r.drawW;
-    const height = clamp01(b.h) * r.drawH;
-    return { left, top, width, height };
+    const leftPx = r.offsetX + (b.x + b.w / 2) * r.drawW;
+    const topPx = r.offsetY + (b.y + b.h / 2) * r.drawH;
+    const widthPx = b.w * r.drawW;
+    const heightPx = b.h * r.drawH;
+    return {
+      left: leftPx,
+      top: topPx,
+      width: widthPx,
+      height: heightPx,
+      transformOrigin: "center",
+      transform: `translate(-50%, -50%) rotate(${angle}deg)`,
+    };
   }
 
   return (
@@ -84,7 +98,6 @@ const AnomalyPreview: React.FC<Props> = ({ src, alt = "", boxes = [], className,
       className={cn("relative w-full overflow-hidden rounded-xl border border-white/15 bg-black/30", className)}
       style={{ height }}
     >
-      {/* Image en object-contain pour ne pas rogner */}
       {/* eslint-disable-next-line jsx-a11y/alt-text */}
       <img
         ref={imgRef}
@@ -102,18 +115,19 @@ const AnomalyPreview: React.FC<Props> = ({ src, alt = "", boxes = [], className,
             key={b.id}
             className="absolute rounded-md"
             style={{
-              ...normBoxToStyle(b),
+              ...normBoxToCenterStyle(b),
               border: `2px solid ${b.color || "#22C55E"}`,
               boxShadow: "inset 0 0 0 9999px rgba(34,197,94,0.08)",
             }}
           >
             {showLabels && b.label ? (
               <div
-                className="absolute -top-5 left-0 rounded-md px-1.5 py-0.5 text-[10px] leading-none"
+                className="absolute -top-5 left-1 rounded-md px-1.5 py-0.5 text-[10px] leading-none"
                 style={{
                   backgroundColor: `${(b.color || "#22C55E")}33`,
                   color: "#fff",
                   border: `1px solid ${b.color || "#22C55E"}`,
+                  transform: "rotate(0deg)",
                 }}
               >
                 {b.label}
