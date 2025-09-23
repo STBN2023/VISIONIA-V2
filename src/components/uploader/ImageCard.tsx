@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { ArrowLeftCircle, ArrowRightCircle, Trash2, ChevronDown, ChevronUp, Plus } from "lucide-react";
 import type { ImageTag, ProjectImage } from "@/utils/storage";
 import type { PromptTemplate } from "@/utils/prompts";
+import { Checkbox } from "@/components/ui/checkbox";
 
 type Props = {
   img: ProjectImage;
@@ -21,6 +22,10 @@ type Props = {
   onUpdateTag: (imgId: string, tag?: ImageTag) => void;
   onUpdateImageTemplate: (imgId: string, templateId?: string) => void;
   onCreateTag: (label: string) => void;
+  // Nouveau: sélection multiple
+  selectMode?: boolean;
+  selected?: boolean;
+  onSelectChange?: (imgId: string, selected: boolean) => void;
 };
 
 const ImageCard = ({
@@ -34,6 +39,9 @@ const ImageCard = ({
   onUpdateTag,
   onUpdateImageTemplate,
   onCreateTag,
+  selectMode = false,
+  selected = false,
+  onSelectChange,
 }: Props) => {
   const [openOptions, setOpenOptions] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -49,6 +57,14 @@ const ImageCard = ({
     setNewTag("");
   };
 
+  const handleImageClick = () => {
+    if (selectMode) {
+      onSelectChange?.(img.id, !selected);
+    } else {
+      setPreviewOpen(true);
+    }
+  };
+
   return (
     <>
       <Card className="overflow-hidden rounded-3xl border border-white/20 bg-white/8 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur-2xl">
@@ -58,10 +74,23 @@ const ImageCard = ({
             alt={img.name}
             className="h-full w-full cursor-zoom-in object-cover"
             draggable={false}
-            onClick={() => setPreviewOpen(true)}
+            onClick={handleImageClick}
           />
-          {/* halo doux pour la lisibilité sans opacifier */}
+
+          {/* overlay dégradé bas */}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/35 via-black/10 to-transparent" />
+
+          {/* Case à cocher en mode sélection */}
+          {selectMode ? (
+            <div className="absolute left-2 top-2 z-10 rounded-xl bg-black/40 p-1 backdrop-blur-md">
+              <Checkbox
+                checked={selected}
+                onCheckedChange={(v) => onSelectChange?.(img.id, Boolean(v))}
+                aria-label={selected ? "Désélectionner l'image" : "Sélectionner l'image"}
+                className="data-[state=checked]:bg-white data-[state=checked]:text-black"
+              />
+            </div>
+          ) : null}
         </div>
 
         <CardContent className="space-y-2 p-3">

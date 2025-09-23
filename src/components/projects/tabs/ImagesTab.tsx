@@ -10,6 +10,7 @@ import { Image as ImageIcon, Upload, X } from "lucide-react";
 import type { ImageTag, Project } from "@/utils/storage";
 import type { PromptTemplate } from "@/utils/prompts";
 import ImageCard from "@/components/uploader/ImageCard";
+import { showSuccess } from "@/utils/toast";
 
 type Props = {
   project: Project;
@@ -44,6 +45,19 @@ const ImagesTab = ({
 
   const [newTag, setNewTag] = useState("");
 
+  // Mode sélection pour tagging en masse
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const selectedIds = useMemo(
+    () => Object.entries(selected).filter(([, v]) => v).map(([k]) => k),
+    [selected],
+  );
+  const selectedCount = selectedIds.length;
+
+  // Choix du tag à appliquer en masse
+  const [bulkExistingTag, setBulkExistingTag] = useState<"none" | string>("none");
+  const [bulkNewTag, setBulkNewTag] = useState("");
+
   const addTag = () => {
     const label = newTag.trim();
     if (!label) return;
@@ -51,6 +65,47 @@ const ImagesTab = ({
       onCreateTag(label);
     }
     setNewTag("");
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedCount === filteredImages.length) {
+      setSelected({});
+    } else {
+      const map: Record<string, boolean> = {};
+      filteredImages.forEach((img) => (map[img.id] = true));
+      setSelected(map);
+    }
+  };
+
+  const clearSelection = () => setSelected({});
+
+  const applyBulkTag = () => {
+    if (selectedCount === 0) return;
+    let toApply: string | undefined = undefined;
+
+    const newLabel = bulkNewTag.trim();
+    if (newLabel) {
+      if (!project.tags.includes(newLabel)) {
+        onCreateTag(newLabel);
+      }
+      toApply = newLabel;
+    } else if (bulkExistingTag !== "none") {
+      toApply = bulkExistingTag;
+    } else {
+      toApply = undefined; // retirer le tag
+    }
+
+    // Applique à chaque image sélectionnée
+    selectedIds.forEach((id) => onUpdateTag(id, toApply));
+    showSuccess(
+      toApply ? `Tag “${toApply}” appliqué à ${selectedCount} image(s)` : `Tag retiré sur ${selectedCount} image(s)`,
+    );
+
+    // Reset
+    setBulkExistingTag("none");
+    setBulkNewTag("");
+    clearSelection();
+    setSelectMode(false);
   };
 
   return (
@@ -141,12 +196,28 @@ const ImagesTab = ({
         </CardContent>
       </Card>
 
+      {/* Ligne d’outils: compteur + filtre + bascule mode sélection */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-white/80">
           {filteredImages.length} image{filteredImages.length > 1 ? "s" : ""} affichée{filteredImages.length > 1 ? "s" : ""}
           {tagFilter !== "all" ? ` (filtre: ${tagFilter})` : ""}
+          {selectMode && selectedCount > 0 ? ` • ${selectedCount} sélectionnée(s)` : ""}
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant={selectMode ? "secondary" : "outline"}
+            onClick={() => {
+              setSelectMode((v) => {
+                const next = !v;
+                if (!next) setSelected({});
+                return next;
+              });
+            }}
+            className={selectMode ? "backdrop-blur-sm" : "bg-white/10 border-white/30 text-white hover:bg-white/20 backdrop-blur-sm"}
+          >
+            {selectMode ? "Quitter sélection" : "Mode sélection"}
+          </Button>
           <Label className="text-xs text-white/80">Filtrer par tag</Label>
           <Select value={tagFilter} onValueChange={(v) => setTagFilter((v as ImageTag) || "all")}>
             <SelectTrigger className="w-[240px] bg-white/10 text-white">
@@ -164,6 +235,84 @@ const ImagesTab = ({
         </div>
       </div>
 
+      {/* Barre d’actions en masse, visible en mode sélection */}
+      {selectMode ? (
+        <Card className="rounded-2xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
+          <CardContent className="flex flex-col gap-3 py-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="outline"
+                onClick={toggleSelectAll}
+                className="border-white/30 bg-transparent text-white hover:bg-white/10"
+              >
+                {selectedCount === filteredImages.length ? "Tout désélectionner" : "Tout sélectionner"}
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={clearSelection}
+                className="bg-white/10 text-white hover:bg-white/20"
+              >
+                Effacer la sélection
+              </Button>
+              <div className="mx-2 h-6 w-px bg-white/20" aria-hidden />
+              <div className="flex items-center gap-2">
+                <Label className="text-xs">Tag existant</Label>
+                <Select
+                  value={bulkExistingTag}
+                  onValueChange={(v) => setBulkExistingTag(v as "none" | string)}
+                >
+                  <SelectTrigger className="w-[220px] bg-white/10 text-white">
+                    <SelectValue placeholder="Choisir un tag" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Aucun (retirer)</SelectItem>
+                    {project.tags.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label className="text-xs">Nouveau tag</Label>
+                <Input
+                  value={bulkNewTag}
+                  onChange={(e) => setBulkNewTag(e.target.value)}
+                  placeholder="Saisir un nouveau tag"
+                  className="w-[220px] bg-white/10 text-white placeholder:text-white/60"
+                />
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const t = bulkNewTag.trim();
+                    if (!t) return;
+                    if (!project.tags.includes(t)) {
+                      onCreateTag(t);
+                    }
+                  }}
+                  className="border-white/30 bg-transparent text-white hover:bg-white/10"
+                >
+                  Ajouter au projet
+                </Button>
+              </div>
+              <div className="mx-2 h-6 w-px bg-white/20" aria-hidden />
+              <Button
+                onClick={applyBulkTag}
+                disabled={selectedCount === 0}
+                className="backdrop-blur-sm"
+                title={selectedCount === 0 ? "Sélectionnez des images" : "Appliquer le tag aux images sélectionnées"}
+              >
+                Appliquer
+              </Button>
+            </div>
+            <p className="text-xs text-white/70">
+              Astuce: si “Nouveau tag” est saisi, il sera créé puis appliqué. Sinon, le tag existant choisi sera appliqué. “Aucun” retire le tag.
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
+
       {project.images.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/20 bg-white/5 py-16 text-center backdrop-blur-xl">
           <ImageIcon className="mb-3 h-8 w-8 text-white/70" />
@@ -175,6 +324,8 @@ const ImagesTab = ({
             const idx = project.images.findIndex((i) => i.id === img.id);
             const canLeft = idx > 0;
             const canRight = idx < project.images.length - 1;
+            const isSelected = !!selected[img.id];
+
             return (
               <ImageCard
                 key={img.id}
@@ -188,6 +339,12 @@ const ImagesTab = ({
                 onUpdateTag={onUpdateTag}
                 onUpdateImageTemplate={onUpdateImageTemplate}
                 onCreateTag={onCreateTag}
+                // Sélection multiple
+                selectMode={selectMode}
+                selected={isSelected}
+                onSelectChange={(id, s) =>
+                  setSelected((prev) => ({ ...prev, [id]: s }))
+                }
               />
             );
           })}
