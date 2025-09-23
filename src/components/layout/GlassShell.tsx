@@ -15,7 +15,7 @@ export const GlassShell = ({ children, className }: Props) => {
   );
   const [bgUrl, setBgUrl] = React.useState<string>(
     initial.backgroundImage ||
-      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=2400&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1756806983725-977bb2308d4e?q=80&w=1170&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
   );
   const [bgColor, setBgColor] = React.useState<string>(
     initial.backgroundColor || "#0b1220",
