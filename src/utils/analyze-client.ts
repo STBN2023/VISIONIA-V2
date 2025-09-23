@@ -2,6 +2,7 @@ import type { ProjectImage } from "@/utils/storage";
 import type { RunMode } from "@/utils/runs";
 import type { Box } from "@/utils/runs";
 import { getSettings } from "@/utils/settings";
+import { colorFor, guessType } from "@/utils/anomaly-colors";
 
 export type AnalyzeOk =
   | { ok: true; mode: "aggregate"; outputText: string }
@@ -73,7 +74,6 @@ function clamp01(n: number) {
 }
 
 function extractFirstJsonObject(text: string): any | null {
-  // Cherche le premier bloc JSON via comptage d’accolades
   const start = text.indexOf("{");
   if (start === -1) return null;
   let depth = 0;
@@ -87,17 +87,20 @@ function extractFirstJsonObject(text: string): any | null {
         try {
           return JSON.parse(candidate);
         } catch {
-          // continue à chercher plus loin si parse échoue
+          // continue
         }
       }
     }
   }
-  // Fallback: tentative brute
   try {
     return JSON.parse(text);
   } catch {
     return null;
   }
+}
+
+function toTitle(s: string) {
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
 function toBoxes(obj: any): { boxes: Box[]; summary?: string } {
@@ -109,8 +112,11 @@ function toBoxes(obj: any): { boxes: Box[]; summary?: string } {
     const y = clamp01(Number(b?.y ?? 0));
     const w = clamp01(Number(b?.w ?? 0));
     const h = clamp01(Number(b?.h ?? 0));
-    const color = typeof a?.color === "string" && a.color.trim() ? a.color.trim() : "#FF4D4F"; // rouge par défaut
-    const label = typeof a?.label === "string" ? a.label : undefined;
+    const lbl = typeof a?.label === "string" ? a.label : undefined;
+    const typeRaw = typeof a?.type === "string" ? a.type : undefined;
+    const inferredType = (typeRaw as string) || guessType(lbl);
+    const col = colorFor({ type: inferredType, label: lbl, color: a?.color });
+
     if (w > 0 && h > 0) {
       boxes.push({
         id: crypto.randomUUID(),
@@ -118,8 +124,8 @@ function toBoxes(obj: any): { boxes: Box[]; summary?: string } {
         y,
         w,
         h,
-        color,
-        label,
+        color: col,
+        label: lbl || toTitle(String(inferredType || "anomalie")),
       });
     }
   }
@@ -128,21 +134,25 @@ function toBoxes(obj: any): { boxes: Box[]; summary?: string } {
 }
 
 function buildDetectionInstruction(userPrompt: string): string {
-  // Instruction claire pour un JSON strict
+  // Instruction claire pour JSON strict avec type normalisé
   return [
-    "Analyse cette image pour détecter des anomalies visibles (fissures, infiltrations, isolation, ponts thermiques, humidité, menuiseries, toiture, etc.).",
+    "Analyse cette image pour détecter des anomalies visibles (fissures, infiltrations, humidité, isolation, ponts thermiques, menuiseries, toiture, etc.).",
     "Réponds UNIQUEMENT en JSON (pas de texte autour, pas de markdown) au format strict suivant:",
-    '{',
+    "{",
     '  "anomalies": [',
-    '    { "label": "Courte description", "color": "#FF4D4F", "box": { "x": 0.12, "y": 0.34, "w": 0.22, "h": 0.15 } }',
+    '    {',
+    '      "type": "fissure|infiltration|humidite|isolation|pont_thermique|menuiserie|toiture|moisissure|structure|electrique|plomberie|vegetation|autre",',
+    '      "label": "Courte description lisible (FR)",',
+    '      "box": { "x": 0.12, "y": 0.34, "w": 0.22, "h": 0.15 }',
+    "    }",
     "  ],",
-    '  "summary": "Résumé technique concis des constats et recommandations"',
+    '  "summary": "Résumé technique concis des constats et recommandations (FR)"',
     "}",
     "- Contraintes:",
-    "  - Les coordonnées x,y,w,h sont normalisées entre 0 et 1, relatives à l’image (0 = bord gauche/haut, 1 = bord droit/bas).",
+    "  - Les coordonnées x,y,w,h sont normalisées entre 0 et 1 (0 = bord gauche/haut, 1 = bord droit/bas).",
     "  - Si aucune anomalie, renvoie anomalies: [].",
-    "  - Color est un hex valide (ex: #FF4D4F).",
-    "Prompt utilisateur (contexte):",
+    "  - Utilise le champ 'type' avec les valeurs proposées pour homogénéiser.",
+    "Contexte (prompt utilisateur):",
     userPrompt || "(aucun)",
   ].join("\n");
 }
@@ -174,7 +184,6 @@ export async function analyzeLLM(input: {
 
   try {
     if (input.mode === "aggregate") {
-      // Comportement inchangé pour l’agrégé
       const text = await callOpenAI({
         apiKey: s.apiKey!,
         model,
@@ -185,7 +194,6 @@ export async function analyzeLLM(input: {
       });
       return { ok: true, mode: "aggregate", outputText: text };
     } else {
-      // per_image: détection + boîtes via JSON
       const instruction = buildDetectionInstruction(input.prompt);
       const items = await Promise.all(
         limited.map(async (img) => {
@@ -198,7 +206,6 @@ export async function analyzeLLM(input: {
             max_tokens,
           });
 
-          // Essaye d’extraire du JSON; si échec, on garde le texte brut et pas de boxes
           const parsed = extractFirstJsonObject(raw);
           if (parsed) {
             const { boxes, summary } = toBoxes(parsed);
