@@ -30,6 +30,7 @@ const Settings = () => {
   const [backgroundColor, setBackgroundColor] = useState("#0b1220");
   const [backgroundDim, setBackgroundDim] = useState<number>(20);
   const [themePreset, setThemePreset] = useState<ThemePreset>("violet");
+  const [brightness, setBrightness] = useState<number>(100);
 
   useEffect(() => {
     const s = getSettings();
@@ -45,6 +46,7 @@ const Settings = () => {
     setBackgroundColor(s.backgroundColor ?? "#0b1220");
     setBackgroundDim(typeof s.backgroundDim === "number" ? s.backgroundDim : 20);
     setThemePreset((s.themePreset as ThemePreset) ?? "violet");
+    setBrightness(typeof s.brightness === "number" ? s.brightness : 100);
   }, []);
 
   const handleSave = () => {
@@ -70,12 +72,14 @@ const Settings = () => {
       backgroundColor: backgroundMode === "color" ? (backgroundColor || "#0b1220") : undefined,
       backgroundDim: Math.max(0, Math.min(100, Number(backgroundDim))),
       themePreset,
+      brightness: Math.max(50, Math.min(150, Number(brightness))),
     });
     setBackgroundMode((next.backgroundMode as BackgroundMode) ?? "image");
     setBackgroundImage(next.backgroundImage ?? "");
     setBackgroundColor(next.backgroundColor ?? "#0b1220");
     setBackgroundDim(next.backgroundDim ?? 20);
     setThemePreset((next.themePreset as ThemePreset) ?? "violet");
+    setBrightness(next.brightness ?? 100);
     showSuccess("Paramètres enregistrés");
   };
 
@@ -115,7 +119,7 @@ const Settings = () => {
       <main className="mx-auto w-full max-w-6xl px-4 py-6 text-white">
         <div className="mb-4">
           <h1 className="text-2xl font-semibold">Paramètres</h1>
-          <p className="text-sm text-white/70">Configurer l’API LLM et l’apparence du fond (image, couleur, contraste, palette).</p>
+          <p className="text-sm text-white/70">Configurer l’API LLM et l’apparence du fond (image, couleur, contraste, palette, luminosité).</p>
         </div>
         <Separator className="mb-6 border-white/20" />
 
@@ -301,6 +305,22 @@ const Settings = () => {
               </div>
               <p className="text-xs text-white/70">
                 Augmenter la valeur assombrit le fond pour améliorer la lisibilité des contenus.
+              </p>
+            </div>
+
+            <div className="grid gap-2">
+              <Label>Luminosité du fond: {Math.round(brightness)}%</Label>
+              <div className="px-2">
+                <Slider
+                  value={[brightness]}
+                  min={50}
+                  max={150}
+                  step={1}
+                  onValueChange={(v) => setBrightness(v[0] ?? 100)}
+                />
+              </div>
+              <p className="text-xs text-white/70">
+                Ajuste la luminosité du fond (50% = plus sombre, 150% = plus lumineux). Valeur par défaut: 100%.
               </p>
             </div>
           </CardContent>

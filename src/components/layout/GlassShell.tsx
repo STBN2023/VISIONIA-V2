@@ -26,6 +26,9 @@ export const GlassShell = ({ children, className }: Props) => {
   const [theme, setTheme] = React.useState<"violet" | "blue" | "neutral">(
     (initial.themePreset as any) || "violet",
   );
+  const [brightness, setBrightness] = React.useState<number>(
+    typeof initial.brightness === "number" ? initial.brightness : 100,
+  );
 
   React.useEffect(() => {
     const onUpdated = () => {
@@ -35,6 +38,7 @@ export const GlassShell = ({ children, className }: Props) => {
       setBgColor(s.backgroundColor || "#0b1220");
       setDim(typeof s.backgroundDim === "number" ? s.backgroundDim : 20);
       setTheme((s.themePreset as any) || "violet");
+      setBrightness(typeof s.brightness === "number" ? s.brightness : 100);
     };
     window.addEventListener("settings:updated", onUpdated);
     return () => window.removeEventListener("settings:updated", onUpdated);
@@ -42,6 +46,8 @@ export const GlassShell = ({ children, className }: Props) => {
 
   const dimClamped = Math.max(0, Math.min(100, Number.isFinite(dim) ? dim : 20));
   const alpha = (dimClamped / 100) * 0.7; // voile sombre max ~70%
+
+  const brightClamped = Math.max(50, Math.min(150, Number.isFinite(brightness) ? brightness : 100));
 
   const themeConf = {
     violet: {
@@ -68,8 +74,11 @@ export const GlassShell = ({ children, className }: Props) => {
         <div className={cn("absolute inset-0 bg-gradient-to-br", themeConf.base)} />
       </div>
 
-      {/* Couche arrière-plan: image ou couleur */}
-      <div className="fixed inset-0 -z-20">
+      {/* Couche arrière-plan: image ou couleur (avec luminosité) */}
+      <div
+        className="fixed inset-0 -z-20"
+        style={{ filter: `brightness(${brightClamped}%)` }}
+      >
         {mode === "image" ? (
           <div
             className="absolute inset-0 bg-cover bg-center"
