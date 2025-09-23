@@ -49,11 +49,12 @@ const PromptTab = ({
           <CardTitle>Prompt maître (projet)</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid gap-2 sm:grid-cols-2">
+          {/* 2 colonnes alignées en haut */}
+          <div className="grid gap-3 sm:grid-cols-2 sm:items-start">
             <div className="grid gap-2">
               <Label>Template (projet)</Label>
               <Select value={projectTemplateId ?? "none"} onValueChange={(v) => setProjectTemplateId(v === "none" ? undefined : v)}>
-                <SelectTrigger className="bg-white/10 text-white">
+                <SelectTrigger className="h-10 w-full bg-white/10 text-white">
                   <SelectValue placeholder="Choisir un template" />
                 </SelectTrigger>
                 <SelectContent>
@@ -82,7 +83,7 @@ const PromptTab = ({
             <div className="grid gap-2">
               <Label>Filtrer les images analysées</Label>
               <Select value={analysisTag} onValueChange={(v) => setAnalysisTag(v)}>
-                <SelectTrigger className="bg-white/10 text-white">
+                <SelectTrigger className="h-10 w-full bg-white/10 text-white">
                   <SelectValue placeholder="Toutes les images" />
                 </SelectTrigger>
                 <SelectContent>
