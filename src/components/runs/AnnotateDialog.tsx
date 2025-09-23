@@ -28,6 +28,7 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
   const [boxes, setBoxes] = React.useState<Box[]>([]);
   const [drawing, setDrawing] = React.useState(false);
   const [start, setStart] = React.useState<{ x: number; y: number } | null>(null);
+  const [preview, setPreview] = React.useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   const containerRef = React.useRef<HTMLDivElement | null>(null);
   const imgRef = React.useRef<HTMLImageElement | null>(null);
@@ -67,7 +68,7 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
     return { offsetX, offsetY, drawW, drawH, contRect: rect };
   }
 
-  // Convertit un point client vers coords normalisées image (0..1)
+  // Convertit un event → coords normalisées (0..1) si dans l'image, sinon null
   function clientToNorm(e: React.PointerEvent) {
     const r = getRenderRect();
     if (!r) return null;
@@ -81,11 +82,24 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
     return { x: nx, y: ny };
   }
 
-  // Convertit une box normalisée (0..1) en style pixels dans le conteneur
-  function normBoxToStyle(b: Box): React.CSSProperties {
+  // Variante: renvoie toujours une coordonnée normalisée, en la clampant aux bords de l'image
+  function clientToNormClamped(e: React.PointerEvent) {
+    const r = getRenderRect();
+    if (!r) return null;
+    let xPx = e.clientX - r.contRect.left - r.offsetX;
+    let yPx = e.clientY - r.contRect.top - r.offsetY;
+    xPx = Math.max(0, Math.min(r.drawW, xPx));
+    yPx = Math.max(0, Math.min(r.drawH, yPx));
+    const nx = clamp01(xPx / r.drawW);
+    const ny = clamp01(yPx / r.drawH);
+    return { x: nx, y: ny };
+  }
+
+  // Convertit une box normalisée (0..1) en style pixels
+  function normBoxToStyle(b: { x: number; y: number; w: number; h: number }): React.CSSProperties {
     const r = getRenderRect();
     if (!r) {
-      // Fallback ancien comportement (moins précis)
+      // Fallback (moins précis)
       return {
         left: `${b.x * 100}%`,
         top: `${b.y * 100}%`,
@@ -97,44 +111,64 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
     const top = r.offsetY + b.y * r.drawH;
     const width = b.w * r.drawW;
     const height = b.h * r.drawH;
-    return {
-      left,
-      top,
-      width,
-      height,
-    };
+    return { left, top, width, height };
   }
 
-  const onPointerDown = (e: React.PointerEvent) => {
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const p = clientToNorm(e);
     if (!p) return; // ignore si on clique dans les bandes
+    try { (e.currentTarget as any).setPointerCapture?.(e.pointerId); } catch {}
     setStart(p);
     setDrawing(true);
+    setPreview(null);
   };
 
-  const onPointerMove = (e: React.PointerEvent) => {
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!drawing || !start) return;
-    // Optionnel: aperçu live du rectangle (non nécessaire ici)
+    const p = clientToNormClamped(e);
+    if (!p) return;
+    const x = Math.min(start.x, p.x);
+    const y = Math.min(start.y, p.y);
+    const w = Math.max(0.001, Math.abs(p.x - start.x));
+    const h = Math.max(0.001, Math.abs(p.y - start.y));
+    setPreview({ x, y, w, h });
     e.preventDefault();
   };
 
-  const onPointerUp = (e: React.PointerEvent) => {
-    if (!drawing || !start) return;
-    const p = clientToNorm(e);
+  const onPointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    try { (e.currentTarget as any).releasePointerCapture?.(e.pointerId); } catch {}
+    if (!drawing || !start) {
+      setDrawing(false);
+      setStart(null);
+      setPreview(null);
+      return;
+    }
+    const p = clientToNormClamped(e);
     setDrawing(false);
     if (!p) {
       setStart(null);
+      setPreview(null);
       return;
     }
     const x = Math.min(start.x, p.x);
     const y = Math.min(start.y, p.y);
     const w = Math.max(0.001, Math.abs(p.x - start.x));
     const h = Math.max(0.001, Math.abs(p.y - start.y));
+
     setBoxes((prev) => [
       ...prev,
       { id: crypto.randomUUID(), x, y, w, h, color: defaultColor, label: "" },
     ]);
     setStart(null);
+    setPreview(null);
+  };
+
+  const onPointerLeave = () => {
+    // Ne rien faire si on dessine (pointer capture gère la suite)
+    if (!drawing) {
+      setStart(null);
+      setPreview(null);
+    }
   };
 
   const removeBox = (id: string) => {
@@ -145,17 +179,23 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
     setBoxes((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
   };
 
-  const cancelDrawing = () => {
-    setDrawing(false);
-    setStart(null);
+  const closeDialog = (o: boolean) => {
+    if (!o) {
+      setDrawing(false);
+      setStart(null);
+      setPreview(null);
+    }
+    onOpenChange(o);
   };
 
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (!o) cancelDrawing(); onOpenChange(o); }}>
+    <Dialog open={open} onOpenChange={closeDialog}>
       <GlassDialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle>Annoter l’image</DialogTitle>
-          <DialogDescription>Cliquer-glisser dans l’image (pas les bandes) pour dessiner un rectangle, puis ajuster couleur et libellé.</DialogDescription>
+          <DialogDescription>
+            Cliquer-glisser à l’intérieur de l’image (les bordures sombres sont ignorées). Un aperçu en pointillé se dessine pendant le tracé.
+          </DialogDescription>
         </DialogHeader>
 
         <div
@@ -164,7 +204,7 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
           onPointerDown={onPointerDown}
           onPointerUp={onPointerUp}
           onPointerMove={onPointerMove}
-          onPointerLeave={cancelDrawing}
+          onPointerLeave={onPointerLeave}
         >
           <img
             ref={imgRef}
@@ -199,6 +239,18 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
                 ) : null}
               </div>
             ))}
+
+            {/* Aperçu en cours de tracé (pointillé) */}
+            {preview ? (
+              <div
+                className="absolute rounded-md"
+                style={{
+                  ...normBoxToStyle(preview),
+                  border: `2px dashed ${defaultColor}`,
+                  boxShadow: "inset 0 0 0 9999px rgba(34, 197, 94, 0.12)",
+                }}
+              />
+            ) : null}
           </div>
         </div>
 
@@ -241,14 +293,14 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
         </div>
 
         <div className="mt-4 flex justify-end gap-2">
-          <Button variant="secondary" className="backdrop-blur-sm" onClick={() => onOpenChange(false)}>
+          <Button variant="secondary" className="backdrop-blur-sm" onClick={() => closeDialog(false)}>
             Annuler
           </Button>
           <Button
             className="backdrop-blur-sm"
             onClick={() => {
               onSave(boxes);
-              onOpenChange(false);
+              closeDialog(false);
             }}
           >
             Enregistrer
