@@ -41,7 +41,7 @@ const RunsTab = ({ runs, images }: Props) => {
                       variant="outline"
                       disabled={run.status !== "succeeded"}
                       onClick={() => exportRunToPdf(run, images)}
-                      className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm"
+                      className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm disabled:opacity-50"
                       title={run.status === "succeeded" ? "Exporter en PDF" : "Disponible lorsque le run est terminé"}
                     >
                       <FileText className="mr-2 h-4 w-4" />
@@ -95,11 +95,17 @@ const RunsTab = ({ runs, images }: Props) => {
                     </div>
                   )}
                   <div className="flex flex-wrap justify-end gap-2">
-                    {run.status === "running" || run.status === "queued" ? (
-                      <Button variant="outline" size="sm" onClick={() => cancelRun(run.id)} className="border-white/30 text-white hover:bg-white/10">
+                    {(run.status === "running" || run.status === "queued") && (
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        onClick={() => cancelRun(run.id)}
+                        className="border border-white/25 bg-white/15 text-white hover:bg-white/25 backdrop-blur-sm"
+                        title="Annuler ce run"
+                      >
                         Annuler
                       </Button>
-                    ) : null}
+                    )}
                     {run.mode === "per_image" && run.status === "failed" ? (
                       <Button
                         variant="secondary"
