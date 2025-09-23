@@ -128,56 +128,69 @@ const Settings = () => {
             <CardTitle>Configuration API</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4 md:grid-cols-2">
-            <div className="grid gap-2">
+            {/* Provider */}
+            <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
               <Label>Provider</Label>
-              <Select value={provider} onValueChange={(v) => setProvider(v as APIProvider)}>
-                <SelectTrigger className="bg-white/10 text-white">
-                  <SelectValue placeholder="Choisir un provider" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="openai">OpenAI</SelectItem>
-                  <SelectItem value="anthropic">Anthropic</SelectItem>
-                  <SelectItem value="google">Google</SelectItem>
-                  <SelectItem value="azure">Azure OpenAI</SelectItem>
-                </SelectContent>
-              </Select>
+              <div>
+                <Select value={provider} onValueChange={(v) => setProvider(v as APIProvider)}>
+                  <SelectTrigger className="bg-white/10 text-white">
+                    <SelectValue placeholder="Choisir un provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai">OpenAI</SelectItem>
+                    <SelectItem value="anthropic">Anthropic</SelectItem>
+                    <SelectItem value="google">Google</SelectItem>
+                    <SelectItem value="azure">Azure OpenAI</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div className="grid gap-2">
+            {/* Clé API */}
+            <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-start">
               <Label>Clé API</Label>
-              <Input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                placeholder="sk-..."
-                className="bg-white/10 text-white placeholder:text-white/60"
-              />
-              <p className="text-xs text-white/70">Note: la clé est stockée localement (navigateur) pour la démo.</p>
+              <div className="space-y-1">
+                <Input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  placeholder="sk-..."
+                  className="bg-white/10 text-white placeholder:text-white/60"
+                />
+                <p className="text-xs text-white/70">Note: la clé est stockée localement (navigateur) pour la démo.</p>
+              </div>
             </div>
 
-            <div className="grid gap-2">
+            {/* Modèle */}
+            <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
               <Label>Modèle</Label>
               <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="ex: gpt-4o, claude-3-5, ..." className="bg-white/10 text-white placeholder:text-white/60" />
             </div>
 
-            <div className="grid gap-2">
+            {/* Température */}
+            <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
               <Label>Température</Label>
               <Input type="number" step="0.1" min="0" max="2" value={temperature} onChange={(e) => setTemperature(e.target.value)} className="bg-white/10 text-white" />
             </div>
 
-            <div className="grid gap-2">
+            {/* Max tokens */}
+            <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
               <Label>Max tokens</Label>
               <Input type="number" min="1" value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} className="bg-white/10 text-white" />
             </div>
 
-            <div className="grid gap-2">
+            {/* Endpoint */}
+            <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-start">
               <Label>Endpoint (optionnel)</Label>
-              <Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} placeholder="https://api.openai.com/v1" className="bg-white/10 text-white placeholder:text-white/60" />
-              <p className="text-xs text-white/70">Utilisez un endpoint custom si nécessaire (Azure, proxy...).</p>
+              <div className="space-y-1">
+                <Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} placeholder="https://api.openai.com/v1" className="bg-white/10 text-white placeholder:text-white/60" />
+                <p className="text-xs text-white/70">Utilisez un endpoint custom si nécessaire (Azure, proxy...).</p>
+              </div>
             </div>
 
+            {/* Azure deployment (si Azure) */}
             {provider === "azure" ? (
-              <div className="grid gap-2 md:col-span-2">
+              <div className="grid gap-2 md:col-span-2 md:grid-cols-[220px,1fr] md:items-center">
                 <Label>Nom du déploiement Azure</Label>
                 <Input value={azureDeployment} onChange={(e) => setAzureDeployment(e.target.value)} placeholder="ex: gpt-4o-prod" className="bg-white/10 text-white placeholder:text-white/60" />
               </div>
