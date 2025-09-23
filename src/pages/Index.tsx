@@ -21,7 +21,7 @@ const Index = () => {
             </Link>
           </div>
           <div className="mt-8">
-            <Outil developpé pour le GROUPE ISOEDRE />
+            < />
           </div>
         </GlassPanel>
       </main>
