@@ -97,8 +97,13 @@ const ImagesTab = ({
       toApply = undefined; // retirer le tag
     }
 
-    // Patch unique pour toutes les images sélectionnées
-    onBulkUpdateTags(selectedIds, toApply);
+    // Patch unique si dispo, sinon fallback par image
+    if (typeof onBulkUpdateTags === "function") {
+      onBulkUpdateTags(selectedIds, toApply);
+    } else {
+      selectedIds.forEach((id) => onUpdateTag(id, toApply));
+    }
+
     showSuccess(
       toApply ? `Tag “${toApply}” appliqué à ${selectedCount} image(s)` : `Tag retiré sur ${selectedCount} image(s)`,
     );

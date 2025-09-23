@@ -198,7 +198,7 @@ const ProjectDetail = () => {
 
     if (newImages.length === 0) {
       if (ignoredWrongType || ignoredTooLarge) {
-        const parts = [];
+        const parts: string[] = [];
         if (ignoredWrongType) parts.push(`${ignoredWrongType} format(s) non supporté(s)`);
         if (ignoredTooLarge) parts.push(`${ignoredTooLarge} trop lourde(s) après compression`);
         showError(`Aucune image ajoutée (${parts.join(", ")}).`);
@@ -229,6 +229,15 @@ const ProjectDetail = () => {
     if (!project) return;
     const updated = await updateProject(project.id, {
       images: project.images.map((i) => (i.id === imgId ? { ...i, tag } : i)),
+    })!;
+    setProject(updated);
+  };
+
+  // Mise à jour de tags en masse (patch unique)
+  const handleBulkUpdateTags = async (ids: string[], tag?: ImageTag) => {
+    if (!project || ids.length === 0) return;
+    const updated = await updateProject(project.id, {
+      images: project.images.map((i) => (ids.includes(i.id) ? { ...i, tag } : i)),
     })!;
     setProject(updated);
   };
@@ -311,6 +320,7 @@ const ProjectDetail = () => {
               onAddFiles={handleFiles}
               onDeleteImage={handleDeleteImage}
               onUpdateTag={handleUpdateTag}
+              onBulkUpdateTags={handleBulkUpdateTags}
               onUpdateImageTemplate={handleUpdateImageTemplate}
               onMoveImage={moveImage}
               onCreateTag={handleCreateTag}
