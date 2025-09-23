@@ -36,7 +36,6 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
       return;
     }
 
-    // 1) Crée un run en 'running'
     const run = createPendingRun({
       projectId,
       mode,
@@ -50,7 +49,6 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
     showSuccess("Analyse démarrée");
     onStarted?.(run.id);
 
-    // 2) Appel direct OpenAI (clé locale)
     const result = await analyzeLLM({
       mode,
       prompt,
@@ -60,10 +58,9 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
       max_tokens: s.maxTokens,
     });
 
-    // 3) Met à jour le run selon la réponse
     if (result.ok) {
       if (result.mode === "aggregate") {
-        completeRunWithServer(run.id, { mode: "aggregate", outputText: result.outputText });
+        completeRunWithServer(run.id, { mode: "aggregate", outputText: result.outputText, items: result.items });
       } else {
         completeRunWithServer(run.id, { mode: "per_image", items: result.items });
       }
@@ -103,7 +100,7 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
                     htmlFor="aggregate"
                     className="cursor-pointer text-white/90"
                   >
-                    Agrégé (un rapport global)
+                    Agrégé (rapport global + détails par image)
                   </Label>
                 </div>
                 <div className="flex items-center gap-3">
@@ -125,7 +122,7 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
 
           <div className="rounded-md border border-white/20 bg-white/10 p-3 text-sm text-white/80">
             <p>
-              L’analyse utilise votre clé OpenAI stockée localement (Paramètres). Aucune base de données ni secret côté serveur.
+              L’analyse utilise votre clé OpenAI stockée localement (Paramètres).
             </p>
           </div>
           <div className="flex justify-end gap-2">

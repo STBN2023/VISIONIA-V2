@@ -36,8 +36,8 @@ export type Run = {
   temperature?: number;
   createdAt: string;
   updatedAt: string;
-  items: RunItem[]; // vide si aggregate
-  outputText?: string; // si aggregate
+  items: RunItem[]; // peut être utilisé aussi en mode aggregate
+  outputText?: string; // texte global si aggregate
   error?: string;
 };
 
@@ -148,11 +148,11 @@ export function createPendingRun(input: CreateRunInput): Run {
   return run;
 }
 
-// Nouveau: complète un run avec les résultats venus de l’IA (texte + boxes possibles)
+// Nouveau: complète un run avec les résultats venus de l’IA
 export function completeRunWithServer(
   runId: string,
   payload:
-    | { mode: "aggregate"; outputText: string }
+    | { mode: "aggregate"; outputText: string; items?: { imageId?: string; outputText: string; boxes?: Box[] }[] }
     | {
         mode: "per_image";
         items: { imageId?: string; outputText: string; boxes?: Box[] }[];
@@ -160,9 +160,23 @@ export function completeRunWithServer(
 ) {
   const run = getRunById(runId);
   if (!run) return;
-  if (run.mode === "aggregate" && "outputText" in payload) {
+  if (payload.mode === "aggregate") {
     run.outputText = payload.outputText;
-  } else if (run.mode === "per_image" && "items" in payload) {
+    if (Array.isArray(payload.items)) {
+      // Injecte/écrase les items par image en succeeded
+      run.items = payload.items
+        .map((x) => ({
+          id: crypto.randomUUID(),
+          imageId: String(x.imageId || ""),
+          status: "succeeded" as RunItemStatus,
+          outputText: x.outputText,
+          boxes: Array.isArray(x.boxes) ? x.boxes.map((b) => ({ ...b })) : [],
+          finishedAt: new Date().toISOString(),
+        }))
+        .filter((it) => it.imageId);
+    }
+    run.status = "succeeded";
+  } else if (payload.mode === "per_image") {
     run.items = run.items.map((it) => {
       const match = payload.items.find((x) => x.imageId === it.imageId);
       if (match) {
@@ -176,11 +190,6 @@ export function completeRunWithServer(
       }
       return it;
     });
-  }
-  // Déterminer le statut final
-  if (run.mode === "aggregate") {
-    run.status = "succeeded";
-  } else {
     const allHaveOutput = run.items.every((i) => i.status === "succeeded");
     run.status = allHaveOutput ? "succeeded" : "failed";
   }

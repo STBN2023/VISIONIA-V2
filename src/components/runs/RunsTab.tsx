@@ -35,7 +35,7 @@ const RunsTab = ({ runs, images }: Props) => {
   const [logRunId, setLogRunId] = useState<string | null>(null);
   const logRun = useMemo(() => runs.find((r) => r.id === logRunId) ?? null, [runs, logRunId]);
 
-  // Annotate modal state (uniquement pertinent pour les runs par image)
+  // Annotate modal state (utilisé pour les deux modes désormais)
   const [annotateOpen, setAnnotateOpen] = useState(false);
   const [annotateRunId, setAnnotateRunId] = useState<string | null>(null);
   const [annotateItemId, setAnnotateItemId] = useState<string | null>(null);
@@ -209,7 +209,7 @@ const RunsTab = ({ runs, images }: Props) => {
               )}
             </TabsContent>
 
-            {/* Onglet: runs agrégés (résultats du prompt) */}
+            {/* Onglet: runs agrégés (résultats du prompt + détails par image) */}
             <TabsContent value="prompt" className="space-y-4">
               {promptRuns.length === 0 ? (
                 <p className="text-sm text-white/80">Aucun run “agrégé” pour le moment.</p>
@@ -264,10 +264,59 @@ const RunsTab = ({ runs, images }: Props) => {
                       <div className="text-xs text-white/70">{new Date(run.createdAt).toLocaleString()}</div>
                     </div>
 
-                    <div className="p-3 space-y-3">
+                    <div className="p-3 space-y-4">
+                      {/* Texte global */}
                       <pre className="whitespace-pre-wrap rounded-xl bg-white/5 p-3 text-sm">
                         {run.outputText || (run.error ? `Erreur: ${run.error}` : "En cours...")}
                       </pre>
+
+                      {/* Détails par image si présents */}
+                      {run.items && run.items.length > 0 ? (
+                        <div className="space-y-2">
+                          <div className="text-sm text-white/80">Détails par image</div>
+                          <div className="grid gap-3">
+                            {run.items.map((it) => {
+                              const img = images.find((i) => i.id === it.imageId);
+                              const boxCount = (it.boxes || []).length;
+                              return (
+                                <div key={it.id} className="rounded-xl border border-white/15 bg-white/5 p-3">
+                                  <div className="mb-2 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="secondary">ok</Badge>
+                                      <span className="max-w-[240px] truncate text-sm font-medium">
+                                        {img?.name || it.imageId}
+                                      </span>
+                                      {boxCount > 0 ? (
+                                        <Badge variant="secondary" className="ml-1">{boxCount} annotation{boxCount > 1 ? "s" : ""}</Badge>
+                                      ) : null}
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-white/70">{img?.tag || "non taguée"}</span>
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm"
+                                        onClick={() => { setAnnotateRunId(run.id); setAnnotateItemId(it.id); setAnnotateOpen(true); }}
+                                        title="Annoter l’image"
+                                      >
+                                        <Pencil className="mr-2 h-4 w-4" />
+                                        Annoter
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  {it.outputText ? (
+                                    <pre className="whitespace-pre-wrap rounded-lg bg-white/5 p-3 text-sm">{it.outputText}</pre>
+                                  ) : it.error ? (
+                                    <p className="text-sm text-red-300">{it.error}</p>
+                                  ) : (
+                                    <p className="text-sm text-white/70">En cours…</p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : null}
 
                       <div className="flex flex-wrap justify-end gap-2">
                         {(run.status === "running" || run.status === "queued") && (

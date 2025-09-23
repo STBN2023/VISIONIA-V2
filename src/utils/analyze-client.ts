@@ -5,7 +5,12 @@ import { getSettings } from "@/utils/settings";
 import { colorFor, guessType } from "@/utils/anomaly-colors";
 
 export type AnalyzeOk =
-  | { ok: true; mode: "aggregate"; outputText: string }
+  | {
+      ok: true;
+      mode: "aggregate";
+      outputText: string;
+      items?: { imageId?: string; outputText: string; boxes?: Box[] }[];
+    }
   | {
       ok: true;
       mode: "per_image";
@@ -181,7 +186,8 @@ export async function analyzeLLM(input: {
 
   try {
     if (input.mode === "aggregate") {
-      const text = await callOpenAI({
+      // 1) Texte global (toutes les images)
+      const aggregateText = await callOpenAI({
         apiKey: s.apiKey!,
         model,
         temperature,
@@ -189,8 +195,44 @@ export async function analyzeLLM(input: {
         images: input.images.map((i) => ({ dataUrl: i.dataUrl })),
         max_tokens,
       });
-      return { ok: true, mode: "aggregate", outputText: text };
+
+      // 2) Par image: annotations + texte de prompt classique
+      const detectionInstruction = buildDetectionInstruction(input.prompt);
+      const items = await Promise.all(
+        input.images.map(async (img) => {
+          // Annotations (JSON)
+          const detectionRaw = await callOpenAI({
+            apiKey: s.apiKey!,
+            model,
+            temperature,
+            prompt: detectionInstruction,
+            images: [{ dataUrl: img.dataUrl }],
+            max_tokens,
+          });
+          const parsed = extractFirstJsonObject(detectionRaw);
+          const { boxes, summary } = parsed ? toBoxes(parsed) : { boxes: [], summary: undefined };
+
+          // Texte "prompt classique" par image
+          const perImageText = await callOpenAI({
+            apiKey: s.apiKey!,
+            model,
+            temperature,
+            prompt: input.prompt,
+            images: [{ dataUrl: img.dataUrl }],
+            max_tokens,
+          });
+
+          return {
+            imageId: img.id,
+            outputText: (perImageText && String(perImageText)) || (summary && String(summary)) || "",
+            boxes,
+          };
+        }),
+      );
+
+      return { ok: true, mode: "aggregate", outputText: aggregateText, items };
     } else {
+      // Mode par image (inchangé)
       const instruction = buildDetectionInstruction(input.prompt);
       const items = await Promise.all(
         input.images.map(async (img) => {

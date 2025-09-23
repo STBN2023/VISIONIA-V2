@@ -119,6 +119,71 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
     doc.setFontSize(11);
     const text = run.outputText?.trim() || "Aucun contenu disponible (run non terminé).";
     y = addWrappedText(doc, text, margin, y, contentWidth, 6);
+
+    // Si des items existent, ajouter les détails par image
+    if (run.items && run.items.length > 0) {
+      y += 6;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.text("Détails par image", margin, y);
+      y += 8;
+
+      for (const item of run.items) {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        const img = images.find((i) => i.id === item.imageId);
+        const header = `Image: ${img?.name || item.imageId} ${img?.tag ? `(${img.tag})` : ""}`;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        y = addWrappedText(doc, header, margin, y, contentWidth, 5);
+
+        if (img?.dataUrl) {
+          y += 2;
+          const placedRes = await addImageBlock(doc, img.dataUrl, margin, y, Math.min(contentWidth, 100), 70);
+          y = placedRes.nextY + 4;
+
+          const boxes = item.boxes || [];
+          if (boxes.length > 0) {
+            boxes.forEach((b) => {
+              const px = placedRes.placed.x + b.x * placedRes.placed.w;
+              const py = placedRes.placed.y + b.y * placedRes.placed.h;
+              const pw = b.w * placedRes.placed.w;
+              const ph = b.h * placedRes.placed.h;
+
+              let r = 34, g = 197, bcol = 94;
+              const col = b.color || "#22C55E";
+              try {
+                const rgb = hexToRgb(col);
+                r = rgb[0]; g = rgb[1]; bcol = rgb[2];
+              } catch {
+                // fallback défaut
+              }
+              doc.setDrawColor(r, g, bcol);
+              doc.setLineWidth(0.8);
+              doc.rect(px, py, pw, ph);
+
+              if (b.label) {
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(9);
+                doc.text(b.label, px + 1.5, Math.max(py - 1, 10));
+              }
+            });
+          }
+        }
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        const body = item.outputText?.trim() || (item.error ? `Erreur: ${item.error}` : "Pas de résultat disponible.");
+        y = addWrappedText(doc, body, margin, y, contentWidth, 6);
+
+        y += 6;
+        doc.setDrawColor(220);
+        doc.line(margin, y, margin + contentWidth, y);
+        y += 6;
+      }
+    }
   } else {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
@@ -136,14 +201,11 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
       doc.setFontSize(11);
       y = addWrappedText(doc, header, margin, y, contentWidth, 5);
 
-      // Joindre la vignette de l'image
       if (img?.dataUrl) {
-        // max 100mm large, 70mm haut
         y += 2;
         const placedRes = await addImageBlock(doc, img.dataUrl, margin, y, Math.min(contentWidth, 100), 70);
         y = placedRes.nextY + 4;
 
-        // Dessiner les annotations (boîtes)
         const boxes = item.boxes || [];
         if (boxes.length > 0) {
           boxes.forEach((b) => {
@@ -152,7 +214,6 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
             const pw = b.w * placedRes.placed.w;
             const ph = b.h * placedRes.placed.h;
 
-            // Couleur
             let r = 34, g = 197, bcol = 94;
             const col = b.color || "#22C55E";
             try {
