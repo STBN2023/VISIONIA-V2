@@ -22,47 +22,119 @@ function clamp01(n: number) {
 
 const defaultColor = "#22C55E"; // emerald-500
 
+type ImgDims = { naturalW: number; naturalH: number };
+
 const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }: Props) => {
   const [boxes, setBoxes] = React.useState<Box[]>([]);
   const [drawing, setDrawing] = React.useState(false);
   const [start, setStart] = React.useState<{ x: number; y: number } | null>(null);
 
   const containerRef = React.useRef<HTMLDivElement | null>(null);
+  const imgRef = React.useRef<HTMLImageElement | null>(null);
+  const [imgDims, setImgDims] = React.useState<ImgDims | null>(null);
 
   React.useEffect(() => {
     setBoxes(initialBoxes.map((b) => ({ ...b })));
   }, [initialBoxes, image.id, open]);
 
+  // Charge dimensions intrinsèques de l'image
+  const onImgLoad = React.useCallback(() => {
+    const img = imgRef.current;
+    if (!img) return;
+    const naturalW = img.naturalWidth || img.width || 0;
+    const naturalH = img.naturalHeight || img.height || 0;
+    if (naturalW && naturalH) {
+      setImgDims({ naturalW, naturalH });
+    }
+  }, []);
+
+  // Calcule la zone affichée réelle de l'image (object-contain) dans le conteneur
+  function getRenderRect() {
+    const cont = containerRef.current;
+    if (!cont || !imgDims) return null;
+    const rect = cont.getBoundingClientRect();
+    const cw = rect.width;
+    const ch = rect.height;
+    const { naturalW: iw, naturalH: ih } = imgDims;
+    if (!cw || !ch || !iw || !ih) return null;
+
+    const scale = Math.min(cw / iw, ch / ih);
+    const drawW = iw * scale;
+    const drawH = ih * scale;
+    const offsetX = (cw - drawW) / 2;
+    const offsetY = (ch - drawH) / 2;
+
+    return { offsetX, offsetY, drawW, drawH, contRect: rect };
+  }
+
+  // Convertit un point client vers coords normalisées image (0..1)
+  function clientToNorm(e: React.PointerEvent) {
+    const r = getRenderRect();
+    if (!r) return null;
+    const xPx = e.clientX - r.contRect.left - r.offsetX;
+    const yPx = e.clientY - r.contRect.top - r.offsetY;
+    if (xPx < 0 || yPx < 0 || xPx > r.drawW || yPx > r.drawH) {
+      return null; // en dehors de l'image affichée
+    }
+    const nx = clamp01(xPx / r.drawW);
+    const ny = clamp01(yPx / r.drawH);
+    return { x: nx, y: ny };
+  }
+
+  // Convertit une box normalisée (0..1) en style pixels dans le conteneur
+  function normBoxToStyle(b: Box): React.CSSProperties {
+    const r = getRenderRect();
+    if (!r) {
+      // Fallback ancien comportement (moins précis)
+      return {
+        left: `${b.x * 100}%`,
+        top: `${b.y * 100}%`,
+        width: `${b.w * 100}%`,
+        height: `${b.h * 100}%`,
+      };
+    }
+    const left = r.offsetX + b.x * r.drawW;
+    const top = r.offsetY + b.y * r.drawH;
+    const width = b.w * r.drawW;
+    const height = b.h * r.drawH;
+    return {
+      left,
+      top,
+      width,
+      height,
+    };
+  }
+
   const onPointerDown = (e: React.PointerEvent) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) / rect.width;
-    const y = (e.clientY - rect.top) / rect.height;
-    setStart({ x: clamp01(x), y: clamp01(y) });
+    const p = clientToNorm(e);
+    if (!p) return; // ignore si on clique dans les bandes
+    setStart(p);
     setDrawing(true);
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
-    if (!drawing || !start || !containerRef.current) return;
+    if (!drawing || !start) return;
+    // Optionnel: aperçu live du rectangle (non nécessaire ici)
     e.preventDefault();
-    // (aperçu live minimaliste non nécessaire pour lever l’avertissement)
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
-    if (!drawing || !start || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const x2 = clamp01((e.clientX - rect.left) / rect.width);
-    const y2 = clamp01((e.clientY - rect.top) / rect.height);
-    const x = Math.min(start.x, x2);
-    const y = Math.min(start.y, y2);
-    const w = Math.max(0.001, Math.abs(x2 - start.x));
-    const h = Math.max(0.001, Math.abs(y2 - start.y));
+    if (!drawing || !start) return;
+    const p = clientToNorm(e);
+    setDrawing(false);
+    if (!p) {
+      setStart(null);
+      return;
+    }
+    const x = Math.min(start.x, p.x);
+    const y = Math.min(start.y, p.y);
+    const w = Math.max(0.001, Math.abs(p.x - start.x));
+    const h = Math.max(0.001, Math.abs(p.y - start.y));
     setBoxes((prev) => [
       ...prev,
       { id: crypto.randomUUID(), x, y, w, h, color: defaultColor, label: "" },
     ]);
     setStart(null);
-    setDrawing(false);
   };
 
   const removeBox = (id: string) => {
@@ -83,7 +155,7 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
       <GlassDialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle>Annoter l’image</DialogTitle>
-          <DialogDescription>Cliquer-glisser pour dessiner un rectangle, puis ajuster couleur et libellé.</DialogDescription>
+          <DialogDescription>Cliquer-glisser dans l’image (pas les bandes) pour dessiner un rectangle, puis ajuster couleur et libellé.</DialogDescription>
         </DialogHeader>
 
         <div
@@ -91,13 +163,16 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
           className="relative mx-auto aspect-[4/3] w-full max-h-[70vh] overflow-hidden rounded-2xl border border-white/20 bg-black/30"
           onPointerDown={onPointerDown}
           onPointerUp={onPointerUp}
+          onPointerMove={onPointerMove}
           onPointerLeave={cancelDrawing}
         >
           <img
+            ref={imgRef}
             src={image.dataUrl}
             alt={image.name}
             className="h-full w-full select-none object-contain"
             draggable={false}
+            onLoad={onImgLoad}
           />
           {/* Calque des rectangles existants */}
           <div className="pointer-events-none absolute inset-0">
@@ -106,10 +181,7 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
                 key={b.id}
                 className="absolute rounded-md"
                 style={{
-                  left: `${b.x * 100}%`,
-                  top: `${b.y * 100}%`,
-                  width: `${b.w * 100}%`,
-                  height: `${b.h * 100}%`,
+                  ...normBoxToStyle(b),
                   border: `2px solid ${b.color || defaultColor}`,
                 }}
               >
@@ -117,7 +189,7 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
                   <div
                     className="pointer-events-none absolute -top-6 left-0 rounded-md px-2 py-0.5 text-xs"
                     style={{
-                      backgroundColor: `${b.color || defaultColor}33`,
+                      backgroundColor: `${(b.color || defaultColor)}33`,
                       color: "#fff",
                       border: `1px solid ${b.color || defaultColor}`,
                     }}
