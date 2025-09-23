@@ -87,17 +87,42 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
         <div className="space-y-4">
           <div className="grid gap-2">
             <Label>Mode</Label>
-            <RadioGroup value={mode} onValueChange={(v) => setMode(v as RunMode)}>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem id="aggregate" value="aggregate" />
-                <Label htmlFor="aggregate">Agrégé (un rapport global)</Label>
-              </div>
-              <div className="flex items-center gap-2">
-                <RadioGroupItem id="per_image" value="per_image" />
-                <Label htmlFor="per_image">Par image (un rapport par image)</Label>
-              </div>
-            </RadioGroup>
+            <div className="rounded-xl border border-white/20 bg-white/10 p-3">
+              <RadioGroup
+                value={mode}
+                onValueChange={(v) => setMode(v as RunMode)}
+                className="flex flex-col gap-3"
+              >
+                <div className="flex items-center gap-3">
+                  <RadioGroupItem
+                    id="aggregate"
+                    value="aggregate"
+                    className="h-4 w-4 border-white/60 data-[state=checked]:bg-white data-[state=checked]:border-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                  />
+                  <Label
+                    htmlFor="aggregate"
+                    className="cursor-pointer text-white/90"
+                  >
+                    Agrégé (un rapport global)
+                  </Label>
+                </div>
+                <div className="flex items-center gap-3">
+                  <RadioGroupItem
+                    id="per_image"
+                    value="per_image"
+                    className="h-4 w-4 border-white/60 data-[state=checked]:bg-white data-[state=checked]:border-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                  />
+                  <Label
+                    htmlFor="per_image"
+                    className="cursor-pointer text-white/90"
+                  >
+                    Par image (un rapport par image)
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
           </div>
+
           <div className="rounded-md border border-white/20 bg-white/10 p-3 text-sm text-white/80">
             <p>
               L’analyse utilise votre clé OpenAI stockée localement (Paramètres). Aucune base de données ni secret côté serveur.
