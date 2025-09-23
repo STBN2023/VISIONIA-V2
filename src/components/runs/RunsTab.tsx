@@ -1,3 +1,4 @@
+import { useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,9 +8,18 @@ import { cancelRun, retryFailedItems, deleteRun } from "@/utils/runs";
 import { showSuccess } from "@/utils/toast";
 import { FileText, Trash2 } from "lucide-react";
 import { exportRunToPdf } from "@/utils/pdf";
+import RunLogDialog from "./RunLogDialog";
 
 const statusVariant = (s: string) =>
-  s === "succeeded" ? "secondary" : s === "running" ? "default" : s === "queued" ? "outline" : s === "failed" ? "destructive" : "outline";
+  s === "succeeded"
+    ? "secondary"
+    : s === "running"
+    ? "default"
+    : s === "queued"
+    ? "outline"
+    : s === "failed"
+    ? "destructive"
+    : "outline";
 
 type Props = {
   runs: Run[];
@@ -17,6 +27,9 @@ type Props = {
 };
 
 const RunsTab = ({ runs, images }: Props) => {
+  const [logRunId, setLogRunId] = useState<string | null>(null);
+  const logRun = useMemo(() => runs.find((r) => r.id === logRunId) ?? null, [runs, logRunId]);
+
   return (
     <div className="mt-4 text-white">
       <Card className="rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
@@ -31,7 +44,18 @@ const RunsTab = ({ runs, images }: Props) => {
               <div key={run.id} className="rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 p-3">
                   <div className="flex items-center gap-2">
-                    <Badge variant={statusVariant(run.status)}>{run.status}</Badge>
+                    {run.status === "failed" ? (
+                      <button
+                        type="button"
+                        onClick={() => setLogRunId(run.id)}
+                        className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
+                        title="Voir le log d’erreur"
+                      >
+                        <Badge variant={statusVariant(run.status)}>failed</Badge>
+                      </button>
+                    ) : (
+                      <Badge variant={statusVariant(run.status)}>{run.status}</Badge>
+                    )}
                     <span className="text-sm">Mode: {run.mode === "aggregate" ? "Agrégé" : "Par image"}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -78,7 +102,9 @@ const RunsTab = ({ runs, images }: Props) => {
                             <div className="mb-2 flex items-center justify-between">
                               <div className="flex items-center gap-2">
                                 <Badge variant={statusVariant(it.status)}>{it.status}</Badge>
-                                <span className="text-sm font-medium truncate max-w-[240px]">{img?.name || it.imageId}</span>
+                                <span className="max-w-[240px] truncate text-sm font-medium">
+                                  {img?.name || it.imageId}
+                                </span>
                               </div>
                               <span className="text-xs text-white/70">{img?.tag || "non taguée"}</span>
                             </div>
@@ -106,6 +132,17 @@ const RunsTab = ({ runs, images }: Props) => {
                         Annuler
                       </Button>
                     )}
+                    {run.status === "failed" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setLogRunId(run.id)}
+                        className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm"
+                        title="Voir le log d’erreur"
+                      >
+                        Voir le log
+                      </Button>
+                    ) : null}
                     {run.mode === "per_image" && run.status === "failed" ? (
                       <Button
                         variant="secondary"
@@ -126,6 +163,8 @@ const RunsTab = ({ runs, images }: Props) => {
           )}
         </CardContent>
       </Card>
+
+      <RunLogDialog run={logRun} open={!!logRunId} onOpenChange={(o) => !o ? setLogRunId(null) : null} />
     </div>
   );
 };
