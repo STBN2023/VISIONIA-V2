@@ -51,8 +51,7 @@ const Settings = () => {
 
   const handleSave = () => {
     if (backgroundMode === "image" && backgroundImage.startsWith("data:")) {
-      // Rough guard: si l'image encodée est trop grande, éviter d'enregistrer
-      const approxBytes = backgroundImage.length * 0.75; // approximation base64
+      const approxBytes = backgroundImage.length * 0.75; // estimation base64
       if (approxBytes > MAX_BG_BYTES) {
         showError("L’image de fond est trop lourde pour être enregistrée (quota localStorage). Choisissez une image plus légère.");
         return;
@@ -123,6 +122,7 @@ const Settings = () => {
         </div>
         <Separator className="mb-6 border-white/20" />
 
+        {/* Configuration API */}
         <Card className="rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
           <CardHeader>
             <CardTitle>Configuration API</CardTitle>
@@ -188,14 +188,16 @@ const Settings = () => {
           </CardFooter>
         </Card>
 
+        {/* Apparence */}
         <Card className="mt-6 rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
           <CardHeader>
             <CardTitle>Apparence</CardTitle>
           </CardHeader>
           <CardContent className="grid gap-4">
-            <div className="grid gap-2 md:grid-cols-3 md:items-center">
+            {/* Palette */}
+            <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
               <Label>Palette d’accent</Label>
-              <div className="md:col-span-2">
+              <div>
                 <Select value={themePreset} onValueChange={(v) => setThemePreset(v as ThemePreset)}>
                   <SelectTrigger className="bg-white/10 text-white">
                     <SelectValue placeholder="Choisir une palette" />
@@ -209,67 +211,78 @@ const Settings = () => {
               </div>
             </div>
 
-            <div className="grid gap-2">
-              <Label>Mode d’arrière-plan</Label>
-              <RadioGroup value={backgroundMode} onValueChange={(v) => setBackgroundMode(v as BackgroundMode)}>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem id="mode-image" value="image" />
-                  <Label htmlFor="mode-image">Image</Label>
-                </div>
-                <div className="flex items-center gap-2">
-                  <RadioGroupItem id="mode-color" value="color" />
-                  <Label htmlFor="mode-color">Couleur</Label>
-                </div>
-              </RadioGroup>
+            {/* Mode d'arrière-plan */}
+            <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
+              <Label>Mode d’arrière‑plan</Label>
+              <div>
+                <RadioGroup value={backgroundMode} onValueChange={(v) => setBackgroundMode(v as BackgroundMode)}>
+                  <div className="flex items-center gap-3">
+                    <RadioGroupItem id="mode-image" value="image" />
+                    <Label htmlFor="mode-image">Image</Label>
+                  </div>
+                  <div className="mt-2 flex items-center gap-3">
+                    <RadioGroupItem id="mode-color" value="color" />
+                    <Label htmlFor="mode-color">Couleur</Label>
+                  </div>
+                </RadioGroup>
+              </div>
             </div>
 
+            {/* Image: URL */}
             {backgroundMode === "image" ? (
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="grid gap-2">
+              <>
+                <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-start">
                   <Label>Image de fond (URL)</Label>
-                  <Input
-                    value={backgroundImage}
-                    onChange={(e) => setBackgroundImage(e.target.value)}
-                    placeholder="https://… (Unsplash, CDN interne, etc.)"
-                    className="bg-white/10 text-white placeholder:text-white/60"
-                  />
-                  <p className="text-xs text-white/70">
-                    Vous pouvez saisir une URL ou choisir un fichier ci‑dessous. Les fichiers locaux sont compressés automatiquement pour respecter le quota du navigateur.
-                  </p>
+                  <div className="space-y-2">
+                    <Input
+                      value={backgroundImage}
+                      onChange={(e) => setBackgroundImage(e.target.value)}
+                      placeholder="https://… (Unsplash, CDN interne, etc.)"
+                      className="bg-white/10 text-white placeholder:text-white/60"
+                    />
+                    <p className="text-xs text-white/70">
+                      Vous pouvez saisir une URL ou choisir un fichier ci‑dessous. Les fichiers locaux sont compressés automatiquement pour respecter le quota du navigateur.
+                    </p>
+                  </div>
                 </div>
-                <div className="grid gap-2">
-                  <Label>Choisir un fichier (ordinateur)</Label>
-                  <Input
-                    type="file"
-                    accept="image/*"
-                    onChange={async (e) => {
-                      const f = e.target.files?.[0];
-                      if (!f) return;
-                      await handlePickBackgroundFile(f);
-                    }}
-                    className="bg-white/10 text-white file:mr-2 file:rounded file:border-0 file:bg-white/20 file:px-3 file:py-2 file:text-white"
-                  />
-                  {backgroundImage ? (
-                    <div className="mt-1 flex items-center gap-3">
-                      <div className="h-12 w-20 overflow-hidden rounded-xl border border-white/20 bg-white/10">
-                        {/* eslint-disable-next-line jsx-a11y/alt-text */}
-                        <img src={backgroundImage} className="h-full w-full object-cover" />
+
+                {/* Image: fichier */}
+                <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-start">
+                  <Label>Choisir un fichier</Label>
+                  <div className="space-y-2">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={async (e) => {
+                        const f = e.target.files?.[0];
+                        if (!f) return;
+                        await handlePickBackgroundFile(f);
+                      }}
+                      className="bg-white/10 text-white file:mr-2 file:rounded file:border-0 file:bg-white/20 file:px-3 file:py-2 file:text-white"
+                    />
+                    {backgroundImage ? (
+                      <div className="flex items-center gap-3">
+                        <div className="h-12 w-20 overflow-hidden rounded-xl border border-white/20 bg-white/10">
+                          {/* eslint-disable-next-line jsx-a11y/alt-text */}
+                          <img src={backgroundImage} className="h-full w-full object-cover" />
+                        </div>
+                        <Button
+                          variant="ghost"
+                          className="text-white/90 hover:bg-white/10"
+                          onClick={() => setBackgroundImage("")}
+                        >
+                          Retirer l’image
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        className="text-white/90 hover:bg-white/10"
-                        onClick={() => setBackgroundImage("")}
-                      >
-                        Retirer l’image
-                      </Button>
-                    </div>
-                  ) : null}
+                    ) : null}
+                  </div>
                 </div>
-              </div>
+              </>
             ) : (
-              <div className="grid gap-2 md:grid-cols-[auto,1fr] md:items-center">
-                <Label>Couleur d’arrière-plan</Label>
-                <div className="flex items-center gap-4">
+              // Couleur
+              <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
+                <Label>Couleur d’arrière‑plan</Label>
+                <div className="flex flex-wrap items-center gap-4">
                   <input
                     type="color"
                     value={backgroundColor}
@@ -292,36 +305,42 @@ const Settings = () => {
               </div>
             )}
 
-            <div className="grid gap-2">
+            {/* Contraste */}
+            <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
               <Label>Contraste du fond (voile sombre): {Math.round(backgroundDim)}%</Label>
-              <div className="px-2">
-                <Slider
-                  value={[backgroundDim]}
-                  min={0}
-                  max={100}
-                  step={1}
-                  onValueChange={(v) => setBackgroundDim(v[0] ?? 0)}
-                />
+              <div>
+                <div className="px-2">
+                  <Slider
+                    value={[backgroundDim]}
+                    min={0}
+                    max={100}
+                    step={1}
+                    onValueChange={(v) => setBackgroundDim(v[0] ?? 0)}
+                  />
+                </div>
+                <p className="mt-1 text-xs text-white/70">
+                  Augmenter la valeur assombrit le fond pour améliorer la lisibilité des contenus.
+                </p>
               </div>
-              <p className="text-xs text-white/70">
-                Augmenter la valeur assombrit le fond pour améliorer la lisibilité des contenus.
-              </p>
             </div>
 
-            <div className="grid gap-2">
+            {/* Luminosité */}
+            <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
               <Label>Luminosité du fond: {Math.round(brightness)}%</Label>
-              <div className="px-2">
-                <Slider
-                  value={[brightness]}
-                  min={50}
-                  max={150}
-                  step={1}
-                  onValueChange={(v) => setBrightness(v[0] ?? 100)}
-                />
+              <div>
+                <div className="px-2">
+                  <Slider
+                    value={[brightness]}
+                    min={50}
+                    max={150}
+                    step={1}
+                    onValueChange={(v) => setBrightness(v[0] ?? 100)}
+                  />
+                </div>
+                <p className="mt-1 text-xs text-white/70">
+                  Ajuste la luminosité du fond (50% = plus sombre, 150% = plus lumineux). Valeur par défaut: 100%.
+                </p>
               </div>
-              <p className="text-xs text-white/70">
-                Ajuste la luminosité du fond (50% = plus sombre, 150% = plus lumineux). Valeur par défaut: 100%.
-              </p>
             </div>
           </CardContent>
           <CardFooter className="flex justify-end">
