@@ -1,3 +1,5 @@
+import { idbSet, idbGet, idbDel } from "@/utils/idb";
+
 export type ImageTag = string; // tags libres
 
 export type ProjectStatus = "Brouillon" | "En cours" | "Terminé" | "Archivé";
@@ -7,7 +9,7 @@ export type ProjectImage = {
   name: string;
   size: number;
   type: string;
-  dataUrl: string;
+  dataUrl: string; // Hydraté depuis IndexedDB côté lecture
   createdAt: string;
   tag?: ImageTag; // libre
   templateId?: string;
@@ -30,46 +32,82 @@ export type Project = {
 
 // --- Stockage 100% local (navigateur) ---
 const LOCAL_KEY = "projects_local_fallback_v1";
+const IDB_PREFIX = "image:";
 
-function readLocal(): Project[] {
+type StoredImage = Omit<ProjectImage, "dataUrl"> & { dataUrl?: string }; // dataUrl remplacée par idb://id
+type StoredProject = Omit<Project, "images"> & { images: StoredImage[] };
+
+function readLocalRaw(): StoredProject[] {
   try {
     const raw = localStorage.getItem(LOCAL_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     const arr: any[] = Array.isArray(parsed) ? parsed : [];
-    // Migration douce: ensure tags array
     return arr.map((p) => ({
       ...p,
       tags: Array.isArray(p.tags) ? p.tags : [],
-    })) as Project[];
+    })) as StoredProject[];
   } catch {
     return [];
   }
 }
 
-function writeLocal(projects: Project[]) {
+function writeLocalRaw(projects: StoredProject[]) {
   localStorage.setItem(LOCAL_KEY, JSON.stringify(projects));
 }
 
-function findLocal(id: string): Project | undefined {
-  return readLocal().find((p) => p.id === id);
+function findLocalRaw(id: string): StoredProject | undefined {
+  return readLocalRaw().find((p) => p.id === id);
 }
 
-function touchUpdatedAt(p: Project): Project {
+function touchUpdatedAt<P extends { updatedAt: string }>(p: P): P {
   return { ...p, updatedAt: new Date().toISOString() };
 }
 
-// --- API locale ---
+// Remplace dataUrl volumineuse par un pointeur idb://<id> et sauvegarde la dataURL en IndexedDB
+async function externalizeImage(img: ProjectImage | StoredImage): Promise<StoredImage> {
+  const id = img.id || crypto.randomUUID();
+  const pointer = `idb://${id}`;
+  const hasData = typeof (img as any).dataUrl === "string" && (img as any).dataUrl.startsWith("data:");
+  if (hasData) {
+    await idbSet(IDB_PREFIX + id, (img as any).dataUrl as string);
+  }
+  return {
+    ...(img as any),
+    id,
+    dataUrl: pointer, // petite string
+  };
+}
+
+// Hydrate la dataUrl depuis IndexedDB si besoin
+async function hydrateImage(img: StoredImage): Promise<ProjectImage> {
+  const isPointer = typeof img.dataUrl === "string" && img.dataUrl.startsWith("idb://");
+  if (isPointer) {
+    const id = img.id;
+    const data = await idbGet(IDB_PREFIX + id);
+    return {
+      ...(img as any),
+      dataUrl: data || "", // on laisse vide si non trouvé
+    };
+  }
+  return img as ProjectImage;
+}
+
 export async function getProjects(): Promise<Project[]> {
-  // Tri par updatedAt desc
-  return readLocal().sort(
-    (a, b) =>
-      new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  );
+  // Pas besoin d’hydrater les dataURL pour la liste
+  return (readLocalRaw() as StoredProject[])
+    .map((p) => ({
+      ...(p as any),
+      images: (p.images || []).map((i) => ({ ...(i as any), dataUrl: i.dataUrl ?? `idb://${i.id}` })),
+    }))
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()) as Project[];
 }
 
 export async function getProjectById(id: string): Promise<Project | undefined> {
-  return findLocal(id);
+  const p = findLocalRaw(id);
+  if (!p) return undefined;
+  const hydrated = await Promise.all((p.images || []).map((i) => hydrateImage(i)));
+  return { ...(p as any), images: hydrated } as Project;
 }
 
 export async function createProject(input: {
@@ -78,7 +116,7 @@ export async function createProject(input: {
   type?: string;
 }): Promise<Project> {
   const now = new Date().toISOString();
-  const proj: Project = {
+  const proj: StoredProject = {
     id: crypto.randomUUID(),
     title: input.title.trim(),
     address: input.address?.trim() || undefined,
@@ -92,33 +130,69 @@ export async function createProject(input: {
     notes: undefined,
     tags: [],
   };
-  const all = readLocal();
-  writeLocal([proj, ...all]);
-  return proj;
+  const all = readLocalRaw();
+  writeLocalRaw([proj, ...all]);
+  return proj as unknown as Project;
 }
 
 export async function updateProject(
   id: string,
   patch: Partial<Omit<Project, "id" | "createdAt">>,
 ): Promise<Project | undefined> {
-  const all = readLocal();
+  const all = readLocalRaw();
   const idx = all.findIndex((p) => p.id === id);
   if (idx === -1) return undefined;
   const prev = all[idx];
-  const next = touchUpdatedAt({
-    ...prev,
+
+  let nextImages: StoredImage[] | undefined = undefined;
+
+  if (Array.isArray(patch.images)) {
+    // Externaliser toutes les images et déterminer celles à supprimer côté IDB
+    const incoming = patch.images as ProjectImage[];
+    const incomingIds = new Set(incoming.map((i) => i.id));
+    const prevIds = new Set((prev.images || []).map((i) => i.id));
+
+    // Supprimer de l’IDB les images disparues
+    for (const oldId of prevIds) {
+      if (!incomingIds.has(oldId)) {
+        await idbDel(IDB_PREFIX + oldId);
+      }
+    }
+
+    // Sauver les nouvelles / mises à jour
+    nextImages = [];
+    for (const img of incoming) {
+      const stored = await externalizeImage(img);
+      nextImages.push(stored);
+    }
+  }
+
+  const next: StoredProject = touchUpdatedAt({
+    ...(prev as any),
     ...patch,
     // sécurité: ensure tags array
     tags: Array.isArray(patch.tags) ? patch.tags : prev.tags,
+    images: nextImages !== undefined ? nextImages : prev.images,
   });
+
   all[idx] = next;
-  writeLocal(all);
-  return next;
+  writeLocalRaw(all);
+
+  // Retourner le projet hydraté
+  const hydrated = await Promise.all((next.images || []).map((i) => hydrateImage(i)));
+  return { ...(next as any), images: hydrated } as Project;
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  const all = readLocal().filter((p) => p.id !== id);
-  writeLocal(all);
+  // Supprimer d’abord les dataURL IDB des images du projet
+  const prev = findLocalRaw(id);
+  if (prev) {
+    for (const i of prev.images || []) {
+      await idbDel(IDB_PREFIX + i.id);
+    }
+  }
+  const next = readLocalRaw().filter((p) => p.id !== id);
+  writeLocalRaw(next);
 }
 
 export async function fileToDataUrl(file: File): Promise<string> {
