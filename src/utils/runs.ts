@@ -148,10 +148,15 @@ export function createPendingRun(input: CreateRunInput): Run {
   return run;
 }
 
-// Nouveau: complète un run avec les résultats venus du serveur LLM
-export function completeRunWithServer(runId: string, payload:
-  | { mode: "aggregate"; outputText: string }
-  | { mode: "per_image"; items: { imageId?: string; outputText: string }[] }
+// Nouveau: complète un run avec les résultats venus de l’IA (texte + boxes possibles)
+export function completeRunWithServer(
+  runId: string,
+  payload:
+    | { mode: "aggregate"; outputText: string }
+    | {
+        mode: "per_image";
+        items: { imageId?: string; outputText: string; boxes?: Box[] }[];
+      },
 ) {
   const run = getRunById(runId);
   if (!run) return;
@@ -160,11 +165,12 @@ export function completeRunWithServer(runId: string, payload:
   } else if (run.mode === "per_image" && "items" in payload) {
     run.items = run.items.map((it) => {
       const match = payload.items.find((x) => x.imageId === it.imageId);
-      if (match?.outputText) {
+      if (match) {
         return {
           ...it,
           status: "succeeded",
           outputText: match.outputText,
+          boxes: Array.isArray(match.boxes) ? match.boxes.map((b) => ({ ...b })) : it.boxes,
           finishedAt: new Date().toISOString(),
         };
       }
