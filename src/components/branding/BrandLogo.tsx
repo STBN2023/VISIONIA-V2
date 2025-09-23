@@ -14,18 +14,17 @@ const BrandLogo: React.FC<Props> = ({
   height = 32,
   width,
   alt = "Logo",
-  src: preferredSrc = "/favicon-96x96.png",
+  // Utilise par défaut le fichier présent dans /public
+  src: preferredSrc = "/logo-isoedre.png",
 }) => {
   const candidates = React.useMemo(() => {
-    // Ordre de priorité: demandé par l'utilisateur → fichiers connus du projet → placeholder
+    // Ordre de priorité: src fourni → logo-isoedre → favicon → placeholder
     const list = [
       preferredSrc,
       "/logo-isoedre.png",
-      "/web-app-manifest-512x512.png",
       "/favicon.ico",
       "/placeholder.svg",
     ].filter(Boolean);
-    // Évite les doublons
     return Array.from(new Set(list));
   }, [preferredSrc]);
 
@@ -35,10 +34,11 @@ const BrandLogo: React.FC<Props> = ({
   const handleError = () => {
     const next = idx + 1;
     if (next < candidates.length) {
-      console.warn("[BrandLogo] Échec de chargement", candidates[idx], "→ tentative suivante", candidates[next]);
+      // Tente simplement le suivant, sans bruit inutile
       setIdx(next);
     } else {
-      console.warn("[BrandLogo] Toutes les sources ont échoué, dernier fallback utilisé:", candidates[idx]);
+      // Avertit seulement si toutes les sources échouent
+      console.warn("[BrandLogo] Impossible de charger le logo depuis:", candidates);
     }
   };
 
