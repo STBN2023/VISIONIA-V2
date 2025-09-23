@@ -11,6 +11,7 @@ import { FileText, Trash2, Pencil } from "lucide-react";
 import { exportRunToPdf } from "@/utils/pdf";
 import RunLogDialog from "./RunLogDialog";
 import AnnotateDialog from "./AnnotateDialog";
+import AnomalyPreview from "./AnomalyPreview";
 
 const statusVariant = (s: string) =>
   s === "succeeded"
@@ -35,7 +36,7 @@ const RunsTab = ({ runs, images }: Props) => {
   const [logRunId, setLogRunId] = useState<string | null>(null);
   const logRun = useMemo(() => runs.find((r) => r.id === logRunId) ?? null, [runs, logRunId]);
 
-  // Annotate modal state (utilisé pour les deux modes désormais)
+  // Annotate modal state (utilisé pour les deux modes)
   const [annotateOpen, setAnnotateOpen] = useState(false);
   const [annotateRunId, setAnnotateRunId] = useState<string | null>(null);
   const [annotateItemId, setAnnotateItemId] = useState<string | null>(null);
@@ -154,6 +155,18 @@ const RunsTab = ({ runs, images }: Props) => {
                                   </Button>
                                 </div>
                               </div>
+
+                              {/* Aperçu rectangles d’anomalie */}
+                              {img ? (
+                                <AnomalyPreview
+                                  src={img.dataUrl}
+                                  alt={img.name}
+                                  boxes={it.boxes || []}
+                                  className="mb-2"
+                                  height={200}
+                                />
+                              ) : null}
+
                               {it.outputText ? (
                                 <pre className="whitespace-pre-wrap rounded-lg bg-white/5 p-3 text-sm">{it.outputText}</pre>
                               ) : it.error ? (
@@ -304,6 +317,18 @@ const RunsTab = ({ runs, images }: Props) => {
                                       </Button>
                                     </div>
                                   </div>
+
+                                  {/* Aperçu rectangles d’anomalie */}
+                                  {img ? (
+                                    <AnomalyPreview
+                                      src={img.dataUrl}
+                                      alt={img.name}
+                                      boxes={it.boxes || []}
+                                      className="mb-2"
+                                      height={200}
+                                    />
+                                  ) : null}
+
                                   {it.outputText ? (
                                     <pre className="whitespace-pre-wrap rounded-lg bg-white/5 p-3 text-sm">{it.outputText}</pre>
                                   ) : it.error ? (
