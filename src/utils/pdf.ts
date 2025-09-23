@@ -44,7 +44,9 @@ async function toJpegDataUrl(dataUrl: string, quality = 0.9): Promise<string> {
   return canvas.toDataURL("image/jpeg", Math.max(0.6, Math.min(quality, 0.95)));
 }
 
-async function addImageBlock(doc: jsPDF, dataUrl: string, x: number, y: number, maxWidth: number, maxHeight: number): Promise<number> {
+type PlacedImage = { x: number; y: number; w: number; h: number };
+
+async function addImageBlock(doc: jsPDF, dataUrl: string, x: number, y: number, maxWidth: number, maxHeight: number): Promise<{ nextY: number; placed: PlacedImage }> {
   const mime = getMimeFromDataUrl(dataUrl);
   const isPng = mime === "image/png";
   const needsConvert = !(mime === "image/jpeg" || mime === "image/jpg" || isPng);
@@ -61,14 +63,29 @@ async function addImageBlock(doc: jsPDF, dataUrl: string, x: number, y: number, 
   const h = Math.max(10, Math.round(ih * scale));
 
   // Saut de page si nécessaire
-  if (y + h > 280) {
+  let drawY = y;
+  if (drawY + h > 280) {
     doc.addPage();
-    y = 20;
+    drawY = 20;
   }
 
   const format = isPng ? "PNG" : "JPEG";
-  doc.addImage(usableUrl, format as any, x, y, w, h);
-  return y + h;
+  doc.addImage(usableUrl, format as any, x, drawY, w, h);
+  return { nextY: drawY + h, placed: { x, y: drawY, w, h } };
+}
+
+function hexToRgb(hex: string): [number, number, number] {
+  const s = hex.startsWith("#") ? hex.slice(1) : hex;
+  if (s.length === 3) {
+    const r = parseInt(s[0] + s[0], 16);
+    const g = parseInt(s[1] + s[1], 16);
+    const b = parseInt(s[2] + s[2], 16);
+    return [r, g, b];
+  }
+  const r = parseInt(s.slice(0, 2), 16);
+  const g = parseInt(s.slice(2, 4), 16);
+  const b = parseInt(s.slice(4, 6), 16);
+  return [r, g, b];
 }
 
 export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
@@ -119,12 +136,42 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
       doc.setFontSize(11);
       y = addWrappedText(doc, header, margin, y, contentWidth, 5);
 
-      // Joindre la vignette de l'image avant le texte, si disponible
+      // Joindre la vignette de l'image
       if (img?.dataUrl) {
         // max 100mm large, 70mm haut
         y += 2;
-        y = await addImageBlock(doc, img.dataUrl, margin, y, Math.min(contentWidth, 100), 70);
-        y += 4;
+        const placedRes = await addImageBlock(doc, img.dataUrl, margin, y, Math.min(contentWidth, 100), 70);
+        y = placedRes.nextY + 4;
+
+        // Dessiner les annotations (boîtes)
+        const boxes = item.boxes || [];
+        if (boxes.length > 0) {
+          boxes.forEach((b) => {
+            const px = placedRes.placed.x + b.x * placedRes.placed.w;
+            const py = placedRes.placed.y + b.y * placedRes.placed.h;
+            const pw = b.w * placedRes.placed.w;
+            const ph = b.h * placedRes.placed.h;
+
+            // Couleur
+            let r = 34, g = 197, bcol = 94;
+            const col = b.color || "#22C55E";
+            try {
+              const rgb = hexToRgb(col);
+              r = rgb[0]; g = rgb[1]; bcol = rgb[2];
+            } catch {
+              // fallback défaut
+            }
+            doc.setDrawColor(r, g, bcol);
+            doc.setLineWidth(0.8);
+            doc.rect(px, py, pw, ph);
+
+            if (b.label) {
+              doc.setFont("helvetica", "normal");
+              doc.setFontSize(9);
+              doc.text(b.label, px + 1.5, Math.max(py - 1, 10));
+            }
+          });
+        }
       }
 
       doc.setFont("helvetica", "normal");

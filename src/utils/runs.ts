@@ -4,6 +4,17 @@ export type RunMode = "per_image" | "aggregate";
 export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 export type RunItemStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled";
 
+export type Box = {
+  id: string;
+  // Coordonnées normalisées (0..1) relatives à l’image
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  color: string; // hex (#22C55E) ou css color
+  label?: string;
+};
+
 export type RunItem = {
   id: string;
   imageId: string;
@@ -12,6 +23,7 @@ export type RunItem = {
   error?: string;
   startedAt?: string;
   finishedAt?: string;
+  boxes?: Box[]; // annotations
 };
 
 export type Run = {
@@ -217,6 +229,17 @@ export function retryFailedItems(runId: string, images: ProjectImage[]) {
     write(run);
     setTimeout(() => simulateRun(run.id, images), 0);
   }
+}
+
+// --- Annotations ---
+export function updateRunItemBoxes(runId: string, itemId: string, boxes: Box[]) {
+  const run = getRunById(runId);
+  if (!run) return;
+  const idx = run.items.findIndex((i) => i.id === itemId);
+  if (idx === -1) return;
+  run.items[idx] = { ...run.items[idx], boxes: boxes.map((b) => ({ ...b })) };
+  run.updatedAt = new Date().toISOString();
+  write(run);
 }
 
 // --- Simulation (legacy) ---

@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ProjectImage } from "@/utils/storage";
 import type { Run } from "@/utils/runs";
-import { cancelRun, retryFailedItems, deleteRun } from "@/utils/runs";
+import { cancelRun, retryFailedItems, deleteRun, updateRunItemBoxes } from "@/utils/runs";
 import { showSuccess } from "@/utils/toast";
-import { FileText, Trash2 } from "lucide-react";
+import { FileText, Trash2, Pencil } from "lucide-react";
 import { exportRunToPdf } from "@/utils/pdf";
 import RunLogDialog from "./RunLogDialog";
+import AnnotateDialog from "./AnnotateDialog";
 
 const statusVariant = (s: string) =>
   s === "succeeded"
@@ -29,6 +30,26 @@ type Props = {
 const RunsTab = ({ runs, images }: Props) => {
   const [logRunId, setLogRunId] = useState<string | null>(null);
   const logRun = useMemo(() => runs.find((r) => r.id === logRunId) ?? null, [runs, logRunId]);
+
+  // Annotate modal state
+  const [annotateOpen, setAnnotateOpen] = useState(false);
+  const [annotateRunId, setAnnotateRunId] = useState<string | null>(null);
+  const [annotateItemId, setAnnotateItemId] = useState<string | null>(null);
+
+  const annotateImage = useMemo(() => {
+    if (!annotateRunId || !annotateItemId) return null;
+    const run = runs.find((r) => r.id === annotateRunId);
+    const item = run?.items.find((i) => i.id === annotateItemId);
+    const img = images.find((im) => im.id === item?.imageId) || null;
+    return img || null;
+  }, [annotateRunId, annotateItemId, runs, images]);
+
+  const annotateBoxes = useMemo(() => {
+    if (!annotateRunId || !annotateItemId) return [];
+    const run = runs.find((r) => r.id === annotateRunId);
+    const item = run?.items.find((i) => i.id === annotateItemId);
+    return item?.boxes || [];
+  }, [annotateRunId, annotateItemId, runs]);
 
   return (
     <div className="mt-4 text-white">
@@ -59,7 +80,6 @@ const RunsTab = ({ runs, images }: Props) => {
                     <span className="text-sm">Mode: {run.mode === "aggregate" ? "Agrégé" : "Par image"}</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {/* Export PDF (actif si réussi) */}
                     <Button
                       size="sm"
                       variant="outline"
@@ -73,8 +93,6 @@ const RunsTab = ({ runs, images }: Props) => {
                       <FileText className="mr-2 h-4 w-4" />
                       Export PDF
                     </Button>
-
-                    {/* Supprimer le run */}
                     <Button
                       size="icon"
                       variant="ghost"
@@ -99,6 +117,7 @@ const RunsTab = ({ runs, images }: Props) => {
                     <div className="grid gap-3">
                       {run.items.map((it) => {
                         const img = images.find((i) => i.id === it.imageId);
+                        const boxCount = (it.boxes || []).length;
                         return (
                           <div key={it.id} className="rounded-xl border border-white/15 bg-white/5 p-3">
                             <div className="mb-2 flex items-center justify-between">
@@ -107,8 +126,23 @@ const RunsTab = ({ runs, images }: Props) => {
                                 <span className="max-w-[240px] truncate text-sm font-medium">
                                   {img?.name || it.imageId}
                                 </span>
+                                {boxCount > 0 ? (
+                                  <Badge variant="secondary" className="ml-1">{boxCount} annotation{boxCount > 1 ? "s" : ""}</Badge>
+                                ) : null}
                               </div>
-                              <span className="text-xs text-white/70">{img?.tag || "non taguée"}</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-white/70">{img?.tag || "non taguée"}</span>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm"
+                                  onClick={() => { setAnnotateRunId(run.id); setAnnotateItemId(it.id); setAnnotateOpen(true); }}
+                                  title="Annoter l’image"
+                                >
+                                  <Pencil className="mr-2 h-4 w-4" />
+                                  Annoter
+                                </Button>
+                              </div>
                             </div>
                             {it.outputText ? (
                               <pre className="whitespace-pre-wrap rounded-lg bg-white/5 p-3 text-sm">{it.outputText}</pre>
@@ -167,6 +201,19 @@ const RunsTab = ({ runs, images }: Props) => {
       </Card>
 
       <RunLogDialog run={logRun} open={!!logRunId} onOpenChange={(o) => (!o ? setLogRunId(null) : null)} />
+
+      <AnnotateDialog
+        open={annotateOpen}
+        onOpenChange={(o) => setAnnotateOpen(o)}
+        image={annotateImage || ({} as any)}
+        initialBoxes={annotateBoxes}
+        onSave={(newBoxes) => {
+          if (annotateRunId && annotateItemId) {
+            updateRunItemBoxes(annotateRunId, annotateItemId, newBoxes);
+            showSuccess("Annotations enregistrées");
+          }
+        }}
+      />
     </div>
   );
 };
