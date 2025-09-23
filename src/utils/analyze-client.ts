@@ -72,7 +72,7 @@ async function callOpenAI({
   return String(text || "");
 }
 
-// ---- Helpers pour extraction JSON et normalisation des boxes ----
+/* ---------- Helpers extraction/normalisation ---------- */
 
 function clamp01(n: number) {
   return Math.max(0, Math.min(1, n));
@@ -92,7 +92,7 @@ function extractFirstJsonObject(text: string): any | null {
         try {
           return JSON.parse(candidate);
         } catch {
-          // continue
+          // continue scanning
         }
       }
     }
@@ -108,58 +108,172 @@ function toTitle(s: string) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
+type ParsedBox = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  label?: string;
+  color?: string;
+  type?: string;
+  confidence?: number; // 0..1
+};
+
+function iou(a: ParsedBox, b: ParsedBox): number {
+  const ax1 = a.x;
+  const ay1 = a.y;
+  const ax2 = a.x + a.w;
+  const ay2 = a.y + a.h;
+  const bx1 = b.x;
+  const by1 = b.y;
+  const bx2 = b.x + b.w;
+  const by2 = b.y + b.h;
+
+  const ix1 = Math.max(ax1, bx1);
+  const iy1 = Math.max(ay1, by1);
+  const ix2 = Math.min(ax2, bx2);
+  const iy2 = Math.min(ay2, by2);
+
+  const iw = Math.max(0, ix2 - ix1);
+  const ih = Math.max(0, iy2 - iy1);
+  const inter = iw * ih;
+  const areaA = Math.max(0, a.w) * Math.max(0, a.h);
+  const areaB = Math.max(0, b.w) * Math.max(0, b.h);
+  const union = areaA + areaB - inter;
+  if (union <= 0) return 0;
+  return inter / union;
+}
+
+function postProcessBoxes(
+  boxes: ParsedBox[],
+  {
+    minSide = 0.04,
+    minArea = 0.02,
+    maxArea = 0.5,
+    minConfidence = 0.6,
+    maxCount = 6,
+    iouThreshold = 0.6,
+  } = {},
+): ParsedBox[] {
+  // Clamp + filtre de base
+  let filtered = boxes
+    .map((b) => ({
+      ...b,
+      x: clamp01(b.x),
+      y: clamp01(b.y),
+      w: clamp01(b.w),
+      h: clamp01(b.h),
+      confidence: typeof b.confidence === "number" ? Math.max(0, Math.min(1, b.confidence)) : undefined,
+    }))
+    .filter((b) => b.w > 0 && b.h > 0);
+
+  // Filtres taille/aire
+  filtered = filtered.filter((b) => {
+    const area = b.w * b.h;
+    const okSide = b.w >= minSide && b.h >= minSide;
+    const okArea = area >= minArea && area <= maxArea;
+    return okSide && okArea;
+  });
+
+  // Seuil de confiance (si présent)
+  filtered = filtered.filter((b) => (b.confidence === undefined ? true : b.confidence >= minConfidence));
+
+  // Déduplication par IoU
+  const deduped: ParsedBox[] = [];
+  for (const b of filtered) {
+    let keep = true;
+    for (let i = 0; i < deduped.length; i++) {
+      const d = deduped[i];
+      if (iou(b, d) >= iouThreshold) {
+        const bc = b.confidence ?? 0.5;
+        const dc = d.confidence ?? 0.5;
+        if (bc > dc) deduped[i] = b;
+        keep = false;
+        break;
+      }
+    }
+    if (keep) deduped.push(b);
+  }
+
+  // Limite max
+  if (deduped.length > maxCount) {
+    deduped.sort((a, b) => (b.confidence ?? 0.5) - (a.confidence ?? 0.5));
+    deduped = deduped.slice(0, maxCount);
+  }
+
+  return deduped;
+}
+
 function toBoxes(obj: any): { boxes: Box[]; summary?: string } {
-  const boxes: Box[] = [];
+  const parsed: ParsedBox[] = [];
   const anomalies = Array.isArray(obj?.anomalies) ? obj.anomalies : [];
   for (const a of anomalies) {
-    const b = a?.box || {};
-    const x = clamp01(Number(b?.x ?? 0));
-    const y = clamp01(Number(b?.y ?? 0));
-    const w = clamp01(Number(b?.w ?? 0));
-    const h = clamp01(Number(b?.h ?? 0));
+    const bb = a?.box || {};
+    const x = clamp01(Number(bb?.x ?? 0));
+    const y = clamp01(Number(bb?.y ?? 0));
+    const w = clamp01(Number(bb?.w ?? 0));
+    const h = clamp01(Number(bb?.h ?? 0));
     const lbl = typeof a?.label === "string" ? a.label : undefined;
     const typeRaw = typeof a?.type === "string" ? a.type : undefined;
+    const conf = Number.isFinite(a?.confidence) ? Number(a.confidence) : undefined;
+
     const inferredType = (typeRaw as string) || guessType(lbl);
     const col = colorFor({ type: inferredType, label: lbl, color: a?.color });
 
-    if (w > 0 && h > 0) {
-      boxes.push({
-        id: crypto.randomUUID(),
-        x,
-        y,
-        w,
-        h,
-        color: col,
-        label: lbl || toTitle(String(inferredType || "anomalie")),
-      });
-    }
+    parsed.push({
+      x,
+      y,
+      w,
+      h,
+      label: lbl || toTitle(String(inferredType || "anomalie")),
+      color: col,
+      type: inferredType,
+      confidence: conf,
+    });
   }
+
+  const refined = postProcessBoxes(parsed);
+
+  const boxes: Box[] = refined.map((b) => ({
+    id: crypto.randomUUID(),
+    x: b.x,
+    y: b.y,
+    w: b.w,
+    h: b.h,
+    color: b.color || "#22C55E",
+    label: b.label,
+  }));
+
   const summary = typeof obj?.summary === "string" ? obj.summary : undefined;
   return { boxes, summary };
 }
 
 function buildDetectionInstruction(userPrompt: string): string {
   return [
-    "Analyse cette image pour détecter des anomalies visibles (fissures, infiltrations, humidité, isolation, ponts thermiques, menuiseries, toiture, etc.).",
-    "Réponds UNIQUEMENT en JSON (pas de texte autour, pas de markdown) au format strict suivant:",
+    "Détecte UNIQUEMENT les anomalies VISIBLES sur l’image (fissure, infiltration, humidité, isolation, pont_thermique, menuiserie, toiture, moisissure, structure, electrique, plomberie, vegetation, autre).",
+    "RÉPONDS STRICTEMENT en JSON (aucun texte avant/après, pas de markdown):",
     "{",
     '  "anomalies": [',
-    '    {',
+    "    {",
     '      "type": "fissure|infiltration|humidite|isolation|pont_thermique|menuiserie|toiture|moisissure|structure|electrique|plomberie|vegetation|autre",',
-    '      "label": "Courte description lisible (FR)",',
+    '      "label": "Courte description FR lisible",',
+    '      "confidence": 0.0_to_1.0,',
     '      "box": { "x": 0.12, "y": 0.34, "w": 0.22, "h": 0.15 }',
     "    }",
     "  ],",
-    '  "summary": "Résumé technique concis des constats et recommandations (FR)"',
+    '  "summary": "Résumé technique concis (FR)"',
     "}",
     "- Contraintes:",
-    "  - Les coordonnées x,y,w,h sont normalisées entre 0 et 1 (0 = bord gauche/haut, 1 = bord droit/bas).",
-    "  - Si aucune anomalie, renvoie anomalies: [].",
-    "  - Utilise le champ 'type' avec les valeurs proposées pour homogénéiser.",
-    "Contexte (prompt utilisateur):",
-    userPrompt || "(aucun)",
+    "  - JSON valide obligatoire; si aucune anomalie certaine, renvoyer anomalies: [].",
+    "  - Privilégier la PRÉCISION (pas de faux positifs).",
+    "  - Les coordonnées sont normalisées 0..1; boîte serrée autour de la zone visible.",
+    "  - Éviter les boîtes minuscules/gigantesques; pas de boîte englobant toute l’image sans raison.",
+    "  - Limite: max 6 anomalies pertinentes.",
+    `Contexte utilisateur:\n${userPrompt || "(aucun)"}`,
   ].join("\n");
 }
+
+/* ---------- Entrée principale ---------- */
 
 export async function analyzeLLM(input: {
   mode: RunMode;
@@ -179,32 +293,33 @@ export async function analyzeLLM(input: {
   }
 
   const model = input.model || s.model || "gpt-4o-mini";
-  const temperature =
-    typeof input.temperature === "number" ? input.temperature : s.temperature ?? 0.2;
+  const userTemp = typeof input.temperature === "number" ? input.temperature : s.temperature ?? 0.2;
   const max_tokens =
     typeof input.max_tokens === "number" ? input.max_tokens : s.maxTokens ?? 1200;
 
   try {
     if (input.mode === "aggregate") {
-      // 1) Texte global (toutes les images)
+      // 1) Texte global
       const aggregateText = await callOpenAI({
         apiKey: s.apiKey!,
         model,
-        temperature,
+        temperature: userTemp,
         prompt: input.prompt,
         images: input.images.map((i) => ({ dataUrl: i.dataUrl })),
         max_tokens,
       });
 
-      // 2) Par image: annotations + texte de prompt classique
+      // 2) Par image: annotations (température faible) + texte prompt classique
       const detectionInstruction = buildDetectionInstruction(input.prompt);
+      const detectionTemp = 0.1;
+
       const items = await Promise.all(
         input.images.map(async (img) => {
-          // Annotations (JSON)
+          // Détection/annotations
           const detectionRaw = await callOpenAI({
             apiKey: s.apiKey!,
             model,
-            temperature,
+            temperature: detectionTemp,
             prompt: detectionInstruction,
             images: [{ dataUrl: img.dataUrl }],
             max_tokens,
@@ -212,11 +327,11 @@ export async function analyzeLLM(input: {
           const parsed = extractFirstJsonObject(detectionRaw);
           const { boxes, summary } = parsed ? toBoxes(parsed) : { boxes: [], summary: undefined };
 
-          // Texte "prompt classique" par image
+          // Texte par image avec le prompt utilisateur
           const perImageText = await callOpenAI({
             apiKey: s.apiKey!,
             model,
-            temperature,
+            temperature: userTemp,
             prompt: input.prompt,
             images: [{ dataUrl: img.dataUrl }],
             max_tokens,
@@ -232,14 +347,15 @@ export async function analyzeLLM(input: {
 
       return { ok: true, mode: "aggregate", outputText: aggregateText, items };
     } else {
-      // Mode par image (inchangé)
+      // Mode par image: détection stricte + résumé
       const instruction = buildDetectionInstruction(input.prompt);
+      const detectionTemp = 0.1;
       const items = await Promise.all(
         input.images.map(async (img) => {
           const raw = await callOpenAI({
             apiKey: s.apiKey!,
             model,
-            temperature,
+            temperature: detectionTemp,
             prompt: instruction,
             images: [{ dataUrl: img.dataUrl }],
             max_tokens,
