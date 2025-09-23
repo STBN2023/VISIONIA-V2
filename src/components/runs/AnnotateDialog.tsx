@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Dialog } from "@/components/ui/dialog";
+import { Dialog, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import GlassDialogContent from "@/components/glass/GlassDialogContent";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,7 +45,7 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
   const onPointerMove = (e: React.PointerEvent) => {
     if (!drawing || !start || !containerRef.current) return;
     e.preventDefault();
-    // live preview via a temporary box? Keep it simple: update a transient last box
+    // (aperçu live minimaliste non nécessaire pour lever l’avertissement)
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
@@ -81,10 +81,10 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
   return (
     <Dialog open={open} onOpenChange={(o) => { if (!o) cancelDrawing(); onOpenChange(o); }}>
       <GlassDialogContent className="max-w-5xl">
-        <div className="mb-3">
-          <h3 className="text-lg font-semibold">Annoter l’image</h3>
-          <p className="text-sm text-white/70">Cliquez-glissez pour dessiner un rectangle. Ajustez la couleur et le libellé ci-dessous.</p>
-        </div>
+        <DialogHeader>
+          <DialogTitle>Annoter l’image</DialogTitle>
+          <DialogDescription>Cliquer-glisser pour dessiner un rectangle, puis ajuster couleur et libellé.</DialogDescription>
+        </DialogHeader>
 
         <div
           ref={containerRef}
@@ -96,7 +96,7 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
           <img
             src={image.dataUrl}
             alt={image.name}
-            className="h-full w-full object-contain select-none"
+            className="h-full w-full select-none object-contain"
             draggable={false}
           />
           {/* Calque des rectangles existants */}
@@ -111,7 +111,6 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
                   width: `${b.w * 100}%`,
                   height: `${b.h * 100}%`,
                   border: `2px solid ${b.color || defaultColor}`,
-                  boxShadow: `0 0 0 9999px rgba(0,0,0,0)`,
                 }}
               >
                 {b.label ? (
@@ -128,19 +127,6 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
                 ) : null}
               </div>
             ))}
-            {/* Aperçu du rectangle en cours de tracé */}
-            {drawing && start ? (
-              <div
-                className="absolute rounded-md border-2"
-                style={{
-                  left: `${start.x * 100}%`,
-                  top: `${start.y * 100}%`,
-                  width: `0px`,
-                  height: `0px`,
-                  borderColor: defaultColor,
-                }}
-              />
-            ) : null}
           </div>
         </div>
 
