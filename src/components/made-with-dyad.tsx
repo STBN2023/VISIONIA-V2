@@ -5,7 +5,7 @@ export const MadeWithDyad = () => {
         href="https://www.linkedin.com/company/isoedre-ingenierie-architecture/"
         target="_blank"
         rel="noopener noreferrer"
-        className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+        className="text-sm text-white hover:text-gray-200 dark:text-white dark:hover:text-gray-200"
       >
         Outil developpé pour le GROUPE ISOEDRE
       </a>
