@@ -20,6 +20,7 @@ type Props = {
   onAddFiles: (files: FileList | File[] | null) => void;
   onDeleteImage: (imgId: string) => void;
   onUpdateTag: (imgId: string, tag?: ImageTag) => void;
+  onBulkUpdateTags: (ids: string[], tag?: ImageTag) => void;
   onUpdateImageTemplate: (imgId: string, templateId?: string) => void;
   onMoveImage: (imgId: string, direction: "left" | "right") => void;
   onCreateTag: (label: string) => void;
@@ -34,6 +35,7 @@ const ImagesTab = ({
   onAddFiles,
   onDeleteImage,
   onUpdateTag,
+  onBulkUpdateTags,
   onUpdateImageTemplate,
   onMoveImage,
   onCreateTag,
@@ -95,8 +97,8 @@ const ImagesTab = ({
       toApply = undefined; // retirer le tag
     }
 
-    // Applique à chaque image sélectionnée
-    selectedIds.forEach((id) => onUpdateTag(id, toApply));
+    // Applique à toutes les images sélectionnées en un seul patch
+    onBulkUpdateTags(selectedIds, toApply);
     showSuccess(
       toApply ? `Tag “${toApply}” appliqué à ${selectedCount} image(s)` : `Tag retiré sur ${selectedCount} image(s)`,
     );
