@@ -134,7 +134,6 @@ function toBoxes(obj: any): { boxes: Box[]; summary?: string } {
 }
 
 function buildDetectionInstruction(userPrompt: string): string {
-  // Instruction claire pour JSON strict avec type normalisé
   return [
     "Analyse cette image pour détecter des anomalies visibles (fissures, infiltrations, humidité, isolation, ponts thermiques, menuiseries, toiture, etc.).",
     "Réponds UNIQUEMENT en JSON (pas de texte autour, pas de markdown) au format strict suivant:",
@@ -180,8 +179,6 @@ export async function analyzeLLM(input: {
   const max_tokens =
     typeof input.max_tokens === "number" ? input.max_tokens : s.maxTokens ?? 1200;
 
-  const limited = input.images.slice(0, 12);
-
   try {
     if (input.mode === "aggregate") {
       const text = await callOpenAI({
@@ -189,14 +186,14 @@ export async function analyzeLLM(input: {
         model,
         temperature,
         prompt: input.prompt,
-        images: limited.map((i) => ({ dataUrl: i.dataUrl })),
+        images: input.images.map((i) => ({ dataUrl: i.dataUrl })),
         max_tokens,
       });
       return { ok: true, mode: "aggregate", outputText: text };
     } else {
       const instruction = buildDetectionInstruction(input.prompt);
       const items = await Promise.all(
-        limited.map(async (img) => {
+        input.images.map(async (img) => {
           const raw = await callOpenAI({
             apiKey: s.apiKey!,
             model,

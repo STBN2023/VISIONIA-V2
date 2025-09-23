@@ -111,9 +111,6 @@ export default async function handler(req: Request): Promise<Response> {
     });
   }
 
-  // Optionnel: limiter le nombre d’images par requête (sécurité token)
-  const limitedImages = images.slice(0, 12);
-
   try {
     if (mode === "aggregate") {
       const text = await callOpenAI({
@@ -121,7 +118,7 @@ export default async function handler(req: Request): Promise<Response> {
         model,
         temperature,
         prompt,
-        images: limitedImages,
+        images, // plus de limite
         max_tokens,
       });
       return new Response(
@@ -131,7 +128,7 @@ export default async function handler(req: Request): Promise<Response> {
     } else {
       // per_image
       const results = await Promise.all(
-        limitedImages.map(async (img) => {
+        images.map(async (img) => {
           const text = await callOpenAI({
             apiKey,
             model,
