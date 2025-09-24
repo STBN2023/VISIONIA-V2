@@ -10,6 +10,7 @@ import { ArrowLeftCircle, ArrowRightCircle, Trash2, ChevronDown, ChevronUp, Plus
 import type { ImageTag, ProjectImage } from "@/utils/storage";
 import type { PromptTemplate } from "@/utils/prompts";
 import { Checkbox } from "@/components/ui/checkbox";
+import { cn } from "@/lib/utils";
 
 type Props = {
   img: ProjectImage;
@@ -22,7 +23,6 @@ type Props = {
   onUpdateTag: (imgId: string, tag?: ImageTag) => void;
   onUpdateImageTemplate: (imgId: string, templateId?: string) => void;
   onCreateTag: (label: string) => void;
-  // Nouveau: sélection multiple
   selectMode?: boolean;
   selected?: boolean;
   onSelectChange?: (imgId: string, selected: boolean) => void;
@@ -67,7 +67,7 @@ const ImageCard = ({
 
   return (
     <>
-      <Card className="overflow-hidden rounded-3xl border border-white/20 bg-white/8 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur-2xl">
+      <Card className={cn("overflow-hidden rounded-3xl border border-white/20 bg-white/8 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur-2xl transition-all duration-300", { "opacity-0": !img })}>
         <div className="relative aspect-[4/3] w-full">
           <img
             src={img.dataUrl}
@@ -77,10 +77,8 @@ const ImageCard = ({
             onClick={handleImageClick}
           />
 
-          {/* overlay dégradé bas */}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/35 via-black/10 to-transparent" />
 
-          {/* Case à cocher en mode sélection */}
           {selectMode ? (
             <div className="absolute left-2 top-2 z-10 rounded-xl bg-black/40 p-1 backdrop-blur-md">
               <Checkbox
@@ -159,7 +157,7 @@ const ImageCard = ({
                     placeholder="Nouveau tag"
                     value={newTag}
                     onChange={(e) => setNewTag(e.target.value)}
-                    className="h-8 bg-white/10 text-white placeholder:text-white/60 backdrop-blur-sm"
+                    className="h-8 bg-white/10 text-white placeholder:text-white/60"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
