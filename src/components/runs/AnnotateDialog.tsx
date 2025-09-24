@@ -82,50 +82,6 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
     return { x: nx, y: ny };
   }
 
-  // Variante: renvoie toujours une coordonnée normalisée, en la clampant aux bords de l'image
-  function clientToNormClamped(e: React.PointerEvent) {
-    const r = getRenderRect();
-    if (!r) return null;
-    let xPx = e.clientX - r.contRect.left - r.offsetX;
-    let yPx = e.clientY - r.contRect.top - r.offsetY;
-    xPx = Math.max(0, Math.min(r.drawW, xPx));
-    yPx = Math.max(0, Math.min(r.drawH, yPx));
-    const nx = clamp01(xPx / r.drawW);
-    const ny = clamp01(yPx / r.drawH);
-    return { x: nx, y: ny };
-  }
-
-  function normBoxToCenterStyle(b: { x: number; y: number; w: number; h: number; angle?: number }): React.CSSProperties {
-    const r = getRenderRect();
-    const angle = typeof b.angle === "number" ? b.angle : 0;
-    if (!r) {
-      const left = `${(b.x + b.w / 2) * 100}%`;
-      const top = `${(b.y + b.h / 2) * 100}%`;
-      const width = `${b.w * 100}%`;
-      const height = `${b.h * 100}%`;
-      return {
-        left,
-        top,
-        width,
-        height,
-        transformOrigin: "center",
-        transform: `translate(-50%, -50%) rotate(${angle}deg)`,
-      };
-    }
-    const leftPx = r.offsetX + (b.x + b.w / 2) * r.drawW;
-    const topPx = r.offsetY + (b.y + b.h / 2) * r.drawH;
-    const widthPx = b.w * r.drawW;
-    const heightPx = b.h * r.drawH;
-    return {
-      left: leftPx,
-      top: topPx,
-      width: widthPx,
-      height: heightPx,
-      transformOrigin: "center",
-      transform: `translate(-50%, -50%) rotate(${angle}deg)`,
-    };
-  }
-
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     const p = clientToNorm(e);
     if (!p) return; // ignore si on clique dans les bandes
@@ -137,7 +93,7 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
 
   const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!drawing || !start) return;
-    const p = clientToNormClamped(e);
+    const p = clientToNorm(e);
     if (!p) return;
     const x = Math.min(start.x, p.x);
     const y = Math.min(start.y, p.y);
@@ -155,7 +111,7 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
       setPreview(null);
       return;
     }
-    const p = clientToNormClamped(e);
+    const p = clientToNorm(e);
     setDrawing(false);
     if (!p) {
       setStart(null);
@@ -180,14 +136,6 @@ const AnnotateDialog = ({ open, onOpenChange, image, initialBoxes = [], onSave }
       setStart(null);
       setPreview(null);
     }
-  };
-
-  const removeBox = (id: string) => {
-    setBoxes((prev) => prev.filter((b) => b.id !== id));
-  };
-
-  const updateBox = (id: string, patch: Partial<Box>) => {
-    setBoxes((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
   };
 
   const closeDialog = (o: boolean) => {
