@@ -18,7 +18,7 @@ const MAX_BG_BYTES = 2.5 * 1024 * 1024; // ~2.5 Mo pour rester sous la limite de
 const Settings = () => {
   const [provider, setProvider] = useState<APIProvider>("openai");
   const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("");
+  const [model, setModel] = useState("gpt-4o"); // Valeur par défaut
   const [temperature, setTemperature] = useState<number | string>(0.2);
   const [maxTokens, setMaxTokens] = useState<number | string>(2000);
   const [endpoint, setEndpoint] = useState("");
@@ -36,7 +36,7 @@ const Settings = () => {
     const s = getSettings();
     setProvider(s.provider);
     setApiKey(s.apiKey ?? "");
-    setModel(s.model ?? "");
+    setModel(s.model ?? "gpt-4o"); // Valeur par défaut
     setTemperature(s.temperature ?? 0.2);
     setMaxTokens(s.maxTokens ?? 2000);
     setEndpoint(s.endpoint ?? "");
@@ -80,36 +80,6 @@ const Settings = () => {
     setThemePreset((next.themePreset as ThemePreset) ?? "violet");
     setBrightness(next.brightness ?? 100);
     showSuccess("Paramètres enregistrés");
-  };
-
-  // Compression contrôlée de l’image choisie avant stockage
-  const handlePickBackgroundFile = async (file: File) => {
-    // 1er essai: taille confortable
-    let out = await compressImageToBlob(file, {
-      maxWidth: 2000,
-      maxHeight: 1500,
-      quality: 0.82,
-      convertTo: "image/webp",
-    });
-
-    // Si encore trop lourd, 2e essai plus agressif
-    if (out.size > MAX_BG_BYTES) {
-      out = await compressImageToBlob(file, {
-        maxWidth: 1600,
-        maxHeight: 1200,
-        quality: 0.7,
-        convertTo: "image/webp",
-      });
-    }
-
-    if (out.size > MAX_BG_BYTES) {
-      showError("Image trop lourde même après compression. Essayez une image plus petite.");
-      return;
-    }
-
-    const dataUrl = await blobToDataUrl(out);
-    setBackgroundImage(dataUrl);
-    showSuccess("Image compressée et chargée");
   };
 
   return (
@@ -164,7 +134,17 @@ const Settings = () => {
             {/* Modèle */}
             <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
               <Label>Modèle</Label>
-              <Input value={model} onChange={(e) => setModel(e.target.value)} placeholder="ex: gpt-4o, claude-3-5, ..." className="bg-white/10 text-white placeholder:text-white/60" />
+              <div>
+                <Select value={model} onValueChange={(v) => setModel(v as string)}>
+                  <SelectTrigger className="bg-white/10 text-white">
+                    <SelectValue placeholder="Choisir un modèle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gpt-4o">gpt-4o</SelectItem>
+                    <SelectItem value="gpt-4o-mini">gpt-4o-mini</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {/* Température */}
