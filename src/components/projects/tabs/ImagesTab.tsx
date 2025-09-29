@@ -136,7 +136,6 @@ const ImagesTab = ({
     if (filteredImages.length === 0) return;
     setClassifying(true);
 
-    // Cible: sélection si active et non vide, sinon tout le filtre courant
     const targets = (selectMode && selectedCount > 0)
       ? filteredImages.filter((img) => selected[img.id])
       : filteredImages;
@@ -145,15 +144,23 @@ const ImagesTab = ({
       return;
     }
 
-    // Toast de progression + warmup (une seule fois)
-    const toastId = toast.loading("Préparation du modèle...");
-    await warmupSession();
-    toast.loading(`Classement 0/${targets.length}...`, { id: toastId });
+    // Afficher la progression tout de suite (avant warmup)
+    const toastId = toast.loading(`Préparation du modèle…`, { duration: Infinity });
 
-    // Limiter la concurrence pour éviter de saturer le thread principal
-    const CONCURRENCY = 3;
+    // Warmup une seule fois
+    await warmupSession();
+    toast.loading(`Classement 0/${targets.length}…`, { id: toastId, duration: Infinity });
+
+    // Concurrence minimale pour garder l'UI fluide
+    const CONCURRENCY = 1;
     let done = 0;
     const resultsArr: { id: string; suggestedTag: string }[] = [];
+
+    // Fonction pour laisser respirer l'UI
+    const yieldUI = () => new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+
     for (let i = 0; i < targets.length; i += CONCURRENCY) {
       const chunk = targets.slice(i, i + CONCURRENCY);
       const chunkResults = await Promise.all(
@@ -164,15 +171,14 @@ const ImagesTab = ({
       );
       resultsArr.push(...chunkResults);
       done += chunkResults.length;
-      toast.loading(`Classement ${done}/${targets.length}...`, { id: toastId });
-      // Laisser un peu de souffle à l'UI
-      await new Promise((r) => setTimeout(r, 0));
+      toast.loading(`Classement ${done}/${targets.length}…`, { id: toastId, duration: Infinity });
+
+      // Laisser le temps au navigateur d'afficher le toast et peindre l'UI
+      await yieldUI();
     }
 
     const tagToIds = new Map<string, string[]>();
     const tagsToCreate = new Set<string>();
-
-    // Map des tags existants (clé normalisée -> libellé du projet)
     const existingMap = new Map(project.tags.map((t) => [normalizeTagKey(t), t]));
 
     for (const { id, suggestedTag } of resultsArr) {
@@ -189,13 +195,11 @@ const ImagesTab = ({
       tagToIds.set(finalLabel, arr);
     }
 
-    // Créer les tags manquants (séquentiel)
     for (const t of Array.from(tagsToCreate)) {
       await onCreateTag(t);
       existingMap.set(normalizeTagKey(t), t);
     }
 
-    // Construire un patch id -> tag et l'appliquer en une seule fois
     const patch: Record<string, ImageTag | undefined> = {};
     for (const [tag, ids] of tagToIds.entries()) {
       for (const id of ids) patch[id] = tag;
@@ -206,11 +210,10 @@ const ImagesTab = ({
     }
 
     setClassifying(false);
-    if (appliedCount === 0) {
-      toast.success("Aucun tag appliqué.", { id: toastId });
-    } else {
-      toast.success(`Tags appliqués à ${appliedCount} image(s).`, { id: toastId });
-    }
+    toast.success(
+      appliedCount === 0 ? "Aucun tag appliqué." : `Tags appliqués à ${appliedCount} image(s).`,
+      { id: toastId }
+    );
   };
 
   return (
