@@ -1,4 +1,3 @@
-RGB(3), normalisation ImageNet, NCHW.">
 import * as ort from "onnxruntime-web";
 import { getSettings, saveSettings } from "@/utils/settings";
 import { getDatasetManifest } from "@/utils/dataset";
