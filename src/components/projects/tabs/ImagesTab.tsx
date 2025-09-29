@@ -12,6 +12,7 @@ import type { PromptTemplate } from "@/utils/prompts";
 import ImageCard from "@/components/uploader/ImageCard";
 import { showSuccess, showError } from "@/utils/toast";
 import { classifyImageToTag, isModelConfigured } from "@/utils/classifier";
+import { warmupSession } from "@/utils/inference";
 
 // Helpers de normalisation (évite espaces en trop et casse différente)
 const normalizeTagLabel = (s: string) => s.trim().replace(/\s+/g, " ");
@@ -143,27 +144,35 @@ const ImagesTab = ({
       return;
     }
 
+    // 1) Warmup une seule fois (compile EP, etc.)
+    await warmupSession();
+
+    // 2) Lancer les inférences en parallèle
+    //    On garde l’ordre pour pouvoir construire un patch propre.
+    const results = await Promise.all(
+      targets.map(async (img) => {
+        const res = await classifyImageToTag(img.dataUrl);
+        return { id: img.id, suggestedTag: (res?.suggestedTag ?? "").toString() };
+      })
+    );
+
     const tagToIds = new Map<string, string[]>();
     const tagsToCreate = new Set<string>();
 
     // Map des tags existants (clé normalisée -> libellé du projet)
     const existingMap = new Map(project.tags.map((t) => [normalizeTagKey(t), t]));
 
-    for (const img of targets) {
-      const res = await classifyImageToTag(img.dataUrl);
-      const raw = (res?.suggestedTag ?? "").toString();
+    for (const { id, suggestedTag } of results) {
+      const raw = suggestedTag;
       const key = normalizeTagKey(raw);
-
       if (!raw) continue;
 
       const finalLabel = existingMap.get(key) ?? normalizeTagLabel(raw);
-
       if (!existingMap.has(key)) {
         tagsToCreate.add(finalLabel);
       }
-
       const arr = tagToIds.get(finalLabel) || [];
-      arr.push(img.id);
+      arr.push(id);
       tagToIds.set(finalLabel, arr);
     }
 

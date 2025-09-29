@@ -112,7 +112,7 @@ async function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = (e) => reject(new Error("Échec chargement image"));
+    img.onerror = () => reject(new Error("Échec chargement image"));
     img.src = dataUrl;
   });
 }
@@ -314,4 +314,21 @@ export async function calibrateOnVal(samplePerClassCount = 10): Promise<{
     `TP=${best.tp} FP=${best.fp} TN=${best.tn} FN=${best.fn} sur ${records.length} images val`;
 
   return { threshold: best.t, report, evalAtBest: best };
+}
+
+// ————— Warmup support —————
+let didWarmup = false;
+export async function warmupSession(): Promise<void> {
+  if (didWarmup) return;
+  const s = getSettings();
+  const session = await getOrCreateSession();
+  const inputSize = s.modelMeta?.inputSize || 224;
+  // Construire un tenseur NCHW rempli de zéros
+  const zeros = new Float32Array(3 * inputSize * inputSize);
+  const inputTensor = new ort.Tensor("float32", zeros, [1, 3, inputSize, inputSize]);
+  const inputName = (session.inputNames && session.inputNames[0]) || "images";
+  const outputName = (session.outputNames && session.outputNames[0]) || "output";
+  await session.run({ [inputName]: inputTensor });
+  // On ne lit pas la sortie; l’objectif est d’initialiser l’EP/compilations
+  didWarmup = true;
 }
