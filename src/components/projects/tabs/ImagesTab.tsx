@@ -1,4 +1,3 @@
-tag.">
 import { useMemo, useState } from "react";
 import Dropzone from "@/components/uploader/Dropzone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
