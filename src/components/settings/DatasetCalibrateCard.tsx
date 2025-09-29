@@ -71,6 +71,11 @@ const DatasetCalibrateCard = () => {
     if (settings.modelRef?.source === "url") {
       setOnnxUrl(settings.modelRef.value);
     }
+    // Afficher l'état si un modèle local (IDB) est déjà configuré
+    if (settings.modelRef?.source === "idb" && settings.modelRef.value) {
+      const id = settings.modelRef.value;
+      setModelFileName(`Modèle local (id: ${id.slice(0, 8)}…)`);
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -351,40 +356,30 @@ const DatasetCalibrateCard = () => {
         {/* Modèle ONNX */}
         <div className="space-y-2">
           <Label>Modèle YOLOv5‑cls (ONNX)</Label>
-          <div className="grid gap-3 md:grid-cols-[1fr,220px]">
-            <div className="space-y-2">
-              <div className="grid gap-2 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label className="text-xs text-white/70">inputSize</Label>
-                  <Input
-                    type="number"
-                    min={64}
-                    step={1}
-                    value={inputSize}
-                    onChange={(e) => setInputSize(Number(e.target.value || 224))}
-                    className="bg-white/10 text-white"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-white/70">Ordre des classes (1 par ligne)</Label>
-                  <textarea
-                    value={classesOrderText}
-                    onChange={(e) => setClassesOrderText(e.target.value)}
-                    placeholder={manifest ? manifest.classes.join("\n") : "algae\nmajor_crack\n..."}
-                    className="min-h-[120px] w-full rounded-md border border-white/20 bg-white/10 p-2 text-sm text-white placeholder:text-white/50"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={saveModelMeta} variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10">
-                  Enregistrer les métadonnées
-                </Button>
-                <Button onClick={verifyCoherence} variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10">
-                  Vérifier cohérence
-                </Button>
-              </div>
+          <div className="grid gap-4 md:grid-cols-3 items-start">
+            <div className="space-y-1">
+              <Label className="text-xs text-white/70">inputSize</Label>
+              <Input
+                type="number"
+                min={64}
+                step={1}
+                value={inputSize}
+                onChange={(e) => setInputSize(Number(e.target.value || 224))}
+                className="bg-white/10 text-white"
+              />
             </div>
-            <div className="flex flex-col items-start gap-3">
+
+            <div className="space-y-1">
+              <Label className="text-xs text-white/70">Ordre des classes (1 par ligne)</Label>
+              <textarea
+                value={classesOrderText}
+                onChange={(e) => setClassesOrderText(e.target.value)}
+                placeholder={manifest ? manifest.classes.join("\n") : "algae\nmajor_crack\n..."}
+                className="min-h-[180px] w-full rounded-md border border-white/20 bg-white/10 p-2 text-sm text-white placeholder:text-white/50"
+              />
+            </div>
+
+            <div className="space-y-3">
               <Input
                 type="file"
                 accept={onnxAccept}
@@ -421,6 +416,15 @@ const DatasetCalibrateCard = () => {
                 </div>
               </div>
             </div>
+
+            <div className="md:col-span-2 flex flex-wrap gap-2">
+              <Button onClick={saveModelMeta} variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10">
+                Enregistrer les métadonnées
+              </Button>
+              <Button onClick={verifyCoherence} variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10">
+                Vérifier cohérence
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -428,7 +432,7 @@ const DatasetCalibrateCard = () => {
         <div className="space-y-2">
           <Label>Calibration automatique (val)</Label>
           <div className="rounded-2xl border border-white/20 bg-white/5 p-3">
-            <div className="grid gap-3 sm:grid-cols-[220px,1fr] sm:items-center">
+            <div className="grid gap-3 sm:grid-cols-[220px,1fr] sm:items-end">
               <div className="space-y-1">
                 <Label className="text-xs text-white/70">Échantillons par classe (val)</Label>
                 <Input
@@ -440,7 +444,7 @@ const DatasetCalibrateCard = () => {
                   className="bg-white/10 text-white"
                 />
               </div>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-end gap-2">
                 <Button 
                   onClick={handleCalibrate} 
                   disabled={isCalibrating || (!modelFileName && !onnxUrl.trim())}
@@ -458,9 +462,13 @@ const DatasetCalibrateCard = () => {
         </div>
       </CardContent>
       <CardFooter className="justify-end">
-        <Button disabled={!manifest || isImporting} className="backdrop-blur-sm" title={!manifest ? 'Importez un dataset pour continuer' : 'Prêt'}>
-          {isImporting ? "Import en cours..." : "Prêt"}
-        </Button>
+        {isImporting ? (
+          <Badge variant="secondary">Import en cours…</Badge>
+        ) : manifest ? (
+          <Badge variant="secondary">Prêt</Badge>
+        ) : (
+          <Badge variant="outline">En attente de dataset</Badge>
+        )}
       </CardFooter>
     </Card>
   );
