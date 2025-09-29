@@ -1,4 +1,3 @@
-tag en une seule mise à jour, et le passer à ImagesTab.">
 import { useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
