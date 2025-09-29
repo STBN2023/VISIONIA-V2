@@ -76,7 +76,7 @@ export async function importDatasetFromZip(file: File, name?: string): Promise<D
   const zip = await JSZip.loadAsync(file);
   const entries = Object.values(zip.files).filter((f) => !f.dir && isImagePath(f.name));
   if (entries.length === 0) {
-    throw new Error("Aucune image valide trouvée dans l’archive (.jpg/.jpeg/.png/.webp).");
+    throw new Error("Aucune image valide trouvée dans l'archive (.jpg/.jpeg/.png/.webp).");
   }
 
   // Collecte provisoire classNames par split
@@ -240,4 +240,106 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   }
   // btoa peut throw si trop gros, mais en pratique ça passe pour ~10-20 Mo
   return btoa(binary);
+}
+
+// Recalcule classes + stats à partir du manifest courant
+function recalcStatsAndClasses(manifest: DatasetManifest) {
+  const allEntries = [
+    ...manifest.splits.train,
+    ...manifest.splits.val,
+    ...manifest.splits.test,
+  ];
+  const classes = Array.from(new Set(allEntries.map((e) => e.className))).sort((a, b) =>
+    a.localeCompare(b),
+  );
+
+  const stats = {
+    train: emptyStats(classes),
+    val: emptyStats(classes),
+    test: emptyStats(classes),
+    total: emptyStats(classes),
+  };
+
+  for (const e of manifest.splits.train) {
+    stats.train[e.className] = (stats.train[e.className] || 0) + 1;
+    stats.total[e.className] = (stats.total[e.className] || 0) + 1;
+  }
+  for (const e of manifest.splits.val) {
+    stats.val[e.className] = (stats.val[e.className] || 0) + 1;
+    stats.total[e.className] = (stats.total[e.className] || 0) + 1;
+  }
+  for (const e of manifest.splits.test) {
+    stats.test[e.className] = (stats.test[e.className] || 0) + 1;
+    stats.total[e.className] = (stats.total[e.className] || 0) + 1;
+  }
+
+  manifest.classes = classes;
+  manifest.stats = stats;
+}
+
+// Met à jour une ou plusieurs entrées (classe et/ou split), puis sauvegarde le manifest et les settings liés
+export async function updateDatasetEntries(
+  datasetId: string,
+  updates: Array<{ id: string; className?: string; split?: DatasetSplit }>
+): Promise<DatasetManifest> {
+  const manifest = await getDatasetManifest(datasetId);
+  if (!manifest) {
+    throw new Error("Dataset introuvable.");
+  }
+
+  // index rapide: imageID -> [splitName, index]
+  const locate = (id: string): { split: DatasetSplit; index: number } | null => {
+    const { train, val, test } = manifest.splits;
+    let idx = train.findIndex((e) => e.id === id);
+    if (idx >= 0) return { split: "train", index: idx };
+    idx = val.findIndex((e) => e.id === id);
+    if (idx >= 0) return { split: "val", index: idx };
+    idx = test.findIndex((e) => e.id === id);
+    if (idx >= 0) return { split: "test", index: idx };
+    return null;
+  };
+
+  for (const u of updates) {
+    const pos = locate(u.id);
+    if (!pos) continue;
+    const fromArr = manifest.splits[pos.split];
+
+    const entry = { ...fromArr[pos.index] };
+    if (typeof u.className === "string" && u.className.trim()) {
+      entry.className = u.className.trim();
+    }
+
+    const toSplit = u.split ?? pos.split;
+    if (toSplit !== pos.split) {
+      // déplacer vers l'autre split
+      fromArr.splice(pos.index, 1);
+      manifest.splits[toSplit].push(entry);
+    } else {
+      // patch in-place
+      fromArr[pos.index] = entry;
+    }
+  }
+
+  // Recalculer classes + stats
+  recalcStatsAndClasses(manifest);
+
+  // Sauvegarde manifest
+  await idbSet(MANIFEST_PREFIX + manifest.id, JSON.stringify(manifest));
+
+  // Mettre à jour settings dérivés (classesDetected)
+  const nextClassesDetected = {
+    unionClasses: manifest.classes,
+    perSplitClasses: {
+      train: Array.from(new Set(manifest.splits.train.map((e) => e.className))).sort(),
+      val: Array.from(new Set(manifest.splits.val.map((e) => e.className))).sort(),
+      test: Array.from(new Set(manifest.splits.test.map((e) => e.className))).sort(),
+    },
+  };
+
+  saveSettings({
+    classesDetected: nextClassesDetected,
+    datasetRef: { datasetId: manifest.id, datasetName: manifest.name },
+  });
+
+  return manifest;
 }

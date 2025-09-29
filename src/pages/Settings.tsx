@@ -13,6 +13,7 @@ import { getSettings, saveSettings, type APIProvider, type BackgroundMode, type 
 import { GlassShell } from "@/components/layout/GlassShell";
 import { compressImageToBlob, blobToDataUrl } from "@/utils/image-compress";
 import DatasetCalibrateCard from "@/components/settings/DatasetCalibrateCard";
+import DatasetLabelerCard from "@/components/settings/DatasetLabelerCard";
 
 const MAX_BG_BYTES = 2.5 * 1024 * 1024; // ~2.5 Mo pour rester sous la limite de localStorage
 
@@ -54,7 +55,7 @@ const Settings = () => {
     if (backgroundMode === "image" && backgroundImage.startsWith("data:")) {
       const approxBytes = backgroundImage.length * 0.75; // estimation base64
       if (approxBytes > MAX_BG_BYTES) {
-        showError("L’image de fond est trop lourde pour être enregistrée (quota localStorage). Choisissez une image plus légère.");
+        showError("L'image de fond est trop lourde pour être enregistrée (quota localStorage). Choisissez une image plus légère.");
         return;
       }
     }
@@ -97,7 +98,7 @@ const Settings = () => {
       <main className="mx-auto w-full max-w-6xl px-4 py-6 text-white">
         <div className="mb-4">
           <h1 className="text-2xl font-semibold">Paramètres</h1>
-          <p className="text-sm text-white/70">Configurer l’API LLM et l’apparence du fond (image, couleur, contraste, palette, luminosité).</p>
+          <p className="text-sm text-white/70">Configurer l'API LLM et l'apparence du fond (image, couleur, contraste, palette, luminosité).</p>
         </div>
         <Separator className="mb-6 border-white/20" />
 
@@ -198,7 +199,7 @@ const Settings = () => {
           <CardContent className="grid gap-4">
             {/* Palette */}
             <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
-              <Label>Palette d’accent</Label>
+              <Label>Palette d'accent</Label>
               <div>
                 <Select value={themePreset} onValueChange={(v) => setThemePreset(v as ThemePreset)}>
                   <SelectTrigger className="bg-white/10 text-white">
@@ -215,7 +216,7 @@ const Settings = () => {
 
             {/* Mode d'arrière-plan */}
             <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
-              <Label>Mode d’arrière‑plan</Label>
+              <Label>Mode d'arrière‑plan</Label>
               <div>
                 <RadioGroup value={backgroundMode} onValueChange={(v) => setBackgroundMode(v as BackgroundMode)}>
                   <div className="flex items-center gap-3">
@@ -273,7 +274,7 @@ const Settings = () => {
                           className="text-white/90 hover:bg-white/10"
                           onClick={() => setBackgroundImage("")}
                         >
-                          Retirer l’image
+                          Retirer l'image
                         </Button>
                       </div>
                     ) : null}
@@ -283,7 +284,7 @@ const Settings = () => {
             ) : (
               // Couleur
               <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
-                <Label>Couleur d’arrière‑plan</Label>
+                <Label>Couleur d'arrière‑plan</Label>
                 <div className="flex flex-wrap items-center gap-4">
                   <input
                     type="color"
@@ -352,6 +353,9 @@ const Settings = () => {
 
         {/* Dataset & Calibrage (YOLOv5-cls) */}
         <DatasetCalibrateCard />
+
+        {/* Classification manuelle du dataset */}
+        <DatasetLabelerCard />
       </main>
     </GlassShell>
   );
