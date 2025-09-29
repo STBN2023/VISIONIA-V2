@@ -13,6 +13,10 @@ import ImageCard from "@/components/uploader/ImageCard";
 import { showSuccess, showError } from "@/utils/toast";
 import { classifyImageToTag, isModelConfigured } from "@/utils/classifier";
 
+// Helpers de normalisation (évite espaces en trop et casse différente)
+const normalizeTagLabel = (s: string) => s.trim().replace(/\s+/g, " ");
+const normalizeTagKey = (s: string) => normalizeTagLabel(s).toLowerCase();
+
 type Props = {
   project: Project;
   templates: PromptTemplate[];
@@ -63,9 +67,10 @@ const ImagesTab = ({
   const [bulkNewTag, setBulkNewTag] = useState("");
 
   const addTag = async () => {
-    const label = newTag.trim();
+    const label = normalizeTagLabel(newTag);
     if (!label) return;
-    if (!project.tags.includes(label)) {
+    const existing = new Set(project.tags.map(normalizeTagKey));
+    if (!existing.has(normalizeTagKey(label))) {
       await onCreateTag(label);
     }
     setNewTag("");
@@ -87,9 +92,10 @@ const ImagesTab = ({
     if (selectedCount === 0) return;
     let toApply: string | undefined = undefined;
 
-    const newLabel = bulkNewTag.trim();
+    const newLabel = normalizeTagLabel(bulkNewTag);
     if (newLabel) {
-      if (!project.tags.includes(newLabel)) {
+      const existing = new Set(project.tags.map(normalizeTagKey));
+      if (!existing.has(normalizeTagKey(newLabel))) {
         await onCreateTag(newLabel);
       }
       toApply = newLabel;
@@ -137,30 +143,40 @@ const ImagesTab = ({
 
     const tagToIds = new Map<string, string[]>();
     const tagsToCreate = new Set<string>();
-    const IGNORE = new Set(["plain"]);
+    const IGNORE_KEYS = new Set(["plain"]);
+
+    // Map des tags existants (clé normalisée -> libellé du projet)
+    const existingMap = new Map(project.tags.map((t) => [normalizeTagKey(t), t]));
 
     for (const img of targets) {
       const res = await classifyImageToTag(img.dataUrl);
       const raw = (res?.suggestedTag ?? "").toString();
-      const norm = raw.trim().toLowerCase();
+      const key = normalizeTagKey(raw);
 
       // Ignorer les classes "normales"
-      if (!raw || IGNORE.has(norm)) {
+      if (!raw || IGNORE_KEYS.has(key)) {
         continue;
       }
 
-      if (!project.tags.includes(raw)) tagsToCreate.add(raw);
-      const arr = tagToIds.get(raw) || [];
+      // Choisir le libellé final: on réutilise celui du projet si présent, sinon on normalise le brut
+      const finalLabel = existingMap.get(key) ?? normalizeTagLabel(raw);
+
+      if (!existingMap.has(key)) {
+        tagsToCreate.add(finalLabel);
+      }
+
+      const arr = tagToIds.get(finalLabel) || [];
       arr.push(img.id);
-      tagToIds.set(raw, arr);
+      tagToIds.set(finalLabel, arr);
     }
 
     // Créer les tags manquants (séquentiel)
     for (const t of Array.from(tagsToCreate)) {
       await onCreateTag(t);
+      existingMap.set(normalizeTagKey(t), t);
     }
 
-    // Appliquer par lot (séquentiel pour éviter les courses)
+    // Appliquer par lot (séquentiel)
     let appliedCount = 0;
     for (const [tag, ids] of tagToIds.entries()) {
       await onBulkUpdateTags(ids, tag);
@@ -362,9 +378,10 @@ const ImagesTab = ({
                 <Button
                   variant="outline"
                   onClick={async () => {
-                    const t = bulkNewTag.trim();
+                    const t = normalizeTagLabel(bulkNewTag);
                     if (!t) return;
-                    if (!project.tags.includes(t)) {
+                    const existing = new Set(project.tags.map(normalizeTagKey));
+                    if (!existing.has(normalizeTagKey(t))) {
                       await onCreateTag(t);
                     }
                   }}
