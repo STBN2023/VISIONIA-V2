@@ -147,23 +147,35 @@ export async function updateProject(
   let nextImages: StoredImage[] | undefined = undefined;
 
   if (Array.isArray(patch.images)) {
-    // Externaliser toutes les images et déterminer celles à supprimer côté IDB
+    // Externaliser uniquement les nouvelles images et éviter de réécrire celles déjà stockées
     const incoming = patch.images as ProjectImage[];
+    const prevById = new Map((prev.images || []).map((i) => [i.id, i]));
     const incomingIds = new Set(incoming.map((i) => i.id));
     const prevIds = new Set((prev.images || []).map((i) => i.id));
 
-    // Supprimer de l’IDB les images disparues
+    // Supprimer de l'IDB les images disparues
     for (const oldId of prevIds) {
       if (!incomingIds.has(oldId)) {
         await idbDel(IDB_PREFIX + oldId);
       }
     }
 
-    // Sauver les nouvelles / mises à jour
     nextImages = [];
     for (const img of incoming) {
-      const stored = await externalizeImage(img);
-      nextImages.push(stored);
+      if (prevById.has(img.id)) {
+        // Image déjà connue: on conserve le pointeur IDB et on met à jour les métadonnées
+        const prevStored = prevById.get(img.id)!;
+        const { dataUrl: _ignored, ...rest } = img as any;
+        nextImages.push({
+          ...(prevStored as any),
+          ...rest,
+          dataUrl: prevStored.dataUrl ?? `idb://${img.id}`,
+        });
+      } else {
+        // Nouvelle image: externaliser (sauver dataUrl en IDB et stocker un pointeur)
+        const stored = await externalizeImage(img);
+        nextImages.push(stored);
+      }
     }
   }
 
@@ -184,7 +196,7 @@ export async function updateProject(
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  // Supprimer d’abord les dataURL IDB des images du projet
+  // Supprimer d'abord les dataURL IDB des images du projet
   const prev = findLocalRaw(id);
   if (prev) {
     for (const i of prev.images || []) {
