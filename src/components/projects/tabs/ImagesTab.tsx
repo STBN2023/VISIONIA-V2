@@ -13,6 +13,7 @@ import ImageCard from "@/components/uploader/ImageCard";
 import { showSuccess, showError } from "@/utils/toast";
 import { classifyImageToTag, isModelConfigured } from "@/utils/classifier";
 import { warmupSession } from "@/utils/inference";
+import { toast } from "sonner";
 
 // Helpers de normalisation (évite espaces en trop et casse différente)
 const normalizeTagLabel = (s: string) => s.trim().replace(/\s+/g, " ");
@@ -144,17 +145,29 @@ const ImagesTab = ({
       return;
     }
 
-    // 1) Warmup une seule fois (compile EP, etc.)
+    // Toast de progression + warmup (une seule fois)
+    const toastId = toast.loading("Préparation du modèle...");
     await warmupSession();
+    toast.loading(`Classement 0/${targets.length}...`, { id: toastId });
 
-    // 2) Lancer les inférences en parallèle
-    //    On garde l’ordre pour pouvoir construire un patch propre.
-    const results = await Promise.all(
-      targets.map(async (img) => {
-        const res = await classifyImageToTag(img.dataUrl);
-        return { id: img.id, suggestedTag: (res?.suggestedTag ?? "").toString() };
-      })
-    );
+    // Limiter la concurrence pour éviter de saturer le thread principal
+    const CONCURRENCY = 3;
+    let done = 0;
+    const resultsArr: { id: string; suggestedTag: string }[] = [];
+    for (let i = 0; i < targets.length; i += CONCURRENCY) {
+      const chunk = targets.slice(i, i + CONCURRENCY);
+      const chunkResults = await Promise.all(
+        chunk.map(async (img) => {
+          const res = await classifyImageToTag(img.dataUrl);
+          return { id: img.id, suggestedTag: (res?.suggestedTag ?? "").toString() };
+        })
+      );
+      resultsArr.push(...chunkResults);
+      done += chunkResults.length;
+      toast.loading(`Classement ${done}/${targets.length}...`, { id: toastId });
+      // Laisser un peu de souffle à l'UI
+      await new Promise((r) => setTimeout(r, 0));
+    }
 
     const tagToIds = new Map<string, string[]>();
     const tagsToCreate = new Set<string>();
@@ -162,7 +175,7 @@ const ImagesTab = ({
     // Map des tags existants (clé normalisée -> libellé du projet)
     const existingMap = new Map(project.tags.map((t) => [normalizeTagKey(t), t]));
 
-    for (const { id, suggestedTag } of results) {
+    for (const { id, suggestedTag } of resultsArr) {
       const raw = suggestedTag;
       const key = normalizeTagKey(raw);
       if (!raw) continue;
@@ -194,9 +207,9 @@ const ImagesTab = ({
 
     setClassifying(false);
     if (appliedCount === 0) {
-      showSuccess("Aucun tag appliqué.");
+      toast.success("Aucun tag appliqué.", { id: toastId });
     } else {
-      showSuccess(`Tags appliqués à ${appliedCount} image(s).`);
+      toast.success(`Tags appliqués à ${appliedCount} image(s).`, { id: toastId });
     }
   };
 
