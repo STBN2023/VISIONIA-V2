@@ -8,6 +8,7 @@ import Dropzone from "@/components/uploader/Dropzone";
 import { showError, showSuccess } from "@/utils/toast";
 import { getSettings, saveSettings, type APISettings } from "@/utils/settings";
 import { deleteDataset, deleteOnnxModel, getDatasetManifest, importDatasetFromZip, storeOnnxModelToIdb, type DatasetManifest } from "@/utils/dataset";
+import { calibrateOnVal } from "@/utils/inference";
 
 const zipAccept = "application/zip,application/x-zip-compressed,.zip";
 const onnxAccept = ".onnx,application/octet-stream";
@@ -92,7 +93,7 @@ const DatasetCalibrateCard = () => {
       setClassesOrderText(m.classes.join("\n"));
       showSuccess("Dataset importé avec succès.");
     } catch (e: any) {
-      showError(e?.message || "Échec de l’import du dataset.");
+      showError(e?.message || "Échec de l'import du dataset.");
     } finally {
       setIsImporting(false);
     }
@@ -131,6 +132,45 @@ const DatasetCalibrateCard = () => {
     showSuccess("Métadonnées du modèle enregistrées.");
   };
 
+  const verifyCoherence = () => {
+    if (!manifest) {
+      showError("Importez un dataset d'abord.");
+      return;
+    }
+    const modelClasses = parseClassesOrder(classesOrderText);
+    if (modelClasses.length === 0) {
+      showError("Renseignez l'ordre des classes du modèle.");
+      return;
+    }
+    const missingInModel = manifest.classes.filter((c) => !modelClasses.includes(c));
+    const extraInModel = modelClasses.filter((c) => !manifest.classes.includes(c));
+    if (missingInModel.length === 0 && extraInModel.length === 0) {
+      showSuccess("Cohérence OK: classes dataset et modèle concordent.");
+      return;
+    }
+    const msg = [
+      missingInModel.length ? `Manque dans modèle: ${missingInModel.join(", ")}` : "",
+      extraInModel.length ? `En trop dans modèle: ${extraInModel.join(", ")}` : "",
+    ]
+      .filter(Boolean)
+      .join(" • ");
+    showError(msg || "Incohérence de classes.");
+  };
+
+  const handleCalibrate = async () => {
+    setIsCalibrating(true);
+    setCalibSummary("");
+    try {
+      const res = await calibrateOnVal(perClass);
+      setCalibSummary(res.report);
+      showSuccess(`Seuil calibré: ${res.threshold.toFixed(2)}`);
+    } catch (e: any) {
+      showError(e?.message || "Échec de la calibration.");
+    } finally {
+      setIsCalibrating(false);
+    }
+  };
+
   const handleOnnxPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
@@ -143,7 +183,7 @@ const DatasetCalibrateCard = () => {
       setModelFileName(`${f.name} (id: ${modelId.slice(0, 8)}…)`);
       showSuccess("Modèle ONNX importé en local.");
     } catch (e: any) {
-      showError(e?.message || "Échec de l’import du modèle ONNX.");
+      showError(e?.message || "Échec de l'import du modèle ONNX.");
     }
   };
 
@@ -163,6 +203,10 @@ const DatasetCalibrateCard = () => {
     setModelFileName("");
     showSuccess("Modèle supprimé.");
   };
+
+  const [isCalibrating, setIsCalibrating] = useState(false);
+  const [perClass, setPerClass] = useState<number>(10);
+  const [calibSummary, setCalibSummary] = useState<string>("");
 
   return (
     <Card className="mt-6 rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
@@ -244,7 +288,7 @@ const DatasetCalibrateCard = () => {
             </div>
           ) : (
             <p className="text-xs text-white/70">
-              Conseil: sur iOS Safari, préférez l’import .zip (sélecteur de dossier limité).
+              Conseil: sur iOS Safari, préférez l'import .zip (sélecteur de dossier limité).
             </p>
           )}
         </div>
@@ -306,6 +350,9 @@ const DatasetCalibrateCard = () => {
                 <Button onClick={saveModelMeta} variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10">
                   Enregistrer les métadonnées
                 </Button>
+                <Button onClick={verifyCoherence} variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10">
+                  Vérifier cohérence
+                </Button>
               </div>
             </div>
             <div className="flex flex-col items-start gap-2">
@@ -326,6 +373,34 @@ const DatasetCalibrateCard = () => {
                 <p className="text-xs text-white/70">Chargez un .onnx (≤ ~20 Mo recommandé).</p>
               )}
             </div>
+          </div>
+        </div>
+
+        {/* Calibration */}
+        <div className="space-y-2">
+          <Label>Calibration automatique (val)</Label>
+          <div className="rounded-2xl border border-white/20 bg-white/5 p-3">
+            <div className="grid gap-3 sm:grid-cols-[220px,1fr] sm:items-center">
+              <div className="space-y-1">
+                <Label className="text-xs text-white/70">Échantillons par classe (val)</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={perClass}
+                  onChange={(e) => setPerClass(Number(e.target.value || 10))}
+                  className="bg-white/10 text-white"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <Button onClick={handleCalibrate} disabled={isCalibrating} className="backdrop-blur-sm">
+                  {isCalibrating ? "Calibration..." : "Calibrer automatiquement"}
+                </Button>
+              </div>
+            </div>
+            {calibSummary ? (
+              <pre className="mt-3 whitespace-pre-wrap rounded-xl bg-black/20 p-3 text-xs text-white/80">{calibSummary}</pre>
+            ) : null}
           </div>
         </div>
       </CardContent>
