@@ -20,12 +20,12 @@ type Props = {
   setTagFilter: (v: "all" | ImageTag) => void;
   onAddFiles: (files: FileList | File[] | null) => void;
   onDeleteImage: (imgId: string) => void;
-  onUpdateTag: (imgId: string, tag?: ImageTag) => void;
-  onBulkUpdateTags: (ids: string[], tag?: ImageTag) => void;
+  onUpdateTag: (imgId: string, tag?: ImageTag) => Promise<void>;
+  onBulkUpdateTags: (ids: string[], tag?: ImageTag) => Promise<void>;
   onUpdateImageTemplate: (imgId: string, templateId?: string) => void;
   onMoveImage: (imgId: string, direction: "left" | "right") => void;
-  onCreateTag: (label: string) => void;
-  onDeleteTag: (label: string) => void;
+  onCreateTag: (label: string) => Promise<void>;
+  onDeleteTag: (label: string) => Promise<void>;
 };
 
 const ImagesTab = ({
@@ -62,11 +62,11 @@ const ImagesTab = ({
   const [bulkExistingTag, setBulkExistingTag] = useState<"none" | string>("none");
   const [bulkNewTag, setBulkNewTag] = useState("");
 
-  const addTag = () => {
+  const addTag = async () => {
     const label = newTag.trim();
     if (!label) return;
     if (!project.tags.includes(label)) {
-      onCreateTag(label);
+      await onCreateTag(label);
     }
     setNewTag("");
   };
@@ -83,14 +83,14 @@ const ImagesTab = ({
 
   const clearSelection = () => setSelected({});
 
-  const applyBulkTag = () => {
+  const applyBulkTag = async () => {
     if (selectedCount === 0) return;
     let toApply: string | undefined = undefined;
 
     const newLabel = bulkNewTag.trim();
     if (newLabel) {
       if (!project.tags.includes(newLabel)) {
-        onCreateTag(newLabel);
+        await onCreateTag(newLabel);
       }
       toApply = newLabel;
     } else if (bulkExistingTag !== "none") {
@@ -99,11 +99,12 @@ const ImagesTab = ({
       toApply = undefined; // retirer le tag
     }
 
-    // Patch unique si dispo, sinon fallback par image
     if (typeof onBulkUpdateTags === "function") {
-      onBulkUpdateTags(selectedIds, toApply);
+      await onBulkUpdateTags(selectedIds, toApply);
     } else {
-      selectedIds.forEach((id) => onUpdateTag(id, toApply));
+      for (const id of selectedIds) {
+        await onUpdateTag(id, toApply);
+      }
     }
 
     showSuccess(
@@ -136,28 +137,42 @@ const ImagesTab = ({
 
     const tagToIds = new Map<string, string[]>();
     const tagsToCreate = new Set<string>();
+    const IGNORE = new Set(["plain"]);
 
     for (const img of targets) {
       const res = await classifyImageToTag(img.dataUrl);
-      const tag = res.suggestedTag;
-      if (tag && !project.tags.includes(tag)) tagsToCreate.add(tag);
-      const arr = tagToIds.get(tag) || [];
+      const raw = (res?.suggestedTag ?? "").toString();
+      const norm = raw.trim().toLowerCase();
+
+      // Ignorer les classes "normales"
+      if (!raw || IGNORE.has(norm)) {
+        continue;
+      }
+
+      if (!project.tags.includes(raw)) tagsToCreate.add(raw);
+      const arr = tagToIds.get(raw) || [];
       arr.push(img.id);
-      tagToIds.set(tag, arr);
+      tagToIds.set(raw, arr);
     }
 
-    // Créer les tags manquants
+    // Créer les tags manquants (séquentiel)
     for (const t of Array.from(tagsToCreate)) {
-      onCreateTag(t);
+      await onCreateTag(t);
     }
 
-    // Appliquer par lot (réduction des patchs)
+    // Appliquer par lot (séquentiel pour éviter les courses)
+    let appliedCount = 0;
     for (const [tag, ids] of tagToIds.entries()) {
-      onBulkUpdateTags(ids, tag);
+      await onBulkUpdateTags(ids, tag);
+      appliedCount += ids.length;
     }
 
     setClassifying(false);
-    showSuccess(`Tags appliqués à ${targets.length} image(s).`);
+    if (appliedCount === 0) {
+      showSuccess('Aucun tag appliqué (classe "plain" ignorée).');
+    } else {
+      showSuccess(`Tags appliqués à ${appliedCount} image(s).`);
+    }
   };
 
   return (
@@ -346,11 +361,11 @@ const ImagesTab = ({
                 />
                 <Button
                   variant="outline"
-                  onClick={() => {
+                  onClick={async () => {
                     const t = bulkNewTag.trim();
                     if (!t) return;
                     if (!project.tags.includes(t)) {
-                      onCreateTag(t);
+                      await onCreateTag(t);
                     }
                   }}
                   className="border-white/30 bg-transparent text-white hover:bg-white/10"
