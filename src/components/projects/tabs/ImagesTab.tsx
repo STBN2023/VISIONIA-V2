@@ -143,7 +143,8 @@ const ImagesTab = ({
 
     const tagToIds = new Map<string, string[]>();
     const tagsToCreate = new Set<string>();
-    const IGNORE_KEYS = new Set(["plain"]);
+    // On n'ignore plus "plain" pour que toutes les images soient taguées
+    // const IGNORE_KEYS = new Set(["plain"]);
 
     // Map des tags existants (clé normalisée -> libellé du projet)
     const existingMap = new Map(project.tags.map((t) => [normalizeTagKey(t), t]));
@@ -153,8 +154,8 @@ const ImagesTab = ({
       const raw = (res?.suggestedTag ?? "").toString();
       const key = normalizeTagKey(raw);
 
-      // Ignorer les classes "normales"
-      if (!raw || IGNORE_KEYS.has(key)) {
+      // Ne rien ignorer; si le modèle renvoie un label vide, on passe
+      if (!raw) {
         continue;
       }
 
@@ -185,7 +186,7 @@ const ImagesTab = ({
 
     setClassifying(false);
     if (appliedCount === 0) {
-      showSuccess('Aucun tag appliqué (classe "plain" ignorée).');
+      showSuccess("Aucun tag appliqué.");
     } else {
       showSuccess(`Tags appliqués à ${appliedCount} image(s).`);
     }
