@@ -154,6 +154,21 @@ function extractFirstJsonObject(text: string): any | null {
   }
 }
 
+// Détecte les réponses de refus typiques pour éviter de les afficher en sortie utilisateur
+function isLikelyRefusal(text: string): boolean {
+  const s = String(text || "").toLowerCase();
+  return (
+    /\bi (can('|’)?t|cannot)\s+(assist|help)/.test(s) ||
+    s.includes("i'm sorry") ||
+    s.includes("i am sorry") ||
+    s.includes("as an ai") ||
+    s.includes("je ne peux pas") ||
+    s.includes("désolé") ||
+    s.includes("je ne suis pas en mesure") ||
+    s.includes("je ne suis pas autorisé")
+  );
+}
+
 function toTitle(s: string) {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
@@ -402,7 +417,7 @@ export async function analyzeLLM(input: {
     return {
       ok: false,
       error:
-        "Aucune clé API détectée. Renseignez votre clé dans Paramètres pour lancer l’analyse.",
+        "Aucune clé API détectée. Renseignez votre clé dans Paramètres pour lancer l'analyse.",
     };
   }
 
@@ -447,9 +462,14 @@ export async function analyzeLLM(input: {
             max_tokens,
           });
 
+          const baseText = (perImageText && String(perImageText)) || "";
+          const finalText = isLikelyRefusal(baseText)
+            ? ((summary && String(summary)) || "")
+            : baseText;
+
           return {
             imageId: img.id,
-            outputText: (perImageText && String(perImageText)) || (summary && String(summary)) || "",
+            outputText: finalText,
             boxes,
           };
         }),
@@ -475,13 +495,13 @@ export async function analyzeLLM(input: {
             const { boxes, summary } = toBoxes(parsed);
             return {
               imageId: img.id,
-              outputText: (summary && String(summary)) || raw,
+              outputText: (summary && String(summary)) || (isLikelyRefusal(raw) ? "" : raw),
               boxes,
             };
           } else {
             return {
               imageId: img.id,
-              outputText: raw,
+              outputText: isLikelyRefusal(raw) ? "" : raw,
               boxes: [],
             };
           }
@@ -490,6 +510,6 @@ export async function analyzeLLM(input: {
       return { ok: true, mode: "per_image", items };
     }
   } catch (e: any) {
-    return { ok: false, error: e?.message || "Erreur lors de l’appel OpenAI" };
+    return { ok: false, error: e?.message || "Erreur lors de l'appel OpenAI" };
   }
 }
