@@ -251,7 +251,7 @@ const ImagesTab = ({
     const appliedCount = Object.keys(patch).length;
     toast.success(
       appliedCount === 0 ? "Aucun tag appliqué." : `Tags appliqués à ${appliedCount} image(s).`,
-      { id: toastId }
+      { id: toastId, duration: 3500 }
     );
   };
 
