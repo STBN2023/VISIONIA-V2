@@ -11,6 +11,7 @@ import type { ImageTag, ProjectImage } from "@/utils/storage";
 import type { PromptTemplate } from "@/utils/prompts";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 
 type Props = {
   img: ProjectImage;
@@ -26,6 +27,9 @@ type Props = {
   selectMode?: boolean;
   selected?: boolean;
   onSelectChange?: (imgId: string, selected: boolean) => void;
+  // Infos de classification (optionnelles, non persistées)
+  classificationScore?: number;
+  classificationLabel?: string;
 };
 
 const ImageCard = ({
@@ -42,6 +46,8 @@ const ImageCard = ({
   selectMode = false,
   selected = false,
   onSelectChange,
+  classificationScore,
+  classificationLabel,
 }: Props) => {
   const [openOptions, setOpenOptions] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -77,8 +83,10 @@ const ImageCard = ({
             onClick={handleImageClick}
           />
 
+          {/* Gradient bas */}
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/35 via-black/10 to-transparent" />
 
+          {/* Sélection */}
           {selectMode ? (
             <div className="absolute left-2 top-2 z-10 rounded-xl bg-black/40 p-1 backdrop-blur-md">
               <Checkbox
@@ -87,6 +95,16 @@ const ImageCard = ({
                 aria-label={selected ? "Désélectionner l'image" : "Sélectionner l'image"}
                 className="data-[state=checked]:bg-white data-[state=checked]:text-black"
               />
+            </div>
+          ) : null}
+
+          {/* Badge score de classification */}
+          {typeof classificationScore === "number" ? (
+            <div className="absolute right-2 top-2 z-10">
+              <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-md">
+                {Math.round(classificationScore * 100)}%
+                {classificationLabel ? ` • ${classificationLabel}` : ""}
+              </Badge>
             </div>
           ) : null}
         </div>
@@ -217,7 +235,7 @@ const ImageCard = ({
       <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
         <GlassDialogContent className="max-w-5xl p-0">
           <DialogHeader className="sr-only">
-            <DialogTitle>Aperçu de l’image</DialogTitle>
+            <DialogTitle>Aperçu de l'image</DialogTitle>
             <DialogDescription>Prévisualisation plein écran de {img.name}</DialogDescription>
           </DialogHeader>
           <img

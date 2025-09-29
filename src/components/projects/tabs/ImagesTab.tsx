@@ -73,6 +73,9 @@ const ImagesTab = ({
   const [bulkExistingTag, setBulkExistingTag] = useState<"none" | string>("none");
   const [bulkNewTag, setBulkNewTag] = useState("");
 
+  // Scores/labels de classification en mémoire (non persistés)
+  const [classifMap, setClassifMap] = useState<Record<string, { score: number; label: string }>>({});
+
   const addTag = async () => {
     const label = normalizeTagLabel(newTag);
     if (!label) return;
@@ -154,7 +157,7 @@ const ImagesTab = ({
 
     const CONCURRENCY = 1;
     let done = 0;
-    const resultsArr: { id: string; suggestedTag: string }[] = [];
+    const resultsArr: { id: string; suggestedTag: string; topScore?: number }[] = [];
 
     const yieldUI = () => new Promise<void>((resolve) => {
       requestAnimationFrame(() => resolve());
@@ -165,10 +168,20 @@ const ImagesTab = ({
       const chunkResults = await Promise.all(
         chunk.map(async (img) => {
           const res = await classifyImageToTag(img.dataUrl);
-          return { id: img.id, suggestedTag: (res?.suggestedTag ?? "").toString() };
+          return { id: img.id, suggestedTag: (res?.suggestedTag ?? "").toString(), topScore: res?.topScore };
         })
       );
       resultsArr.push(...chunkResults);
+      // mettre à jour la carte des scores au fil de l'eau
+      setClassifMap((prev) => {
+        const next = { ...prev };
+        for (const r of chunkResults) {
+          if (typeof r.topScore === "number") {
+            next[r.id] = { score: r.topScore, label: r.suggestedTag || "" };
+          }
+        }
+        return next;
+      });
       done += chunkResults.length;
       toast.loading(`Classement ${done}/${targets.length}…`, { id: toastId, duration: Infinity });
       await yieldUI();
@@ -448,6 +461,7 @@ const ImagesTab = ({
             const canLeft = idx > 0;
             const canRight = idx < project.images.length - 1;
             const isSelected = !!selected[img.id];
+            const cls = classifMap[img.id];
 
             return (
               <ImageCard
@@ -468,6 +482,9 @@ const ImagesTab = ({
                 onSelectChange={(id, s) =>
                   setSelected((prev) => ({ ...prev, [id]: s }))
                 }
+                // Affichage du pourcentage de classification (si disponible)
+                classificationScore={cls?.score}
+                classificationLabel={cls?.label}
               />
             );
           })}
