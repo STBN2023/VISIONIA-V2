@@ -1,4 +1,3 @@
-tags, et charger un modèle ONNX.">
 import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -262,7 +261,8 @@ const DatasetCalibrateCard = () => {
                     <Input
                       value={mapping[cls] ?? ""}
                       onChange={(e) => setMapping((m) => ({ ...m, [cls]: e.target.value }))}
-                      placeholder={defaultTagForClass(cls) || "tag (vide = aucun)"}
+                      placeholder={defaultTagForClass(cls) || "tag (vide = aucun)"
+                      }
                       className="bg-white/10 text-white placeholder:text-white/50"
                     />
                   </div>
