@@ -43,6 +43,7 @@ const DatasetCalibrateCard = () => {
   const [modelFileName, setModelFileName] = useState<string>("");
   const [inputSize, setInputSize] = useState<number>(224);
   const [classesOrderText, setClassesOrderText] = useState<string>("");
+  const [onnxUrl, setOnnxUrl] = useState<string>("");
 
   const settings = useMemo(() => getSettings(), []);
 
@@ -65,6 +66,10 @@ const DatasetCalibrateCard = () => {
           setInputSize(settings.modelMeta?.inputSize || 224);
         }
       });
+    }
+    // Pré-remplir l'URL si un modèle via URL est déjà enregistré
+    if (settings.modelRef?.source === "url") {
+      setOnnxUrl(settings.modelRef.value);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -151,10 +156,30 @@ const DatasetCalibrateCard = () => {
     const msg = [
       missingInModel.length ? `Manque dans modèle: ${missingInModel.join(", ")}` : "",
       extraInModel.length ? `En trop dans modèle: ${extraInModel.join(", ")}` : "",
-    ]
-      .filter(Boolean)
-      .join(" • ");
+    ].filter(Boolean).join(" • ");
     showError(msg || "Incohérence de classes.");
+  };
+
+  const setModelFromUrl = () => {
+    const url = onnxUrl.trim();
+    if (!url) {
+      showError("Renseignez une URL de modèle ONNX.");
+      return;
+    }
+    if (!/^https?:\/\//i.test(url) && !url.startsWith("data:")) {
+      showError("URL invalide (http(s) ou data:).");
+      return;
+    }
+    saveSettings({ modelRef: { source: "url", value: url } });
+    setModelFileName("");
+    showSuccess("Modèle ONNX défini via URL.");
+  };
+
+  const clearModelSelection = () => {
+    saveSettings({ modelRef: undefined, modelMeta: undefined });
+    setOnnxUrl("");
+    setModelFileName("");
+    showSuccess("Modèle désélectionné.");
   };
 
   const handleCalibrate = async () => {
@@ -198,10 +223,10 @@ const DatasetCalibrateCard = () => {
 
   const removeModel = async () => {
     const mr = getSettings().modelRef;
-    if (!mr?.value) return;
-    await deleteOnnxModel(mr.value);
-    setModelFileName("");
-    showSuccess("Modèle supprimé.");
+    if (mr?.source === "idb" && mr.value) {
+      await deleteOnnxModel(mr.value);
+    }
+    clearModelSelection();
   };
 
   const [isCalibrating, setIsCalibrating] = useState(false);
@@ -355,7 +380,7 @@ const DatasetCalibrateCard = () => {
                 </Button>
               </div>
             </div>
-            <div className="flex flex-col items-start gap-2">
+            <div className="flex flex-col items-start gap-3">
               <Input
                 type="file"
                 accept={onnxAccept}
@@ -372,6 +397,25 @@ const DatasetCalibrateCard = () => {
               ) : (
                 <p className="text-xs text-white/70">Chargez un .onnx (≤ ~20 Mo recommandé).</p>
               )}
+              <div className="w-full space-y-2">
+                <Label className="text-xs text-white/70">Ou URL du modèle</Label>
+                <Input
+                  value={onnxUrl}
+                  onChange={(e) => setOnnxUrl(e.target.value)}
+                  placeholder="https://…/model.onnx ou data:application/octet-stream;base64,..."
+                  className="bg-white/10 text-white placeholder:text-white/60"
+                />
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={setModelFromUrl} className="border-white/30 bg-transparent text-white hover:bg-white/10">
+                    Utiliser l'URL
+                  </Button>
+                  {onnxUrl ? (
+                    <Button variant="ghost" onClick={clearModelSelection} className="text-white/90 hover:bg-white/10">
+                      Effacer l'URL
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -393,7 +437,12 @@ const DatasetCalibrateCard = () => {
                 />
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Button onClick={handleCalibrate} disabled={isCalibrating} className="backdrop-blur-sm">
+                <Button 
+                  onClick={handleCalibrate} 
+                  disabled={isCalibrating || (!modelFileName && !onnxUrl.trim())}
+                  className="backdrop-blur-sm"
+                  title={!modelFileName && !onnxUrl.trim() ? "Définissez un modèle (fichier ou URL) pour activer la calibration" : undefined}
+                >
                   {isCalibrating ? "Calibration..." : "Calibrer automatiquement"}
                 </Button>
               </div>
