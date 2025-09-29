@@ -1,3 +1,4 @@
+tag en une seule mise à jour, et le passer à ImagesTab.">
 import { useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -242,13 +243,23 @@ const ProjectDetail = () => {
     setProject(updated);
   };
 
+  // Appliquer un patch id -> tag en une seule fois (évite les états périmés)
+  const handleApplyTagsPatch = async (patchMap: Record<string, ImageTag | undefined>) => {
+    if (!project) return;
+    const nextImages = project.images.map((i) =>
+      Object.prototype.hasOwnProperty.call(patchMap, i.id) ? { ...i, tag: patchMap[i.id] } : i
+    );
+    const updated = await updateProject(project.id, { images: nextImages })!;
+    setProject(updated);
+  };
+
   const handleUpdateImageTemplate = async (imgId: string, templateId?: string) => {
     if (!project) return;
     const updated = await updateProject(project.id, {
       images: project.images.map((i) => (i.id === imgId ? { ...i, templateId } : i)),
     })!;
     setProject(updated);
-    showSuccess("Template appliqué à l’image");
+    showSuccess("Template appliqué à l'image");
   };
 
   const moveImage = async (imgId: string, direction: "left" | "right") => {
@@ -325,6 +336,7 @@ const ProjectDetail = () => {
               onMoveImage={moveImage}
               onCreateTag={handleCreateTag}
               onDeleteTag={handleDeleteTag}
+              onApplyTagsPatch={handleApplyTagsPatch}
             />
           </TabsContent>
 

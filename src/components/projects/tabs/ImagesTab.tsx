@@ -1,3 +1,4 @@
+tag.">
 import { useMemo, useState } from "react";
 import Dropzone from "@/components/uploader/Dropzone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,7 @@ type Props = {
   onMoveImage: (imgId: string, direction: "left" | "right") => void;
   onCreateTag: (label: string) => Promise<void>;
   onDeleteTag: (label: string) => Promise<void>;
+  onApplyTagsPatch: (patch: Record<string, ImageTag | undefined>) => Promise<void>;
 };
 
 const ImagesTab = ({
@@ -45,6 +47,7 @@ const ImagesTab = ({
   onMoveImage,
   onCreateTag,
   onDeleteTag,
+  onApplyTagsPatch,
 }: Props) => {
   const filteredImages = useMemo(() => {
     return project.images.filter((img) => (tagFilter === "all" ? true : img.tag === tagFilter));
@@ -143,8 +146,6 @@ const ImagesTab = ({
 
     const tagToIds = new Map<string, string[]>();
     const tagsToCreate = new Set<string>();
-    // On n'ignore plus "plain" pour que toutes les images soient taguées
-    // const IGNORE_KEYS = new Set(["plain"]);
 
     // Map des tags existants (clé normalisée -> libellé du projet)
     const existingMap = new Map(project.tags.map((t) => [normalizeTagKey(t), t]));
@@ -154,12 +155,8 @@ const ImagesTab = ({
       const raw = (res?.suggestedTag ?? "").toString();
       const key = normalizeTagKey(raw);
 
-      // Ne rien ignorer; si le modèle renvoie un label vide, on passe
-      if (!raw) {
-        continue;
-      }
+      if (!raw) continue;
 
-      // Choisir le libellé final: on réutilise celui du projet si présent, sinon on normalise le brut
       const finalLabel = existingMap.get(key) ?? normalizeTagLabel(raw);
 
       if (!existingMap.has(key)) {
@@ -177,11 +174,14 @@ const ImagesTab = ({
       existingMap.set(normalizeTagKey(t), t);
     }
 
-    // Appliquer par lot (séquentiel)
-    let appliedCount = 0;
+    // Construire un patch id -> tag et l'appliquer en une seule fois
+    const patch: Record<string, ImageTag | undefined> = {};
     for (const [tag, ids] of tagToIds.entries()) {
-      await onBulkUpdateTags(ids, tag);
-      appliedCount += ids.length;
+      for (const id of ids) patch[id] = tag;
+    }
+    const appliedCount = Object.keys(patch).length;
+    if (appliedCount > 0) {
+      await onApplyTagsPatch(patch);
     }
 
     setClassifying(false);
