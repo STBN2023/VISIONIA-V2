@@ -33,6 +33,8 @@ type Props = {
   onCreateTag: (label: string) => Promise<void>;
   onDeleteTag: (label: string) => Promise<void>;
   onApplyTagsPatch: (patch: Record<string, ImageTag | undefined>) => Promise<void>;
+  // nouvelle prop optionnelle pour un apply atomique
+  onApplyTagsBatch?: (input: { createTags: string[]; patch: Record<string, ImageTag | undefined> }) => Promise<void>;
 };
 
 const ImagesTab = ({
@@ -49,6 +51,7 @@ const ImagesTab = ({
   onCreateTag,
   onDeleteTag,
   onApplyTagsPatch,
+  onApplyTagsBatch,
 }: Props) => {
   const filteredImages = useMemo(() => {
     return project.images.filter((img) => (tagFilter === "all" ? true : img.tag === tagFilter));
@@ -144,19 +147,15 @@ const ImagesTab = ({
       return;
     }
 
-    // Afficher la progression tout de suite (avant warmup)
     const toastId = toast.loading(`Préparation du modèle…`, { duration: Infinity });
 
-    // Warmup une seule fois
     await warmupSession();
     toast.loading(`Classement 0/${targets.length}…`, { id: toastId, duration: Infinity });
 
-    // Concurrence minimale pour garder l'UI fluide
     const CONCURRENCY = 1;
     let done = 0;
     const resultsArr: { id: string; suggestedTag: string }[] = [];
 
-    // Fonction pour laisser respirer l'UI
     const yieldUI = () => new Promise<void>((resolve) => {
       requestAnimationFrame(() => resolve());
     });
@@ -172,8 +171,6 @@ const ImagesTab = ({
       resultsArr.push(...chunkResults);
       done += chunkResults.length;
       toast.loading(`Classement ${done}/${targets.length}…`, { id: toastId, duration: Infinity });
-
-      // Laisser le temps au navigateur d'afficher le toast et peindre l'UI
       await yieldUI();
     }
 
@@ -182,11 +179,11 @@ const ImagesTab = ({
     const existingMap = new Map(project.tags.map((t) => [normalizeTagKey(t), t]));
 
     for (const { id, suggestedTag } of resultsArr) {
-      const raw = suggestedTag;
-      const key = normalizeTagKey(raw);
+      const raw = normalizeTagLabel(suggestedTag);
       if (!raw) continue;
+      const key = normalizeTagKey(raw);
 
-      const finalLabel = existingMap.get(key) ?? normalizeTagLabel(raw);
+      const finalLabel = existingMap.get(key) ?? raw;
       if (!existingMap.has(key)) {
         tagsToCreate.add(finalLabel);
       }
@@ -195,21 +192,28 @@ const ImagesTab = ({
       tagToIds.set(finalLabel, arr);
     }
 
-    for (const t of Array.from(tagsToCreate)) {
-      await onCreateTag(t);
-      existingMap.set(normalizeTagKey(t), t);
-    }
-
+    // Construire le patch imageId -> tag
     const patch: Record<string, ImageTag | undefined> = {};
-    for (const [tag, ids] of tagToIds.entries()) {
-      for (const id of ids) patch[id] = tag;
+    for (const [label, ids] of tagToIds.entries()) {
+      for (const imgId of ids) patch[imgId] = label;
     }
-    const appliedCount = Object.keys(patch).length;
-    if (appliedCount > 0) {
-      await onApplyTagsPatch(patch);
+    const createTags = Array.from(tagsToCreate);
+
+    // Flux atomique si disponible, sinon fallback (ancien flux)
+    if (onApplyTagsBatch) {
+      await onApplyTagsBatch({ createTags, patch });
+    } else {
+      for (const t of createTags) {
+        await onCreateTag(t);
+      }
+      const appliedCount = Object.keys(patch).length;
+      if (appliedCount > 0) {
+        await onApplyTagsPatch(patch);
+      }
     }
 
     setClassifying(false);
+    const appliedCount = Object.keys(patch).length;
     toast.success(
       appliedCount === 0 ? "Aucun tag appliqué." : `Tags appliqués à ${appliedCount} image(s).`,
       { id: toastId }

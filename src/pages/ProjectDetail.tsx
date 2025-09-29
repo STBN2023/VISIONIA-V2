@@ -252,6 +252,20 @@ const ProjectDetail = () => {
     setProject(updated);
   };
 
+  // Nouvelle version atomique: création de tags + patch images en UNE seule écriture
+  const handleApplyTagsBatch = async (input: { createTags: string[]; patch: Record<string, ImageTag | undefined> }) => {
+    if (!project) return;
+    const createTags = Array.from(new Set((input.createTags || []).map((t) => t.trim()).filter(Boolean)));
+    const nextTags = Array.from(new Set([...(project.tags || []), ...createTags])).sort((a, b) => a.localeCompare(b));
+
+    const nextImages = project.images.map((i) =>
+      Object.prototype.hasOwnProperty.call(input.patch, i.id) ? { ...i, tag: input.patch[i.id] } : i
+    );
+
+    const updated = await updateProject(project.id, { tags: nextTags, images: nextImages })!;
+    setProject(updated);
+  };
+
   const handleUpdateImageTemplate = async (imgId: string, templateId?: string) => {
     if (!project) return;
     const updated = await updateProject(project.id, {
@@ -336,6 +350,7 @@ const ProjectDetail = () => {
               onCreateTag={handleCreateTag}
               onDeleteTag={handleDeleteTag}
               onApplyTagsPatch={handleApplyTagsPatch}
+              onApplyTagsBatch={handleApplyTagsBatch}
             />
           </TabsContent>
 
