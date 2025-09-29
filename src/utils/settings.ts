@@ -2,21 +2,59 @@ export type APIProvider = "openai" | "anthropic" | "google" | "azure";
 export type BackgroundMode = "image" | "color";
 export type ThemePreset = "violet" | "blue" | "neutral";
 
+export type DatasetRef = { datasetId: string; datasetName: string };
+export type ClassesDetected = {
+  unionClasses: string[];
+  perSplitClasses: {
+    train: string[];
+    val: string[];
+    test: string[];
+  };
+};
+export type ModelRef = { source: "idb" | "url"; value: string };
+export type ModelMeta = {
+  inputSize: number;
+  channelsOrder: "RGB";
+  normalization?: { scale?: number; mean?: number[]; std?: number[] };
+  classesOrder: string[];
+  version?: string;
+};
+export type InferenceSettings = {
+  threshold: number;
+  backendPreference?: "webgpu" | "webgl" | "wasm";
+  batchSize?: number;
+  warmup?: boolean;
+};
+
 export type APISettings = {
   provider: APIProvider;
   apiKey?: string;
   model?: string;
   temperature?: number;
   maxTokens?: number;
-  endpoint?: string; // custom endpoint (ex: Azure/OpenAI proxy)
-  azureDeployment?: string; // nom du déploiement Azure OpenAI si provider=azure
+  endpoint?: string;
+  azureDeployment?: string;
   // Apparence
-  backgroundMode?: BackgroundMode; // image | color
+  backgroundMode?: BackgroundMode;
   backgroundImage?: string;
-  backgroundColor?: string; // hex
-  backgroundDim?: number; // 0..100 (voile sombre)
-  themePreset?: ThemePreset; // palette d’accent globale
-  brightness?: number; // 50..150 % (100 par défaut)
+  backgroundColor?: string;
+  backgroundDim?: number;
+  themePreset?: ThemePreset;
+  brightness?: number;
+  // Dataset & IA
+  datasetRef?: DatasetRef;
+  classesDetected?: ClassesDetected;
+  classMapping?: Record<string, string>;
+  modelRef?: ModelRef;
+  modelMeta?: ModelMeta;
+  inference?: InferenceSettings;
+  calibrationReport?: {
+    date: string;
+    sampleSize?: number;
+    criterion?: string;
+    thresholdRecommended?: number;
+    metricsSummary?: string;
+  };
   updatedAt: string;
 };
 
@@ -35,6 +73,14 @@ export function getDefaultSettings(): APISettings {
     backgroundDim: 20,
     themePreset: "violet",
     brightness: 100,
+    // Defaults Dataset & IA
+    datasetRef: undefined,
+    classesDetected: undefined,
+    classMapping: undefined,
+    modelRef: undefined,
+    modelMeta: undefined,
+    inference: { threshold: 0.6, backendPreference: "webgpu", batchSize: 1, warmup: false },
+    calibrationReport: undefined,
     updatedAt: new Date().toISOString(),
   };
 }
@@ -47,8 +93,9 @@ export function getSettings(): APISettings {
     return {
       ...getDefaultSettings(),
       ...parsed,
-      // normalisation douce
       brightness: typeof parsed.brightness === "number" ? parsed.brightness : 100,
+      // garder inference et autres telles quelles si définies
+      inference: parsed.inference || getDefaultSettings().inference,
     };
   } catch {
     return getDefaultSettings();
@@ -66,7 +113,6 @@ export function saveSettings(patch: Partial<APISettings>): APISettings {
     updatedAt: new Date().toISOString(),
   };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  // Notifier l'app (update dynamique du fond)
   try {
     if (typeof window !== "undefined") {
       window.dispatchEvent(new CustomEvent("settings:updated", { detail: next }));

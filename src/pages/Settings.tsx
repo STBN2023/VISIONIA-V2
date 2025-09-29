@@ -12,6 +12,7 @@ import { showSuccess, showError } from "@/utils/toast";
 import { getSettings, saveSettings, type APIProvider, type BackgroundMode, type ThemePreset } from "@/utils/settings";
 import { GlassShell } from "@/components/layout/GlassShell";
 import { compressImageToBlob, blobToDataUrl } from "@/utils/image-compress";
+import DatasetCalibrateCard from "@/components/settings/DatasetCalibrateCard";
 
 const MAX_BG_BYTES = 2.5 * 1024 * 1024; // ~2.5 Mo pour rester sous la limite de localStorage
 
@@ -81,6 +82,14 @@ const Settings = () => {
     setBrightness(next.brightness ?? 100);
     showSuccess("Paramètres enregistrés");
   };
+
+  // Gestion image de fond locale
+  async function handlePickBackgroundFile(f: File) {
+    // Compression rapide pour rester sous quota
+    const blob = await compressImageToBlob(f, { maxWidth: 2400, quality: 0.82 });
+    const dataUrl = await blobToDataUrl(blob);
+    setBackgroundImage(dataUrl);
+  }
 
   return (
     <GlassShell>
@@ -340,6 +349,9 @@ const Settings = () => {
             <Button onClick={handleSave} className="backdrop-blur-sm">Enregistrer</Button>
           </CardFooter>
         </Card>
+
+        {/* Dataset & Calibrage (YOLOv5-cls) */}
+        <DatasetCalibrateCard />
       </main>
     </GlassShell>
   );
