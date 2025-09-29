@@ -14,6 +14,7 @@ import { showSuccess, showError } from "@/utils/toast";
 import { classifyImageToTag, isModelConfigured } from "@/utils/classifier";
 import { warmupSession } from "@/utils/inference";
 import { toast } from "sonner";
+import { applyCorrectionPreference, recordCorrection } from "@/utils/corrections";
 
 // Helpers de normalisation (évite espaces en trop et casse différente)
 const normalizeTagLabel = (s: string) => s.trim().replace(/\s+/g, " ");
@@ -76,6 +77,15 @@ const ImagesTab = ({
   // Scores/labels de classification en mémoire (non persistés)
   const [classifMap, setClassifMap] = useState<Record<string, { score: number; label: string }>>({});
 
+  // Wrapper: enregistre une correction quand l'utilisateur modifie un tag après une suggestion
+  const handleUpdateTagWithLearning = async (imgId: string, tag?: ImageTag) => {
+    const prevSuggested = classifMap[imgId]?.label; // tag suggéré affiché
+    await onUpdateTag(imgId, tag);
+    if (prevSuggested && tag && prevSuggested !== tag) {
+      recordCorrection(prevSuggested, tag);
+    }
+  };
+
   const addTag = async () => {
     const label = normalizeTagLabel(newTag);
     if (!label) return;
@@ -120,6 +130,16 @@ const ImagesTab = ({
     } else {
       for (const id of selectedIds) {
         await onUpdateTag(id, toApply);
+      }
+    }
+
+    // Apprentissage: si on applique un tag et qu'une suggestion précédente existait et diffère, on l'enregistre
+    if (toApply) {
+      for (const id of selectedIds) {
+        const prevSuggested = classifMap[id]?.label;
+        if (prevSuggested && prevSuggested !== toApply) {
+          recordCorrection(prevSuggested, toApply);
+        }
       }
     }
 
@@ -168,7 +188,9 @@ const ImagesTab = ({
       const chunkResults = await Promise.all(
         chunk.map(async (img) => {
           const res = await classifyImageToTag(img.dataUrl);
-          return { id: img.id, suggestedTag: (res?.suggestedTag ?? "").toString(), topScore: res?.topScore };
+          const rawSuggested = (res?.suggestedTag ?? "").toString();
+          const adjustedSuggested = applyCorrectionPreference(rawSuggested);
+          return { id: img.id, suggestedTag: adjustedSuggested, topScore: res?.topScore };
         })
       );
       resultsArr.push(...chunkResults);
@@ -473,7 +495,7 @@ const ImagesTab = ({
                 availableTags={project.tags}
                 onMoveImage={onMoveImage}
                 onDeleteImage={onDeleteImage}
-                onUpdateTag={onUpdateTag}
+                onUpdateTag={handleUpdateTagWithLearning}
                 onUpdateImageTemplate={onUpdateImageTemplate}
                 onCreateTag={onCreateTag}
                 // Sélection multiple
