@@ -6,11 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Image as ImageIcon, Upload, X } from "lucide-react";
+import { Image as ImageIcon, Upload, X, Sparkles } from "lucide-react";
 import type { ImageTag, Project } from "@/utils/storage";
 import type { PromptTemplate } from "@/utils/prompts";
 import ImageCard from "@/components/uploader/ImageCard";
-import { showSuccess } from "@/utils/toast";
+import { showSuccess, showError } from "@/utils/toast";
+import { classifyImageToTag, isModelConfigured } from "@/utils/classifier";
 
 type Props = {
   project: Project;
@@ -46,6 +47,7 @@ const ImagesTab = ({
   }, [project.images, tagFilter]);
 
   const [newTag, setNewTag] = useState("");
+  const [classifying, setClassifying] = useState(false);
 
   // Mode sélection pour tagging en masse
   const [selectMode, setSelectMode] = useState(false);
@@ -113,6 +115,49 @@ const ImagesTab = ({
     setBulkNewTag("");
     clearSelection();
     setSelectMode(false);
+  };
+
+  const handleClassifyAndTag = async () => {
+    if (!isModelConfigured()) {
+      showError("Aucun modèle ONNX configuré. Allez dans Paramètres > Dataset & Calibrage.");
+      return;
+    }
+    if (filteredImages.length === 0) return;
+    setClassifying(true);
+
+    // Cible: sélection si active et non vide, sinon tout le filtre courant
+    const targets = (selectMode && selectedCount > 0)
+      ? filteredImages.filter((img) => selected[img.id])
+      : filteredImages;
+    if (targets.length === 0) {
+      setClassifying(false);
+      return;
+    }
+
+    const tagToIds = new Map<string, string[]>();
+    const tagsToCreate = new Set<string>();
+
+    for (const img of targets) {
+      const res = await classifyImageToTag(img.dataUrl);
+      const tag = res.suggestedTag;
+      if (tag && !project.tags.includes(tag)) tagsToCreate.add(tag);
+      const arr = tagToIds.get(tag) || [];
+      arr.push(img.id);
+      tagToIds.set(tag, arr);
+    }
+
+    // Créer les tags manquants
+    for (const t of Array.from(tagsToCreate)) {
+      onCreateTag(t);
+    }
+
+    // Appliquer par lot (réduction des patchs)
+    for (const [tag, ids] of tagToIds.entries()) {
+      onBulkUpdateTags(ids, tag);
+    }
+
+    setClassifying(false);
+    showSuccess(`Tags appliqués à ${targets.length} image(s).`);
   };
 
   return (
@@ -203,7 +248,7 @@ const ImagesTab = ({
         </CardContent>
       </Card>
 
-      {/* Ligne d’outils: compteur + filtre + bascule mode sélection */}
+      {/* Ligne d'outils: compteur + filtre + bascule mode sélection */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-white/80">
           {filteredImages.length} image{filteredImages.length > 1 ? "s" : ""} affichée{filteredImages.length > 1 ? "s" : ""}
@@ -211,6 +256,16 @@ const ImagesTab = ({
           {selectMode && selectedCount > 0 ? ` • ${selectedCount} sélectionnée(s)` : ""}
         </div>
         <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            onClick={handleClassifyAndTag}
+            disabled={classifying || filteredImages.length === 0}
+            className="backdrop-blur-sm"
+            title="Utilise le modèle ONNX pour proposer et appliquer des tags"
+          >
+            <Sparkles className="mr-2 h-4 w-4" />
+            {classifying ? "Classement..." : "Classer et taguer"}
+          </Button>
           <Button
             type="button"
             variant={selectMode ? "secondary" : "outline"}
@@ -242,7 +297,7 @@ const ImagesTab = ({
         </div>
       </div>
 
-      {/* Barre d’actions en masse */}
+      {/* Barre d'actions en masse */}
       {selectMode ? (
         <Card className="rounded-2xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
           <CardContent className="flex flex-col gap-3 py-4">
@@ -314,7 +369,7 @@ const ImagesTab = ({
               </Button>
             </div>
             <p className="text-xs text-white/70">
-              Astuce: si “Nouveau tag” est saisi, il sera créé puis appliqué. Sinon, le tag existant choisi sera appliqué. “Aucun” retire le tag.
+              Astuce: si "Nouveau tag" est saisi, il sera créé puis appliqué. Sinon, le tag existant choisi sera appliqué. "Aucun" retire le tag.
             </p>
           </CardContent>
         </Card>

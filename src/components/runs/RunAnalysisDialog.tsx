@@ -2,12 +2,14 @@ import { useState } from "react";
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import GlassDialogContent from "@/components/glass/GlassDialogContent";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { ProjectImage } from "@/utils/storage";
 import { createPendingRun, completeRunWithServer, failRun, type RunMode } from "@/utils/runs";
 import { showError, showSuccess } from "@/utils/toast";
 import { getSettings } from "@/utils/settings";
+import { classifyDataUrl } from "@/utils/inference";
 import { analyzeLLM } from "@/utils/analyze-client";
 
 type Props = {
@@ -22,6 +24,7 @@ type Props = {
 const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, triggerLabel = "Lancer l'analyse" }: Props) => {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<RunMode>("aggregate");
+  const [onlySuspects, setOnlySuspects] = useState(false);
 
   const canStart = !disabled && prompt.trim().length > 0 && images.length > 0;
 
@@ -35,12 +38,34 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
       showError("Aucune clé API détectée. Renseignez votre clé dans Paramètres.");
       return;
     }
+    
+    // Filtrage optionnel: uniquement les suspectes (selon classifieur ONNX)
+    let imgs = images;
+    if (onlySuspects) {
+      if (!s.modelRef) {
+        showError("Aucun modèle ONNX configuré (Paramètres > Dataset & Calibrage).");
+        return;
+      }
+      const threshold = s.inference?.threshold ?? 0.6;
+      const suspects: typeof images = [];
+      for (const im of images) {
+        const { topLabel, topScore } = await classifyDataUrl(im.dataUrl);
+        if (topLabel !== "plain" && topScore >= threshold) {
+          suspects.push(im);
+        }
+      }
+      if (suspects.length === 0) {
+        showError("Aucune image suspecte selon le seuil calibré.");
+        return;
+      }
+      imgs = suspects;
+    }
 
     const run = createPendingRun({
       projectId,
       mode,
       prompt,
-      images,
+      images: imgs,
       model: s.model,
       temperature: s.temperature,
     });
@@ -52,7 +77,7 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
     const result = await analyzeLLM({
       mode,
       prompt,
-      images,
+      images: imgs,
       model: s.model,
       temperature: s.temperature,
       max_tokens: s.maxTokens,
@@ -78,8 +103,8 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
       </DialogTrigger>
       <GlassDialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Lancer l’analyse</DialogTitle>
-          <DialogDescription>Choisissez le mode d’exécution et validez.</DialogDescription>
+          <DialogTitle>Lancer l'analyse</DialogTitle>
+          <DialogDescription>Choisissez le mode d'exécution et validez.</DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
           <div className="grid gap-2">
@@ -120,9 +145,26 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
             </div>
           </div>
 
+          <div className="rounded-xl border border-white/20 bg-white/10 p-3">
+            <div className="flex items-center gap-3">
+              <Checkbox
+                id="onlySuspects"
+                checked={onlySuspects}
+                onCheckedChange={(v) => setOnlySuspects(Boolean(v))}
+                className="data-[state=checked]:bg-white data-[state=checked]:text-black"
+              />
+              <Label htmlFor="onlySuspects" className="cursor-pointer text-white/90">
+                Analyser uniquement les images suspectes (score ≥ seuil calibré)
+              </Label>
+            </div>
+            <p className="mt-2 text-xs text-white/70">
+              Utilise le modèle ONNX local pour filtrer (plain vs défaut) avant d'appeler le LLM.
+            </p>
+          </div>
+
           <div className="rounded-md border border-white/20 bg-white/10 p-3 text-sm text-white/80">
             <p>
-              L’analyse utilise votre clé OpenAI stockée localement (Paramètres).
+              L'analyse utilise votre clé OpenAI stockée localement (Paramètres).
             </p>
           </div>
           <div className="flex justify-end gap-2">
