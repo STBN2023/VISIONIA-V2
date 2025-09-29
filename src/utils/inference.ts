@@ -199,7 +199,7 @@ function evalBinary(records: { isPlainGT: boolean; topIsPlain: boolean; score: n
     const gtDefect = !r.isPlainGT;
     if (predDefect && gtDefect) tp++;
     else if (predDefect && !gtDefect) fp++;
-    else if (!predDefect && !gtDefect) fn++;
+    else if (!predDefect && gtDefect) fn++;
     else tn++;
   }
   const precision = tp + fp > 0 ? tp / (tp + fp) : 0;
