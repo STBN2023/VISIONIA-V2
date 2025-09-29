@@ -1,3 +1,4 @@
+RGB(3), normalisation ImageNet, NCHW.">
 import * as ort from "onnxruntime-web";
 import { getSettings, saveSettings } from "@/utils/settings";
 import { getDatasetManifest } from "@/utils/dataset";
@@ -123,35 +124,61 @@ async function preprocessToTensor(
   normalization?: { scale?: number; mean?: number[]; std?: number[] },
 ): Promise<ort.Tensor> {
   const img = await loadImage(dataUrl);
-  const { sx, sy, s } = centerCropSquare(img);
-  const canvas = document.createElement("canvas");
-  canvas.width = size;
-  canvas.height = size;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("Canvas context non disponible.");
-  ctx.drawImage(img, sx, sy, s, s, 0, 0, size, size);
-  const { data } = ctx.getImageData(0, 0, size, size);
 
-  const scale = normalization?.scale ?? 1;
-  const mean = normalization?.mean ?? [0, 0, 0];
-  const std = normalization?.std ?? [1, 1, 1];
+  // 1) Resize: shorter side = 256 (ratio conservé)
+  const targetShort = 256;
+  const scaleFactor = targetShort / Math.min(img.naturalWidth, img.naturalHeight);
+  const resizedW = Math.max(1, Math.round(img.naturalWidth * scaleFactor));
+  const resizedH = Math.max(1, Math.round(img.naturalHeight * scaleFactor));
 
-  const float = new Float32Array(3 * size * size);
+  const resizeCanvas = document.createElement("canvas");
+  resizeCanvas.width = resizedW;
+  resizeCanvas.height = resizedH;
+  const rctx = resizeCanvas.getContext("2d");
+  if (!rctx) throw new Error("Canvas context non disponible.");
+  rctx.drawImage(img, 0, 0, resizedW, resizedH);
+
+  // 2) Center crop 224x224
+  const cropSize = size; // attendu 224
+  const sx = Math.floor((resizedW - cropSize) / 2);
+  const sy = Math.floor((resizedH - cropSize) / 2);
+
+  const cropCanvas = document.createElement("canvas");
+  cropCanvas.width = cropSize;
+  cropCanvas.height = cropSize;
+  const cctx = cropCanvas.getContext("2d");
+  if (!cctx) throw new Error("Canvas context non disponible.");
+  cctx.drawImage(resizeCanvas, sx, sy, cropSize, cropSize, 0, 0, cropSize, cropSize);
+
+  const { data } = cctx.getImageData(0, 0, cropSize, cropSize);
+
+  // 3) Conversion en niveaux de gris puis réplication RGB(3)
+  // 4) Normalisation après échelle [0,1]
+  const scaleParam = normalization?.scale ?? 1;
+  const mean = normalization?.mean ?? [0.485, 0.456, 0.406];
+  const std = normalization?.std ?? [0.229, 0.224, 0.225];
+
+  // 5) Format tenseur NCHW float32 (ordre RGB)
+  const float = new Float32Array(3 * cropSize * cropSize);
   let p = 0;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const idx = (y * size + x) * 4;
-      const r = data[idx] / 255 / scale;
-      const g = data[idx + 1] / 255 / scale;
-      const b = data[idx + 2] / 255 / scale;
-      // NCHW
-      float[p] = (r - mean[0]) / std[0]; // R
-      float[p + size * size] = (g - mean[1]) / std[1]; // G
-      float[p + 2 * size * size] = (b - mean[2]) / std[2]; // B
+  for (let y = 0; y < cropSize; y++) {
+    for (let x = 0; x < cropSize; x++) {
+      const idx = (y * cropSize + x) * 4;
+      const r = data[idx];
+      const g = data[idx + 1];
+      const b = data[idx + 2];
+
+      // luminance ITU-R BT.601
+      const gray01 = (0.299 * r + 0.587 * g + 0.114 * b) / 255 / scaleParam;
+
+      // Réplication sur 3 canaux avec normalisation ImageNet
+      float[p] = (gray01 - mean[0]) / std[0]; // R
+      float[p + cropSize * cropSize] = (gray01 - mean[1]) / std[1]; // G
+      float[p + 2 * cropSize * cropSize] = (gray01 - mean[2]) / std[2]; // B
       p++;
     }
   }
-  return new ort.Tensor("float32", float, [1, 3, size, size]);
+  return new ort.Tensor("float32", float, [1, 3, cropSize, cropSize]);
 }
 
 export async function classifyDataUrl(dataUrl: string): Promise<ClassifyResult> {

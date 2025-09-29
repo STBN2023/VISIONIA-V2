@@ -123,7 +123,11 @@ const DatasetCalibrateCard = () => {
       modelMeta: {
         inputSize,
         channelsOrder: "RGB",
-        normalization: { scale: 1 },
+        normalization: {
+          scale: 1,
+          mean: [0.485, 0.456, 0.406],
+          std: [0.229, 0.224, 0.225],
+        },
         classesOrder,
         version: `yolov5-cls-s-${inputSize} v1`,
       },
