@@ -18,6 +18,17 @@ type ClassifyResult = {
 let cachedSession: ort.InferenceSession | null = null;
 let cachedKey = "";
 
+// Configure ORT to load WASM from CDN and avoid threads (no COOP/COEP required)
+const ORT_WASM_CDN = "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.23.0/dist/";
+let ortEnvConfigured = false;
+function ensureOrtEnv() {
+  if (ortEnvConfigured) return;
+  ort.env.wasm.wasmPaths = ORT_WASM_CDN;
+  ort.env.wasm.numThreads = 1; // single-threaded for broad compatibility
+  // ort.env.wasm.simd stays enabled by default when available
+  ortEnvConfigured = true;
+}
+
 // Utilitaires base64 <-> bytes
 function dataUrlToUint8Array(dataUrl: string): Uint8Array {
   const [, b64] = dataUrl.split(",");
@@ -65,6 +76,9 @@ export async function getOrCreateSession(): Promise<ort.InferenceSession> {
   const epOrder = getBackendPref();
   const key = `${ref.source}:${ref.value}:${epOrder.join(",")}`;
   if (cachedSession && cachedKey === key) return cachedSession;
+
+  // Ensure ORT env is configured before first session
+  ensureOrtEnv();
 
   const bytes = await loadModelBytesFromSettings();
 
