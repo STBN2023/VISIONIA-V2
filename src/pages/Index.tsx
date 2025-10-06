@@ -11,7 +11,7 @@ const Index = () => {
       <AppHeader />
       <main className="mx-auto flex w-full max-w-6xl flex-col items-center justify-center px-4 py-20">
         <GlassPanel className="mx-auto max-w-3xl text-center">
-          <h1 className="mb-3 text-4xl font-bold">Visison IA - Analyse des images</h1>
+          <h1 className="mb-3 text-4xl font-bold">Vision IA - Analyse des images</h1>
           <p className="mb-6 text-muted-foreground">
             Créez un projet, importez vos images, éditez le modèle d'analyse et préparez l'orchestration de vos conmpte-rendu.
           </p>
