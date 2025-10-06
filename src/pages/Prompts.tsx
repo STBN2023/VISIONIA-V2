@@ -110,7 +110,7 @@ const Prompts = () => {
           <div>
             <h1 className="text-2xl font-semibold">Templates de prompt</h1>
             <p className="text-sm text-white/70">
-              Définissez des styles globaux de prompt, choisissez un défaut et appliquez-les aux projets et aux images.
+              Définissez des styles globaux de modèle d'analyse, choisissez un modèle par défaut et appliquez-les aux projets et aux images.
             </p>
           </div>
           <Button onClick={handleNew} className="backdrop-blur-sm">Nouveau template</Button>
