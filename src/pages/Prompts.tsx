@@ -108,9 +108,9 @@ const Prompts = () => {
       <main className="mx-auto w-full max-w-6xl px-4 py-6 text-white">
         <div className="mb-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-semibold">Templates de prompt</h1>
+            <h1 className="text-2xl font-semibold">Modèles d'analyse</h1>
             <p className="text-sm text-white/70">
-              Définissez des styles globaux de modèle d'analyse, choisissez un modèle par défaut et appliquez-les aux projets et aux images.
+             Créez des styles d’analyse globaux, définissez un modèle par défaut, puis appliquez-les à l’ensemble de vos projets et images.
             </p>
           </div>
           <Button onClick={handleNew} className="backdrop-blur-sm">Nouveau template</Button>
