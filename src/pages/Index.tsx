@@ -13,7 +13,7 @@ const Index = () => {
         <GlassPanel className="mx-auto max-w-3xl text-center">
           <h1 className="mb-3 text-4xl font-bold">Vision IA - Analyse des images</h1>
           <p className="mb-6 text-muted-foreground">
-            Créez un projet, importez vos images, éditez le modèle d'analyse et préparez l'orchestration de vos conmpte-rendu.
+            Créez un projet, importez vos images, éditez le modèle d'analyse et préparez l'orchestration de vos compte-rendu.
           </p>
           <div className="flex items-center justify-center gap-3">
             <Link to="/projects">
