@@ -257,15 +257,21 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
     y = addWrappedText(doc, text, margin, y, contentWidth, 6);
 
     if (run.items && run.items.length > 0) {
-      y += 6;
+      // Mettre le titre 'Détails par image' en tête d'une nouvelle page/section
+      y = pageBreak(doc);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(12);
-      doc.text("Détails par image", margin, y);
-      y += 8;
+      y = drawSectionHeader(doc, "Détails par image", margin, y, contentWidth);
 
-      // Chaque image commence sur une nouvelle page
+      // Première image sous le titre, suivantes chacune sur nouvelle page
+      let isFirst = true;
       for (const item of run.items) {
-        y = pageBreak(doc);
+        if (!isFirst) {
+          y = pageBreak(doc);
+        } else {
+          // petite marge sous le cartouche
+          y += 4;
+        }
 
         const img = images.find((i) => i.id === item.imageId);
         const header = `Image: ${img?.name || item.imageId} ${img?.tag ? `(${img.tag})` : ""}`;
@@ -288,6 +294,8 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
         doc.setFontSize(11);
         const body = stripMarkdown(item.outputText?.trim() || (item.error ? `Erreur: ${item.error}` : "Pas de résultat disponible."));
         y = addWrappedText(doc, body, margin, y, contentWidth, 6);
+
+        isFirst = false;
       }
     }
   } else {
