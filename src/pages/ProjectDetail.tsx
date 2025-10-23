@@ -21,6 +21,30 @@ import { GlassShell } from "@/components/layout/GlassShell";
 const MAX_IMAGE_SIZE = 25 * 1024 * 1024; // 25 Mo
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
 
+// Ajout: utilitaires pour formatage des noms
+const sanitizeToFileBase = (input: string) => {
+  const base = (input || "Sans titre").normalize("NFKD").replace(/[\u0300-\u036f]/g, "");
+  return base.replace(/[^a-zA-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
+};
+const formatDateDDMMYYYY = (d: Date) => {
+  const dd = String(d.getDate()).padStart(2, "0");
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const yyyy = String(d.getFullYear());
+  return `${dd}${mm}${yyyy}`;
+};
+const extFromMime = (mime: string) => {
+  switch (mime) {
+    case "image/jpeg":
+      return ".jpg";
+    case "image/png":
+      return ".png";
+    case "image/webp":
+      return ".webp";
+    default:
+      return ".jpg";
+  }
+};
+
 const ProjectDetail = () => {
   const { id } = useParams<{ id: string }>();
   const [project, setProject] = useState<Project | undefined>(undefined);
@@ -130,8 +154,13 @@ const ProjectDetail = () => {
     let compressedCount = 0;
 
     const newImages: ProjectImage[] = [];
+    const baseName = sanitizeToFileBase(project.title || "Sans titre");
+    const importDate = new Date();
+    const dateStr = formatDateDDMMYYYY(importDate);
+    const startIndex = (project.images?.length || 0) + 1;
 
-    for (const f of filesArr) {
+    for (let idx = 0; idx < filesArr.length; idx++) {
+      const f = filesArr[idx];
       // Type accepté
       if (!ALLOWED_TYPES.includes(f.type)) {
         ignoredWrongType++;
@@ -185,11 +214,16 @@ const ProjectDetail = () => {
         dataUrl = await blobToDataUrl(finalBlob);
       }
 
+      const finalType = (finalBlob.type as string) || f.type || "image/webp";
+      const ext = extFromMime(finalType);
+      const increment = startIndex + idx;
+      const generatedName = `${baseName}_${dateStr}_${increment}${ext}`;
+
       const img: ProjectImage = {
         id: crypto.randomUUID(),
-        name: f.name,
+        name: generatedName,
         size: finalBlob.size,
-        type: (finalBlob.type as string) || f.type || "image/webp",
+        type: finalType,
         dataUrl,
         createdAt: new Date().toISOString(),
       };
