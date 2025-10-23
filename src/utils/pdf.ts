@@ -34,7 +34,7 @@ function toFrenchStatus(status: Run["status"]): string {
     case "running":
       return "en cours";
     case "queued":
-      return "en file d’attente";
+      return "en file d'attente";
     case "failed":
       return "échoué";
     default:
@@ -53,6 +53,31 @@ function addWrappedText(doc: jsPDF, text: string, x: number, y: number, maxWidth
     y += lineHeight;
   }
   return y;
+}
+
+// Ajout: gestion des sauts de page et en-têtes de sections
+const PAGE_TOP = 20;
+const PAGE_BOTTOM = 280;
+
+function pageBreak(doc: jsPDF) {
+  doc.addPage();
+  return PAGE_TOP;
+}
+
+function ensureSpace(doc: jsPDF, y: number, needed: number) {
+  return y + needed > PAGE_BOTTOM ? pageBreak(doc) : y;
+}
+
+function drawSectionHeader(doc: jsPDF, text: string, x: number, y: number, width: number) {
+  const lines = doc.splitTextToSize(text, width - 4);
+  const boxHeight = lines.length * 5 + 6; // padding + lignes
+  y = ensureSpace(doc, y, boxHeight + 4);
+  doc.setFillColor(245);
+  (doc as any).roundedRect(x, y - 4, width, boxHeight, 2, 2, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  y = addWrappedText(doc, text, x + 2, y, width - 4, 5);
+  return y + 4;
 }
 
 function getMimeFromDataUrl(dataUrl: string): string {
@@ -162,7 +187,7 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
 
-  // Remplacer l’ID du projet par son nom réel et traduire mode/statut
+  // Remplacer l'ID du projet par son nom réel et traduire mode/statut
   const project = await getProjectById(run.projectId);
   const metaText = [
     `Run: ${run.id}`,
@@ -238,16 +263,15 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
       doc.text("Détails par image", margin, y);
       y += 8;
 
+      // Chaque image commence sur une nouvelle page
       for (const item of run.items) {
-        if (y > 270) {
-          doc.addPage();
-          y = 20;
-        }
+        y = pageBreak(doc);
+
         const img = images.find((i) => i.id === item.imageId);
         const header = `Image: ${img?.name || item.imageId} ${img?.tag ? `(${img.tag})` : ""}`;
         doc.setFont("helvetica", "bold");
         doc.setFontSize(11);
-        y = addWrappedText(doc, header, margin, y, contentWidth, 5);
+        y = drawSectionHeader(doc, header, margin, y, contentWidth);
 
         if (img?.dataUrl) {
           y += 2;
@@ -264,11 +288,6 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
         doc.setFontSize(11);
         const body = stripMarkdown(item.outputText?.trim() || (item.error ? `Erreur: ${item.error}` : "Pas de résultat disponible."));
         y = addWrappedText(doc, body, margin, y, contentWidth, 6);
-
-        y += 6;
-        doc.setDrawColor(220);
-        doc.line(margin, y, margin + contentWidth, y);
-        y += 6;
       }
     }
   } else {
@@ -277,16 +296,15 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
     doc.text("Rapports par image", margin, y);
     y += 8;
 
+    // Chaque image commence sur une nouvelle page
     for (const item of run.items) {
-      if (y > 270) {
-        doc.addPage();
-        y = 20;
-      }
+      y = pageBreak(doc);
+
       const img = images.find((i) => i.id === item.imageId);
       const header = `Image: ${img?.name || item.imageId} ${img?.tag ? `(${img.tag})` : ""} • Statut: ${toFrenchStatus(item.status)}`;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
-      y = addWrappedText(doc, header, margin, y, contentWidth, 5);
+      y = drawSectionHeader(doc, header, margin, y, contentWidth);
 
       if (img?.dataUrl) {
         y += 2;
@@ -303,11 +321,6 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
       doc.setFontSize(11);
       const body = stripMarkdown(item.outputText?.trim() || (item.error ? `Erreur: ${item.error}` : "Pas de résultat disponible."));
       y = addWrappedText(doc, body, margin, y, contentWidth, 6);
-
-      y += 6;
-      doc.setDrawColor(220);
-      doc.line(margin, y, margin + contentWidth, y);
-      y += 6;
     }
   }
 
