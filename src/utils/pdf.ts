@@ -1,6 +1,46 @@
 import { jsPDF } from "jspdf";
 import type { Run } from "@/utils/runs";
 import type { ProjectImage } from "@/utils/storage";
+import { getProjectById } from "@/utils/storage";
+
+// Ajout: nettoyage Markdown -> texte simple
+function stripMarkdown(input: string): string {
+  let text = input || "";
+  // Retirer fences ```... et lignes ```lang
+  text = text.replace(/^```.*$/gm, "");
+  // Retirer les # en début de ligne (titres)
+  text = text.replace(/^[#]+\s*/gm, "");
+  // Retirer puces en début de ligne (-, *, +)
+  text = text.replace(/^[\-\*\+]\s+/gm, "");
+  // Retirer emphases **bold**, __bold__, *italique*, _italique_
+  text = text.replace(/(\*\*|__)(.*?)\1/g, "$2");
+  text = text.replace(/(\*|_)(.*?)\1/g, "$2");
+  // Retirer code inline `code`
+  text = text.replace(/`([^`]*)`/g, "$1");
+  // Nettoyage espaces multiples et lignes vides répétées
+  text = text.replace(/[ \t]+\n/g, "\n"); // espaces en fin de ligne
+  text = text.replace(/\n{3,}/g, "\n\n");
+  return text.trim();
+}
+
+// Ajout: traductions FR pour mode/statut
+function toFrenchMode(mode: Run["mode"]): string {
+  return mode === "aggregate" ? "agrégé" : "par image";
+}
+function toFrenchStatus(status: Run["status"]): string {
+  switch (status) {
+    case "succeeded":
+      return "terminé";
+    case "running":
+      return "en cours";
+    case "queued":
+      return "en file d’attente";
+    case "failed":
+      return "échoué";
+    default:
+      return String(status);
+  }
+}
 
 function addWrappedText(doc: jsPDF, text: string, x: number, y: number, maxWidth: number, lineHeight = 6) {
   const lines = doc.splitTextToSize(text, maxWidth);
@@ -121,10 +161,25 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
-  const meta = `Run: ${run.id} • Projet: ${run.projectId} • Mode: ${run.mode} • Statut: ${run.status} • Créé: ${new Date(
-    run.createdAt,
-  ).toLocaleString()}`;
-  let y = addWrappedText(doc, meta, margin, 26, contentWidth, 5);
+
+  // Remplacer l’ID du projet par son nom réel et traduire mode/statut
+  const project = await getProjectById(run.projectId);
+  const metaText = [
+    `Run: ${run.id}`,
+    `Projet: ${project?.title || "Sans titre"}`,
+    `Mode: ${toFrenchMode(run.mode)}`,
+    `Statut: ${toFrenchStatus(run.status)}`,
+    `Créé: ${new Date(run.createdAt).toLocaleString()}`,
+  ].join(" • ");
+
+  // Encadrer l'en-tête dans un petit cartouche
+  const metaLines = doc.splitTextToSize(metaText, contentWidth);
+  let y = 26;
+  const boxHeight = metaLines.length * 5 + 4;
+  doc.setFillColor(245);
+  // arrondis légers
+  (doc as any).roundedRect(margin - 1, y - 5, contentWidth + 2, boxHeight, 2, 2, "F");
+  y = addWrappedText(doc, metaText, margin, y, contentWidth, 5);
 
   y += 4;
   doc.setDrawColor(180);
@@ -173,7 +228,7 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(11);
-    const text = run.outputText?.trim() || "Aucun contenu disponible (run non terminé).";
+    const text = stripMarkdown(run.outputText?.trim() || "Aucun contenu disponible (run non terminé).");
     y = addWrappedText(doc, text, margin, y, contentWidth, 6);
 
     if (run.items && run.items.length > 0) {
@@ -207,7 +262,7 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(11);
-        const body = item.outputText?.trim() || (item.error ? `Erreur: ${item.error}` : "Pas de résultat disponible.");
+        const body = stripMarkdown(item.outputText?.trim() || (item.error ? `Erreur: ${item.error}` : "Pas de résultat disponible."));
         y = addWrappedText(doc, body, margin, y, contentWidth, 6);
 
         y += 6;
@@ -228,7 +283,7 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
         y = 20;
       }
       const img = images.find((i) => i.id === item.imageId);
-      const header = `Image: ${img?.name || item.imageId} ${img?.tag ? `(${img.tag})` : ""} • Statut: ${item.status}`;
+      const header = `Image: ${img?.name || item.imageId} ${img?.tag ? `(${img.tag})` : ""} • Statut: ${toFrenchStatus(item.status)}`;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(11);
       y = addWrappedText(doc, header, margin, y, contentWidth, 5);
@@ -246,7 +301,7 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(11);
-      const body = item.outputText?.trim() || (item.error ? `Erreur: ${item.error}` : "Pas de résultat disponible.");
+      const body = stripMarkdown(item.outputText?.trim() || (item.error ? `Erreur: ${item.error}` : "Pas de résultat disponible."));
       y = addWrappedText(doc, body, margin, y, contentWidth, 6);
 
       y += 6;
