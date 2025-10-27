@@ -1,3 +1,4 @@
+' dans le texte JSX pour éviter l'erreur de build">
 import { useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -110,7 +111,7 @@ const Prompts = () => {
           <div>
             <h1 className="text-2xl font-semibold">Modèles d'analyse</h1>
             <p className="text-sm text-white/70">
-             Créez des styles d’analyse globaux, définissez un modèle par défaut, puis appliquez-les à l’ensemble de vos projets et images.
+             Créez des styles d'analyse globaux, définissez un modèle par défaut, puis appliquez-les à l'ensemble de vos projets et images.
             </p>
           </div>
           <Button onClick={handleNew} className="backdrop-blur-sm">Nouveau template</Button>
@@ -147,7 +148,7 @@ const Prompts = () => {
           <div className="md:col-span-2">
             {!selected ? (
               <Card className="rounded-3xl border-white/20 bg-white/10 p-6 text-sm text-white/80 backdrop-blur-2xl">
-                Sélectionnez un template pour l’éditer.
+                Sélectionnez un template pour l'éditer.
               </Card>
             ) : (
               <Card className="rounded-3xl border-white/20 bg-white/10 text-white shadow-2xl backdrop-blur-2xl">
@@ -189,7 +190,9 @@ const Prompts = () => {
                     <Label htmlFor="body">Contenu</Label>
                     <Textarea id="body" rows={14} value={body} onChange={(e) => setBody(e.target.value)} className="bg-white/10 text-white placeholder:text-white/60" />
                     {lineErrors.length > 0 ? (
-                      <p className="text-sm text-red-300">Lignes trop longues (> 100 caractères) : {lineErrors.join(", ")}</p>
+                      <p className="text-sm text-red-300">
+                        Lignes trop longues (&gt; 100 caractères) : {lineErrors.join(", ")}
+                      </p>
                     ) : (
                       <p className="text-xs text-white/70">Règle: chaque ligne ≤ 100 caractères.</p>
                     )}
