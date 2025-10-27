@@ -1,4 +1,3 @@
-' dans le texte JSX pour éviter l'erreur de build">
 import { useEffect, useMemo, useState } from "react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
