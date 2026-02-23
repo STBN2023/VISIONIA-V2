@@ -1,11 +1,37 @@
+import React, { useEffect, useState } from "react";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Button } from "@/components/ui/button";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import GlassPanel from "@/components/ui/GlassPanel";
 import { GlassShell } from "@/components/layout/GlassShell";
+import { supabase } from "@/integrations/supabase/client";
 
 const Index = () => {
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        navigate('/login');
+      }
+      setLoading(false);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session && event !== 'INITIAL_SESSION') {
+        navigate('/login');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [navigate]);
+
+  if (loading) {
+    return <div className="flex h-screen items-center justify-center">Chargement...</div>;
+  }
+
   return (
     <GlassShell>
       <AppHeader />

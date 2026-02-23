@@ -1,8 +1,9 @@
-import { Link, NavLink, useLocation } from "react-router-dom";
-import { FolderClosed, Plus, Settings as SettingsIcon, FileText } from "lucide-react";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { FolderClosed, Plus, Settings as SettingsIcon, FileText, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import BrandLogo from "@/components/branding/BrandLogo";
+import { supabase } from "@/integrations/supabase/client";
 
 const NavItem = ({
   to,
@@ -11,7 +12,7 @@ const NavItem = ({
 }: {
   to: string;
   label: string;
-  icon?: React.ComponentType<{ className?: string }>;
+  icon?: React.ComponentType<{ className?: string }> | null;
 }) => {
   const location = useLocation();
   const active = location.pathname === to || location.pathname.startsWith(to + "/");
@@ -36,6 +37,13 @@ export const AppHeader = ({
 }: {
   onCreateProjectClick?: () => void;
 }) => {
+  const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    navigate("/login");
+  };
+
   return (
     <header className="sticky top-0 z-40">
       <div className="mx-auto max-w-6xl px-4 py-4">
@@ -51,9 +59,9 @@ export const AppHeader = ({
           </nav>
           <div className="flex items-center gap-2">
             {onCreateProjectClick ? (
-              <Button size="sm" className="backdrop-blur-sm">
+              <Button size="sm" className="backdrop-blur-sm" onClick={onCreateProjectClick}>
                 <Plus className="mr-2 h-4 w-4" />
-                <span onClick={onCreateProjectClick}>Nouveau projet</span>
+                <span>Nouveau projet</span>
               </Button>
             ) : (
               <Link to="/projects">
@@ -63,6 +71,15 @@ export const AppHeader = ({
                 </Button>
               </Link>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full text-white/70 hover:bg-white/10 hover:text-white"
+              onClick={handleLogout}
+              title="Déconnexion"
+            >
+              <LogOut className="h-5 w-5" />
+            </Button>
           </div>
         </div>
       </div>
