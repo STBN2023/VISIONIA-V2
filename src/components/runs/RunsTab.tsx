@@ -370,7 +370,7 @@ const RunsTab = ({ runs, images }: Props) => {
                               ) : null}
 
                               {it.outputText ? (
-                                <pre className="whitespace-pre-wrap rounded-lg bg-white/5 p-3 text-sm">{it.outputText}</pre>
+                                <StructuredAnalysisView text={it.outputText} />
                               ) : it.error ? (
                                 <p className="text-sm text-red-300">{it.error}</p>
                               ) : (
@@ -538,7 +538,7 @@ const RunsTab = ({ runs, images }: Props) => {
                                   ) : null}
 
                                   {it.outputText ? (
-                                    <pre className="whitespace-pre-wrap rounded-lg bg-white/5 p-3 text-sm">{it.outputText}</pre>
+                                    <StructuredAnalysisView text={it.outputText} />
                                   ) : it.error ? (
                                     <p className="text-sm text-red-300">{it.error}</p>
                                   ) : (
