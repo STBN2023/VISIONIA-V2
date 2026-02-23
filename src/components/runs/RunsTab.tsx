@@ -16,183 +16,203 @@ import { Badge as UIWebBadge } from "@/components/ui/badge";
 
 // Ajout d'un composant pour afficher le JSON structuré par lots
 const StructuredAnalysisView = ({ text }: { text: string }) => {
-  try {
-    // 1. Nettoyage agressif du texte
-    let cleanText = text.trim();
-    
-    // Enlever les blocs de code Markdown
-    if (cleanText.includes("```")) {
-      const match = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-      if (match && match[1]) {
-        cleanText = match[1].trim();
+  const [parseError, setParseError] = useState<string | null>(null);
+
+  const parsedData = useMemo(() => {
+    if (!text) return null;
+    try {
+      // 1. Nettoyage agressif
+      let cleanText = text.trim();
+      
+      // Enlever les blocs Markdown ```json ... ```
+      const markdownMatch = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (markdownMatch) {
+        cleanText = markdownMatch[1].trim();
       }
+
+      // 2. Extraire le premier objet JSON complet entre { et }
+      // On cherche la première accolade et la dernière pour isoler l'objet
+      const start = cleanText.indexOf('{');
+      const end = cleanText.lastIndexOf('}');
+      if (start === -1 || end === -1 || end <= start) return null;
+      
+      let jsonCandidate = cleanText.substring(start, end + 1);
+
+      // 3. Réparer les retours à la ligne ILLEGAUX dans les chaînes de caractères
+      // Cette regex cherche les retours à la ligne qui NE sont PAS suivis par une structure JSON (clef ou fermeture)
+      // On simplifie : on remplace TOUS les retours à la ligne par des espaces, sauf s'ils sont suivis d'une virgule, d'un crochet ou d'une accolade
+      // Mais le plus sûr pour JSON.parse est de supprimer les retours à la ligne réels à l'intérieur des guillemets
+      
+      // Approche : on remplace les sauts de ligne par des espaces pour le parsing
+      // car JSON.parse accepte les espaces mais pas les \n non échappés dans les strings
+      const sanitized = jsonCandidate.replace(/\n/g, " ").replace(/\r/g, " ");
+
+      const data = JSON.parse(sanitized);
+      if (data.lots || data.contexte_projet) {
+        return data;
+      }
+      return null;
+    } catch (e) {
+      console.error("Erreur de parsing JSON structuré:", e);
+      return null;
     }
+  }, [text]);
 
-    // 2. Tenter l'extraction du premier objet JSON valide si le texte est encore "sale"
-    const firstBrace = cleanText.indexOf('{');
-    const lastBrace = cleanText.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
-    }
-
-    // 3. Remplacement des sauts de ligne réels dans les chaînes JSON par des \n échappés
-    // (L'IA oublie souvent d'échapper les retours à la ligne dans les descriptions)
-    cleanText = cleanText.replace(/\n/g, " ");
-
-    // Tentative de parsing
-    const data = JSON.parse(cleanText);
-    
-    // Vérification de la structure minimale (lots ou contexte)
-    if (!data.lots && !data.contexte_projet) {
-      throw new Error("Structure JSON non reconnue");
-    }
-
-    const hasContext = !!data.contexte_projet;
-    const lots = data.lots || [];
-
+  if (!parsedData) {
     return (
-      <div className="space-y-6 mt-2">
-        {/* BLOC CONTEXTE PROJET */}
-        {hasContext && (
-          <div className="rounded-2xl border border-blue-400/30 bg-blue-500/10 p-4 shadow-lg">
-            <h3 className="text-blue-200 font-bold uppercase text-xs tracking-widest mb-3 flex items-center gap-2">
-              <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
-              Contexte de l'Audit
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-[11px]">
-              <div>
-                <span className="text-white/50 block">Intervention</span>
-                <span className="text-white font-medium">{data.contexte_projet.type_intervention}</span>
-              </div>
-              <div>
-                <span className="text-white/50 block">Phase</span>
-                <span className="text-white font-medium">{data.contexte_projet.phase}</span>
-              </div>
-              <div>
-                <span className="text-white/50 block">Date</span>
-                <span className="text-white font-medium">{data.contexte_projet.date_analysis || data.contexte_projet.date_analyse}</span>
-              </div>
-              <div>
-                <span className="text-white/50 block">DPE Initial</span>
-                <span className="text-white font-medium">{data.contexte_projet.dpe_initial || "N/A"}</span>
-              </div>
+      <div className="space-y-2">
+        <pre className="whitespace-pre-wrap rounded-xl bg-white/5 p-3 text-sm font-mono border border-white/10 opacity-80">{text}</pre>
+        <div className="text-[10px] text-white/30 italic px-2">
+          Note: Le format JSON reçu est malformé. L'IA a probablement inclus des retours à la ligne non autorisés.
+        </div>
+      </div>
+    );
+  }
+
+  const data = parsedData;
+  const hasContext = !!data.contexte_projet;
+  const lots = data.lots || [];
+
+  return (
+    <div className="space-y-6 mt-2 animate-in fade-in slide-in-from-top-4 duration-500">
+      {/* BLOC CONTEXTE PROJET */}
+      {hasContext && (
+        <div className="rounded-2xl border border-blue-400/30 bg-blue-500/10 p-4 shadow-lg">
+          <h3 className="text-blue-200 font-bold uppercase text-xs tracking-widest mb-3 flex items-center gap-2">
+            <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
+            Contexte de l'Audit
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-[11px]">
+            <div>
+              <span className="text-white/50 block">Intervention</span>
+              <span className="text-white font-medium">{data.contexte_projet.type_intervention}</span>
             </div>
-            {data.contexte_projet.reserve_generale && (
-              <p className="mt-3 pt-3 border-t border-white/10 text-[10px] text-white/60 italic">
-                Note : {data.contexte_projet.reserve_generale}
-              </p>
-            )}
+            <div>
+              <span className="text-white/50 block">Phase</span>
+              <span className="text-white font-medium">{data.contexte_projet.phase}</span>
+            </div>
+            <div>
+              <span className="text-white/50 block">Date</span>
+              <span className="text-white font-medium">{data.contexte_projet.date_analysis || data.contexte_projet.date_analyse}</span>
+            </div>
+            <div>
+              <span className="text-white/50 block">DPE Initial</span>
+              <span className="text-white font-medium">{data.contexte_projet.dpe_initial || "N/A"}</span>
+            </div>
           </div>
-        )}
+          {data.contexte_projet.reserve_generale && (
+            <p className="mt-3 pt-3 border-t border-white/10 text-[10px] text-white/60 italic">
+              Note : {data.contexte_projet.reserve_generale}
+            </p>
+          )}
+        </div>
+      )}
 
-        {/* LISTE DES LOTS ET ANOMALIES */}
-        {lots.map((lot: any, idx: number) => (
-          <div key={idx} className="rounded-2xl border border-white/20 bg-white/10 overflow-hidden shadow-xl">
-            <div className="bg-white/20 px-4 py-2 border-b border-white/10 flex items-center justify-between">
-              <h3 className="font-bold text-white uppercase tracking-wider text-sm">LOT {lot.lot || "Non spécifié"}</h3>
-              <UIWebBadge variant="secondary" className="bg-white/10 text-white border-white/20">
-                {lot.anomalies?.length || 0} point(s) d'attention
-              </UIWebBadge>
-            </div>
-            <div className="divide-y divide-white/10">
-              {lot.anomalies?.map((ano: any, aIdx: number) => (
-                <div key={aIdx} className="p-4 space-y-4 bg-white/5 hover:bg-white/10 transition-colors">
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-mono bg-white/20 px-1.5 py-0.5 rounded text-white/70">{ano.id}</span>
-                        <span className="text-[10px] text-white/50">{ano.image_ref} • {ano.localisation}</span>
-                      </div>
-                      <p className="text-sm text-white/90 leading-relaxed font-semibold">{ano.description}</p>
+      {/* LISTE DES LOTS ET ANOMALIES */}
+      {lots.map((lot: any, idx: number) => (
+        <div key={idx} className="rounded-2xl border border-white/20 bg-white/10 overflow-hidden shadow-xl">
+          <div className="bg-white/20 px-4 py-2 border-b border-white/10 flex items-center justify-between">
+            <h3 className="font-bold text-white uppercase tracking-wider text-sm">LOT {lot.lot || "Non spécifié"}</h3>
+            <UIWebBadge variant="secondary" className="bg-white/10 text-white border-white/20">
+              {lot.anomalies?.length || 0} point(s) d'attention
+            </UIWebBadge>
+          </div>
+          <div className="divide-y divide-white/10">
+            {lot.anomalies?.map((ano: any, aIdx: number) => (
+              <div key={aIdx} className="p-4 space-y-4 bg-white/5 hover:bg-white/10 transition-colors">
+                <div className="flex justify-between items-start gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-mono bg-white/20 px-1.5 py-0.5 rounded text-white/70">{ano.id}</span>
+                      <span className="text-[10px] text-white/50">{ano.image_ref} • {ano.localisation}</span>
                     </div>
-                    <div className="flex flex-col gap-1 items-end shrink-0">
-                      {ano.impact_energetique && (
-                        <span className={`text-[9px] px-2 py-0.5 rounded-full border uppercase font-bold ${
-                          ano.impact_energetique === 'fort' || ano.impact_energetique === 'critique' 
-                          ? 'bg-red-500/20 text-red-300 border-red-500/30' 
-                          : 'bg-orange-500/20 text-orange-300 border-orange-500/30'
-                        }`}>
-                          Impact {ano.impact_energetique}
-                        </span>
-                      )}
-                      {ano.priorite_intervention && (
-                        <span className="text-[9px] text-white/40 italic">{ano.priorite_intervention}</span>
-                      )}
-                    </div>
+                    <p className="text-sm text-white/90 leading-relaxed font-semibold">{ano.description}</p>
                   </div>
-
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-1">
-                      <div className="text-[10px] uppercase font-bold text-white/40">Analyse Technique</div>
-                      <p className="text-xs text-white/80 leading-relaxed">{ano.analyse_technique}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="text-[10px] uppercase font-bold text-red-400/60">Risques & Durabilité</div>
-                      <p className="text-xs text-white/80 italic">{ano.risques_associes}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-blue-500/10 p-3 rounded-xl border border-blue-500/20">
-                    <div className="text-[10px] uppercase font-bold text-blue-400/70 mb-1">Prescription CCTP</div>
-                    <p className="text-xs text-blue-100/90 font-medium leading-relaxed">
-                      {ano.prescription_cctp}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-                    <div className="flex flex-wrap gap-2">
-                      {ano.references_normatives?.map((ref: string, rIdx: number) => (
-                        <span key={rIdx} className="text-[9px] bg-white/5 px-2 py-0.5 rounded border border-white/10 text-white/60">
-                          {ref}
-                        </span>
-                      ))}
-                    </div>
-                    {ano.estimation_budgetaire && (
-                      <div className="text-[10px] font-mono text-green-400/80 bg-green-500/5 px-2 py-1 rounded border border-green-500/10">
-                        Est. : {ano.estimation_budgetaire}
-                      </div>
+                  <div className="flex flex-col gap-1 items-end shrink-0">
+                    {ano.impact_energetique && (
+                      <span className={`text-[9px] px-2 py-0.5 rounded-full border uppercase font-bold ${
+                        ano.impact_energetique === 'fort' || ano.impact_energetique === 'critique' 
+                        ? 'bg-red-500/20 text-red-300 border-red-500/30' 
+                        : 'bg-orange-500/20 text-orange-300 border-orange-500/30'
+                      }`}>
+                        Impact {ano.impact_energetique}
+                      </span>
+                    )}
+                    {ano.priorite_intervention && (
+                      <span className="text-[9px] text-white/40 italic">{ano.priorite_intervention}</span>
                     )}
                   </div>
                 </div>
-              ))}
-            </div>
-          </div>
-        ))}
 
-        {/* SYNTHESE ENERGETIQUE FINALE */}
-        {data.synthese_energetique && (
-          <div className="rounded-2xl border border-green-400/30 bg-green-500/10 p-5 shadow-lg space-y-4">
-            <h3 className="text-green-300 font-bold uppercase text-xs tracking-widest flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-400 rounded-full"></span>
-              Synthèse & Recommandations Globales
-            </h3>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <div className="text-[10px] uppercase font-bold text-white/40">Points Critiques</div>
-                <ul className="list-disc list-inside text-xs text-white/80 space-y-1">
-                  {data.synthese_energetique.points_critiques?.map((p: string, i: number) => <li key={i}>{p}</li>)}
-                </ul>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-1">
+                    <div className="text-[10px] uppercase font-bold text-white/40">Analyse Technique</div>
+                    <p className="text-xs text-white/80 leading-relaxed">{ano.analyse_technique}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[10px] uppercase font-bold text-red-400/60">Risques & Durabilité</div>
+                    <p className="text-xs text-white/80 italic">{ano.risques_associes}</p>
+                  </div>
+                </div>
+                
+                <div className="bg-blue-500/10 p-3 rounded-xl border border-blue-500/20">
+                  <div className="text-[10px] uppercase font-bold text-blue-400/70 mb-1">Prescription CCTP</div>
+                  <p className="text-xs text-blue-100/90 font-medium leading-relaxed">
+                    {ano.prescription_cctp}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                  <div className="flex flex-wrap gap-2">
+                    {ano.references_normatives?.map((ref: string, rIdx: number) => (
+                      <span key={rIdx} className="text-[9px] bg-white/5 px-2 py-0.5 rounded border border-white/10 text-white/60">
+                        {ref}
+                      </span>
+                    ))}
+                  </div>
+                  {ano.estimation_budgetaire && (
+                    <div className="text-[10px] font-mono text-green-400/80 bg-green-500/5 px-2 py-1 rounded border border-green-500/10">
+                      Est. : {ano.estimation_budgetaire}
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="space-y-2">
-                <div className="text-[10px] uppercase font-bold text-white/40">Recommandations</div>
-                <ul className="list-disc list-inside text-xs text-white/80 space-y-1">
-                  {data.synthese_energetique.recommandations_globales?.map((r: string, i: number) => <li key={i}>{r}</li>)}
-                </ul>
-              </div>
-            </div>
-            {data.synthese_energetique.impact_dpe_estime && (
-              <div className="pt-3 border-t border-white/10 flex justify-between items-center">
-                <span className="text-xs text-white/60">Impact DPE estimé :</span>
-                <span className="text-sm font-bold text-green-300">{data.synthese_energetique.impact_dpe_estime}</span>
-              </div>
-            )}
+            ))}
           </div>
-        )}
-      </div>
-    );
-  } catch (e) {
-    return <pre className="whitespace-pre-wrap rounded-xl bg-white/5 p-3 text-sm">{text}</pre>;
-  }
+        </div>
+      ))}
+
+      {/* SYNTHESE ENERGETIQUE FINALE */}
+      {data.synthese_energetique && (
+        <div className="rounded-2xl border border-green-400/30 bg-green-500/10 p-5 shadow-lg space-y-4">
+          <h3 className="text-green-300 font-bold uppercase text-xs tracking-widest flex items-center gap-2">
+            <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+            Synthèse & Recommandations Globales
+          </h3>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <div className="text-[10px] uppercase font-bold text-white/40">Points Critiques</div>
+              <ul className="list-disc list-inside text-xs text-white/80 space-y-1">
+                {data.synthese_energetique.points_critiques?.map((p: string, i: number) => <li key={i}>{p}</li>)}
+              </ul>
+            </div>
+            <div className="space-y-2">
+              <div className="text-[10px] uppercase font-bold text-white/40">Recommandations</div>
+              <ul className="list-disc list-inside text-xs text-white/80 space-y-1">
+                {data.synthese_energetique.recommandations_globales?.map((r: string, i: number) => <li key={i}>{r}</li>)}
+              </ul>
+            </div>
+          </div>
+          {data.synthese_energetique.impact_dpe_estime && (
+            <div className="pt-3 border-t border-white/10 flex justify-between items-center">
+              <span className="text-xs text-white/60">Impact DPE estimé :</span>
+              <span className="text-sm font-bold text-green-300">{data.synthese_energetique.impact_dpe_estime}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 };
 
 const statusVariant = (s: string) =>
