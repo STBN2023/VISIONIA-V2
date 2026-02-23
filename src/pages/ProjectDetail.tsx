@@ -74,15 +74,17 @@ const ProjectDetail = () => {
     (async () => {
       if (!id) return;
       const p = await getProjectById(id);
-      setProject(p);
-      setPrompt(p?.prompt ?? "");
-      setTitle(p?.title ?? "");
-      setAddress(p?.address ?? "");
-      setType(p?.type ?? "");
-      setStatus(p?.status ?? "Brouillon");
-      setNotes(p?.notes ?? "");
-      setProjectTemplateId(p?.templateId);
-      setRuns(p ? getRunsByProjectId(p.id) : []);
+      if (p) {
+        setProject(p);
+        setPrompt(p.prompt || "");
+        setTitle(p.title || "");
+        setAddress(p.address || "");
+        setType(p.type || "");
+        setStatus(p.status || "Brouillon");
+        setNotes(p.notes || "");
+        setProjectTemplateId(p.templateId);
+        setRuns(getRunsByProjectId(p.id));
+      }
     })();
   }, [id]);
 
@@ -106,11 +108,39 @@ const ProjectDetail = () => {
   }, [prompt]);
 
   // Actions prompt/template
-  const applyTemplateToPrompt = () => {
+  const handleProjectTemplateChange = async (templateId: string | undefined) => {
+    setProjectTemplateId(templateId);
+    if (!project) return;
+    
+    if (templateId) {
+      const tpl = getTemplateById(templateId);
+      if (tpl) {
+        setPrompt(tpl.body);
+        // Auto-save the selection to the project in DB
+        const updated = await updateProject(project.id, { templateId, prompt: tpl.body });
+        if (updated) setProject(updated);
+        showSuccess("Modèle chargé et appliqué au projet");
+      }
+    } else {
+      const updated = await updateProject(project.id, { templateId: undefined });
+      if (updated) setProject(updated);
+    }
+  };
+
+  const handlePromptChange = async (newPrompt: string) => {
+    setPrompt(newPrompt);
+    if (project) {
+      await updateProject(project.id, { prompt: newPrompt });
+    }
+  };
+
+  const applyTemplateToPrompt = async () => {
     if (!project || !projectTemplateId) return;
     const tpl = getTemplateById(projectTemplateId);
     if (!tpl) return;
     setPrompt(tpl.body);
+    const updated = await updateProject(project.id, { prompt: tpl.body });
+    if (updated) setProject(updated);
     showSuccess("Template appliqué au prompt du projet");
   };
 
@@ -129,7 +159,7 @@ const ProjectDetail = () => {
     );
     const updated = await updateProject(project.id, { tags: nextTags })!;
     setProject(updated);
-    showSuccess(`Tag “${label}” ajouté au projet`);
+    showSuccess(`Tag "${label}" ajouté au projet`);
   };
 
   const handleDeleteTag = async (label: string) => {
@@ -140,7 +170,7 @@ const ProjectDetail = () => {
     const updated = await updateProject(project.id, { tags: nextTags, images: nextImages })!;
     setProject(updated);
     if (tagFilter === label) setTagFilter("all");
-    showSuccess(`Tag “${label}” supprimé`);
+    showSuccess(`Tag "${label}" supprimé`);
   };
 
   // Actions images (avec compression)
@@ -393,10 +423,10 @@ const ProjectDetail = () => {
               projectId={project.id}
               images={project.images}
               prompt={prompt}
-              setPrompt={setPrompt}
+              setPrompt={handlePromptChange}
               templates={templates}
               projectTemplateId={projectTemplateId}
-              setProjectTemplateId={setProjectTemplateId}
+              setProjectTemplateId={handleProjectTemplateChange}
               lineErrors={lineErrors}
               onApplyTemplateToPrompt={applyTemplateToPrompt}
               onSaveProjectTemplateSelection={saveProjectTemplateSelection}

@@ -40,7 +40,9 @@ function mapDbToProject(dbProj: any): Project {
     status: (dbProj.status as ProjectStatus) || "Brouillon",
     createdAt: dbProj.created_at,
     updatedAt: dbProj.updated_at,
-    prompt: "",
+    prompt: dbProj.prompt || "",
+    templateId: dbProj.template_id,
+    notes: dbProj.notes || "",
     images: (dbProj.inspections || []).map((ins: any) => ({
       id: ins.id,
       name: ins.name || "Image",
@@ -50,7 +52,7 @@ function mapDbToProject(dbProj: any): Project {
       createdAt: ins.created_at,
       tag: ins.status,
     })),
-    tags: [],
+    tags: dbProj.tags || [],
   };
 }
 
@@ -180,6 +182,9 @@ export async function updateProject(
   if (patch.address !== undefined) updateData.location = patch.address;
   if (patch.type !== undefined) updateData.description = patch.type;
   if (patch.status) updateData.status = patch.status;
+  if (patch.templateId !== undefined) updateData.template_id = patch.templateId;
+  if (patch.prompt !== undefined) updateData.prompt = patch.prompt;
+  if (patch.notes !== undefined) updateData.notes = patch.notes;
   updateData.updated_at = new Date().toISOString();
 
   const { error } = await supabase
