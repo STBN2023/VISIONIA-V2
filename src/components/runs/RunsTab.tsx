@@ -17,7 +17,20 @@ import { Badge as UIWebBadge } from "@/components/ui/badge";
 // Ajout d'un composant pour afficher le JSON structuré par lots
 const StructuredAnalysisView = ({ text }: { text: string }) => {
   try {
-    const data = JSON.parse(text);
+    // Nettoyage robuste du texte (enlève les blocs de code Markdown si présents)
+    let cleanText = text.trim();
+    if (cleanText.startsWith("```")) {
+      cleanText = cleanText.replace(/^```json\n?/, "").replace(/```$/, "").trim();
+    }
+    
+    // Tentative de parsing
+    const data = JSON.parse(cleanText);
+    
+    // Vérification de la présence d'au moins un bloc connu (lots ou contexte)
+    if (!data.lots && !data.contexte_projet) {
+      return <pre className="whitespace-pre-wrap rounded-xl bg-white/5 p-3 text-sm">{text}</pre>;
+    }
+
     const hasContext = !!data.contexte_projet;
     const lots = data.lots || [];
 
