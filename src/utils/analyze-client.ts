@@ -426,10 +426,11 @@ export async function analyzeLLM(input: {
     };
   }
 
-  const model = input.model || s.model || "gpt-4o-mini";
+  // Utiliser gpt-4o par défaut pour les analyses complexes si disponible, et augmenter max_tokens
+  const model = input.model || s.model || "gpt-4o";
   const userTemp = typeof input.temperature === "number" ? input.temperature : s.temperature ?? 0.2;
   const max_tokens =
-    typeof input.max_tokens === "number" ? input.max_tokens : s.maxTokens ?? 1200;
+    typeof input.max_tokens === "number" ? input.max_tokens : (s.maxTokens && s.maxTokens > 1200 ? s.maxTokens : 4000);
 
   try {
     if (input.mode === "aggregate") {
