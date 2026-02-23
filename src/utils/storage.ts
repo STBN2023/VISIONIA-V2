@@ -1,6 +1,6 @@
-import { idbSet, idbGet, idbDel } from "@/utils/idb";
+import { supabase } from "@/integrations/supabase/client";
 
-export type ImageTag = string; // tags libres
+export type ImageTag = string;
 
 export type ProjectStatus = "Brouillon" | "En cours" | "Terminé" | "Archivé";
 
@@ -9,9 +9,9 @@ export type ProjectImage = {
   name: string;
   size: number;
   type: string;
-  dataUrl: string; // Hydraté depuis IndexedDB côté lecture
+  dataUrl: string;
   createdAt: string;
-  tag?: ImageTag; // libre
+  tag?: ImageTag;
   templateId?: string;
 };
 
@@ -27,87 +27,121 @@ export type Project = {
   templateId?: string;
   images: ProjectImage[];
   notes?: string;
-  tags: string[]; // tags définis au niveau projet
+  tags: string[];
 };
 
-// --- Stockage 100% local (navigateur) ---
-const LOCAL_KEY = "projects_local_fallback_v1";
-const IDB_PREFIX = "image:";
-
-type StoredImage = Omit<ProjectImage, "dataUrl"> & { dataUrl?: string }; // dataUrl remplacée par idb://id
-type StoredProject = Omit<Project, "images"> & { images: StoredImage[] };
-
-function readLocalRaw(): StoredProject[] {
-  try {
-    const raw = localStorage.getItem(LOCAL_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    const arr: any[] = Array.isArray(parsed) ? parsed : [];
-    return arr.map((p) => ({
-      ...p,
-      tags: Array.isArray(p.tags) ? p.tags : [],
-    })) as StoredProject[];
-  } catch {
-    return [];
-  }
-}
-
-function writeLocalRaw(projects: StoredProject[]) {
-  localStorage.setItem(LOCAL_KEY, JSON.stringify(projects));
-}
-
-function findLocalRaw(id: string): StoredProject | undefined {
-  return readLocalRaw().find((p) => p.id === id);
-}
-
-function touchUpdatedAt<P extends { updatedAt: string }>(p: P): P {
-  return { ...p, updatedAt: new Date().toISOString() };
-}
-
-// Remplace dataUrl volumineuse par un pointeur idb://<id> et sauvegarde la dataURL en IndexedDB
-async function externalizeImage(img: ProjectImage | StoredImage): Promise<StoredImage> {
-  const id = img.id || crypto.randomUUID();
-  const pointer = `idb://${id}`;
-  const hasData = typeof (img as any).dataUrl === "string" && (img as any).dataUrl.startsWith("data:");
-  if (hasData) {
-    await idbSet(IDB_PREFIX + id, (img as any).dataUrl as string);
-  }
+// Map database project to frontend Project
+function mapDbToProject(dbProj: any): Project {
   return {
-    ...(img as any),
-    id,
-    dataUrl: pointer, // petite string
+    id: dbProj.id,
+    title: dbProj.name,
+    address: dbProj.location || "",
+    type: dbProj.description || "",
+    status: (dbProj.status as ProjectStatus) || "Brouillon",
+    createdAt: dbProj.created_at,
+    updatedAt: dbProj.updated_at,
+    prompt: "",
+    images: (dbProj.inspections || []).map((ins: any) => ({
+      id: ins.id,
+      name: ins.name || "Image",
+      size: ins.size || 0,
+      type: ins.type || "image/jpeg",
+      dataUrl: ins.image_url || "",
+      createdAt: ins.created_at,
+      tag: ins.status,
+    })),
+    tags: [],
   };
 }
 
-// Hydrate la dataUrl depuis IndexedDB si besoin
-async function hydrateImage(img: StoredImage): Promise<ProjectImage> {
-  const isPointer = typeof img.dataUrl === "string" && img.dataUrl.startsWith("idb://");
-  if (isPointer) {
-    const id = img.id;
-    const data = await idbGet(IDB_PREFIX + id);
-    return {
-      ...(img as any),
-      dataUrl: data || "", // on laisse vide si non trouvé
-    };
+// Helper to upload image to Supabase Storage and create inspection record
+async function uploadAndRecordImage(projectId: string, image: ProjectImage): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("User not authenticated");
+
+  let imageUrl = image.dataUrl;
+
+  // If it's a dataUrl (new image), upload it to Storage
+  if (image.dataUrl.startsWith('data:')) {
+    const response = await fetch(image.dataUrl);
+    const blob = await response.blob();
+    const fileName = `${user.id}/${projectId}/${image.id}.${blob.type.split('/')[1]}`;
+    
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from('inspections')
+      .upload(fileName, blob, {
+        upsert: true,
+        contentType: blob.type
+      });
+
+    if (uploadError) {
+      console.error("Storage upload error:", uploadError);
+      // Fallback: keep dataUrl if upload fails (not ideal for DB size)
+    } else {
+      const { data: { publicUrl } } = supabase.storage
+        .from('inspections')
+        .getPublicUrl(fileName);
+      imageUrl = publicUrl;
+    }
   }
-  return img as ProjectImage;
+
+  // Create or update inspection record
+  const { data, error } = await supabase
+    .from('inspections')
+    .upsert({
+      id: image.id,
+      project_id: projectId,
+      user_id: user.id,
+      image_url: imageUrl,
+      name: image.name,
+      size: image.size,
+      type: image.type,
+      status: image.tag,
+      created_at: image.createdAt
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data.image_url;
 }
 
 export async function getProjects(): Promise<Project[]> {
-  // Pas besoin d’hydrater les dataURL pour la liste
-  return (readLocalRaw() as StoredProject[])
-    .map((p) => ({
-      ...(p as any),
-      images: (p.images || []).map((i) => ({ ...(i as any), dataUrl: i.dataUrl ?? `idb://${i.id}` })),
-    }))
-    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()) as Project[];
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('projects')
+    .select(`
+      *,
+      inspections (*)
+    `)
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error("Error fetching projects:", error);
+    return [];
+  }
+
+  return data.map(mapDbToProject);
 }
 
 export async function getProjectById(id: string): Promise<Project | undefined> {
-  const p = findLocalRaw(id);
-  if (!p) return undefined;
-  const hydrated = await Promise.all((p.images || []).map((i) => hydrateImage(i)));
-  return { ...(p as any), images: hydrated } as Project;
+  const { data, error } = await supabase
+    .from('projects')
+    .select(`
+      *,
+      inspections (*)
+    `)
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    console.error("Error fetching project:", error);
+    return undefined;
+  }
+
+  return mapDbToProject(data);
 }
 
 export async function createProject(input: {
@@ -115,96 +149,80 @@ export async function createProject(input: {
   address?: string;
   type?: string;
 }): Promise<Project> {
-  const now = new Date().toISOString();
-  const proj: StoredProject = {
-    id: crypto.randomUUID(),
-    title: input.title.trim(),
-    address: input.address?.trim() || undefined,
-    type: input.type?.trim() || undefined,
-    status: "Brouillon",
-    createdAt: now,
-    updatedAt: now,
-    prompt: "",
-    templateId: undefined,
-    images: [],
-    notes: undefined,
-    tags: [],
-  };
-  const all = readLocalRaw();
-  writeLocalRaw([proj, ...all]);
-  return proj as unknown as Project;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("User not authenticated");
+
+  const { data, error } = await supabase
+    .from('projects')
+    .insert({
+      user_id: user.id,
+      name: input.title.trim(),
+      location: input.address?.trim(),
+      description: input.type?.trim(),
+      status: 'Brouillon'
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return mapDbToProject({ ...data, inspections: [] });
 }
 
 export async function updateProject(
   id: string,
   patch: Partial<Omit<Project, "id" | "createdAt">>,
 ): Promise<Project | undefined> {
-  const all = readLocalRaw();
-  const idx = all.findIndex((p) => p.id === id);
-  if (idx === -1) return undefined;
-  const prev = all[idx];
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("User not authenticated");
 
-  let nextImages: StoredImage[] | undefined = undefined;
+  const updateData: any = {};
+  if (patch.title) updateData.name = patch.title;
+  if (patch.address !== undefined) updateData.location = patch.address;
+  if (patch.type !== undefined) updateData.description = patch.type;
+  if (patch.status) updateData.status = patch.status;
+  updateData.updated_at = new Date().toISOString();
 
-  if (Array.isArray(patch.images)) {
-    // Externaliser uniquement les nouvelles images et éviter de réécrire celles déjà stockées
-    const incoming = patch.images as ProjectImage[];
-    const prevById = new Map((prev.images || []).map((i) => [i.id, i]));
-    const incomingIds = new Set(incoming.map((i) => i.id));
-    const prevIds = new Set((prev.images || []).map((i) => i.id));
+  const { error } = await supabase
+    .from('projects')
+    .update(updateData)
+    .eq('id', id);
 
-    // Supprimer de l'IDB les images disparues
-    for (const oldId of prevIds) {
-      if (!incomingIds.has(oldId)) {
-        await idbDel(IDB_PREFIX + oldId);
-      }
+  if (error) throw error;
+
+  // Handle images update
+  if (patch.images) {
+    // 1. Get current images to handle deletions
+    const { data: currentInspections } = await supabase
+      .from('inspections')
+      .select('id, image_url')
+      .eq('project_id', id);
+
+    const currentIds = new Set((currentInspections || []).map(ins => ins.id));
+    const newIds = new Set(patch.images.map(img => img.id));
+
+    // 2. Delete removed images
+    const toDelete = (currentInspections || []).filter(ins => !newIds.has(ins.id));
+    for (const ins of toDelete) {
+      await supabase.from('inspections').delete().eq('id', ins.id);
+      // Optional: Delete from Storage too if needed
     }
 
-    nextImages = [];
-    for (const img of incoming) {
-      if (prevById.has(img.id)) {
-        // Image déjà connue: on conserve le pointeur IDB et on met à jour les métadonnées
-        const prevStored = prevById.get(img.id)!;
-        const { dataUrl: _ignored, ...rest } = img as any;
-        nextImages.push({
-          ...(prevStored as any),
-          ...rest,
-          dataUrl: prevStored.dataUrl ?? `idb://${img.id}`,
-        });
-      } else {
-        // Nouvelle image: externaliser (sauver dataUrl en IDB et stocker un pointeur)
-        const stored = await externalizeImage(img);
-        nextImages.push(stored);
-      }
+    // 3. Upload/Update images
+    for (const img of patch.images) {
+      await uploadAndRecordImage(id, img);
     }
   }
 
-  const next: StoredProject = touchUpdatedAt({
-    ...(prev as any),
-    ...patch,
-    // sécurité: ensure tags array
-    tags: Array.isArray(patch.tags) ? patch.tags : prev.tags,
-    images: nextImages !== undefined ? nextImages : prev.images,
-  });
-
-  all[idx] = next;
-  writeLocalRaw(all);
-
-  // Retourner le projet hydraté
-  const hydrated = await Promise.all((next.images || []).map((i) => hydrateImage(i)));
-  return { ...(next as any), images: hydrated } as Project;
+  return getProjectById(id);
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  // Supprimer d'abord les dataURL IDB des images du projet
-  const prev = findLocalRaw(id);
-  if (prev) {
-    for (const i of prev.images || []) {
-      await idbDel(IDB_PREFIX + i.id);
-    }
-  }
-  const next = readLocalRaw().filter((p) => p.id !== id);
-  writeLocalRaw(next);
+  const { error } = await supabase
+    .from('projects')
+    .delete()
+    .eq('id', id);
+  
+  if (error) throw error;
 }
 
 export async function fileToDataUrl(file: File): Promise<string> {
