@@ -17,18 +17,34 @@ import { Badge as UIWebBadge } from "@/components/ui/badge";
 // Ajout d'un composant pour afficher le JSON structuré par lots
 const StructuredAnalysisView = ({ text }: { text: string }) => {
   try {
-    // Nettoyage robuste du texte (enlève les blocs de code Markdown si présents)
+    // 1. Nettoyage agressif du texte
     let cleanText = text.trim();
-    if (cleanText.startsWith("```")) {
-      cleanText = cleanText.replace(/^```json\n?/, "").replace(/```$/, "").trim();
-    }
     
+    // Enlever les blocs de code Markdown
+    if (cleanText.includes("```")) {
+      const match = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (match && match[1]) {
+        cleanText = match[1].trim();
+      }
+    }
+
+    // 2. Tenter l'extraction du premier objet JSON valide si le texte est encore "sale"
+    const firstBrace = cleanText.indexOf('{');
+    const lastBrace = cleanText.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      cleanText = cleanText.substring(firstBrace, lastBrace + 1);
+    }
+
+    // 3. Remplacement des sauts de ligne réels dans les chaînes JSON par des \n échappés
+    // (L'IA oublie souvent d'échapper les retours à la ligne dans les descriptions)
+    cleanText = cleanText.replace(/\n/g, " ");
+
     // Tentative de parsing
     const data = JSON.parse(cleanText);
     
-    // Vérification de la présence d'au moins un bloc connu (lots ou contexte)
+    // Vérification de la structure minimale (lots ou contexte)
     if (!data.lots && !data.contexte_projet) {
-      return <pre className="whitespace-pre-wrap rounded-xl bg-white/5 p-3 text-sm">{text}</pre>;
+      throw new Error("Structure JSON non reconnue");
     }
 
     const hasContext = !!data.contexte_projet;
