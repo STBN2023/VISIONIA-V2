@@ -44,6 +44,9 @@ async function callOpenAI({
     });
   }
 
+  // Determine if we should force JSON mode
+  const isJsonPrompt = prompt.toLowerCase().includes("json") || prompt.includes("{");
+
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -55,6 +58,8 @@ async function callOpenAI({
       temperature,
       max_tokens: max_tokens ?? 1200,
       messages: [{ role: "user", content }],
+      // Force JSON mode if requested in prompt
+      response_format: isJsonPrompt ? { type: "json_object" } : undefined,
     }),
   });
 
@@ -66,8 +71,8 @@ async function callOpenAI({
     throw new Error(msg);
   }
   const text =
-    data?.choices?.[0]?.message?.content ??
-    data?.choices?.[0]?.message?.parts?.map((p: any) => p?.text).join("\n") ??
+    data?.choices?.[0]?.message?.content ?? 
+    data?.choices?.[0]?.message?.parts?.map((p: any) => p?.text).join("\n") ?? 
     "";
   return String(text || "");
 }
