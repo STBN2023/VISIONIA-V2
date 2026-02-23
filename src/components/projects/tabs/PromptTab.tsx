@@ -30,7 +30,7 @@ const PromptTab = ({
   templates,
   projectTemplateId,
   setProjectTemplateId,
-  lineErrors,
+  lineErrors: _unusedLineErrors,
   onApplyTemplateToPrompt,
   onSaveProjectTemplateSelection,
   tags,
@@ -116,11 +116,6 @@ Conformité réglementaire:
             rows={12}
             className="bg-white/10 text-white placeholder:text-white/60"
           />
-          {lineErrors.length > 0 ? (
-            <p className="text-sm text-red-300">Lignes trop longues (&gt; 100 caractères) : {lineErrors.join(", ")}</p>
-          ) : (
-            <p className="text-xs text-white/70">Règle: chaque ligne ≤ 100 caractères.</p>
-          )}
         </CardContent>
         <CardFooter className="flex flex-wrap items-center justify-between gap-2">
           <div className="text-xs text-white/70">Astuce: vérifiez que le prompt correspond bien aux images.</div>

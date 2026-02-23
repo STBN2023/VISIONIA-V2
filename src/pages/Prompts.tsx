@@ -77,10 +77,6 @@ const Prompts = () => {
       showError("Nom trop court (≥ 3 caractères).");
       return;
     }
-    if (lineErrors.length > 0) {
-      showError(`Le template contient des lignes > 100 caractères (lignes: ${lineErrors.join(", ")}).`);
-      return;
-    }
     updateTemplate(selected.id, { name: name.trim(), body });
     refresh();
     showSuccess("Template enregistré");
@@ -188,13 +184,6 @@ const Prompts = () => {
                   <div className="grid gap-2">
                     <Label htmlFor="body">Contenu</Label>
                     <Textarea id="body" rows={14} value={body} onChange={(e) => setBody(e.target.value)} className="bg-white/10 text-white placeholder:text-white/60" />
-                    {lineErrors.length > 0 ? (
-                      <p className="text-sm text-red-300">
-                        Lignes trop longues (&gt; 100 caractères) : {lineErrors.join(", ")}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-white/70">Règle: chaque ligne ≤ 100 caractères.</p>
-                    )}
                   </div>
                 </CardContent>
                 <CardFooter className="flex justify-end">

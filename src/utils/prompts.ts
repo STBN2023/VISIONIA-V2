@@ -141,10 +141,9 @@ export function setDefaultTemplate(id: string) {
   if (changed) writeAll(all);
 }
 
+/**
+ * @deprecated Line length restriction is no longer required.
+ */
 export function getPromptLineErrors(body: string): number[] {
-  const errors: number[] = [];
-  body.split("\n").forEach((line, idx) => {
-    if (line.length > 100) errors.push(idx + 1);
-  });
-  return errors;
+  return []; // Always return empty array as the restriction is removed
 }
