@@ -179,208 +179,218 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const margin = 15;
   const contentWidth = 210 - margin * 2;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(14);
-  doc.text("Rapport d'analyse - ISOEDRE Vision IA", margin, 18);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-
-  // Remplacer l'ID du projet par son nom réel et traduire mode/statut
   const project = await getProjectById(run.projectId);
-  const metaText = [
-    `Run: ${run.id}`,
-    `Projet: ${project?.title || "Sans titre"}`,
-    `Mode: ${toFrenchMode(run.mode)}`,
-    `Statut: ${toFrenchStatus(run.status)}`,
-    `Créé: ${new Date(run.createdAt).toLocaleString()}`,
-  ].join(" • ");
 
-  // Encadrer l'en-tête dans un petit cartouche
-  const metaLines = doc.splitTextToSize(metaText, contentWidth);
-  let y = 26;
-  const boxHeight = metaLines.length * 5 + 4;
-  doc.setFillColor(245);
-  // arrondis légers
-  (doc as any).roundedRect(margin - 1, y - 5, contentWidth + 2, boxHeight, 2, 2, "F");
-  y = addWrappedText(doc, metaText, margin, y, contentWidth, 5);
+  // --- ENTÊTE PROFESSIONNELLE ---
+  // Bandeau supérieur
+  doc.setFillColor(30, 41, 59); // Bleu nuit ISOEDRE
+  doc.rect(0, 0, 210, 35, "F");
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(22);
+  doc.text("ISOEDRE", margin, 20);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text("VISION IA - AUDIT TECHNIQUE & ÉNERGÉTIQUE", margin, 26);
 
-  y += 4;
-  doc.setDrawColor(180);
-  doc.line(margin, y, margin + contentWidth, y);
-  y += 8;
-
-  // Helper pour dessiner le JSON structuré (Lots/Anomalies)
-  function drawStructuredAnalysis(data: any, currentY: number) {
-    if (!data || !data.lots || !Array.isArray(data.lots)) return currentY;
-
-    data.lots.forEach((lot: any) => {
-      // Entête de Lot
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.setTextColor(0, 0, 0);
-      currentY = ensureSpace(doc, currentY, 15);
-      
-      // Bandeau de lot
-      doc.setFillColor(235, 235, 235);
-      doc.rect(margin, currentY - 5, contentWidth, 8, "F");
-      doc.text(`LOT : ${lot.lot || "Général"}`, margin + 2, currentY + 1);
-      currentY += 10;
-
-      lot.anomalies?.forEach((ano: any, aIdx: number) => {
-        // Séparateur entre anomalies
-        if (aIdx > 0) {
-          doc.setDrawColor(220);
-          doc.line(margin + 5, currentY - 2, margin + contentWidth - 5, currentY - 2);
-          currentY += 4;
-        }
-
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(10);
-        doc.setTextColor(60, 60, 60);
-        doc.text("Description :", margin, currentY);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(0, 0, 0);
-        currentY = addWrappedText(doc, ano.description || "N/A", margin + 30, currentY, contentWidth - 30, 5);
-
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(60, 60, 60);
-        doc.text("Analyse :", margin, currentY);
-        doc.setFont("helvetica", "normal");
-        doc.setTextColor(0, 0, 0);
-        currentY = addWrappedText(doc, ano.analyse_technique || "N/A", margin + 30, currentY, contentWidth - 30, 5);
-
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(180, 50, 50); // Rouge pour les risques
-        doc.text("Risques :", margin, currentY);
-        doc.setFont("helvetica", "italic");
-        doc.setTextColor(0, 0, 0);
-        currentY = addWrappedText(doc, ano.risques_associes || "N/A", margin + 30, currentY, contentWidth - 30, 5);
-
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(40, 80, 160); // Bleu pour CCTP
-        doc.text("CCTP :", margin, currentY);
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(0, 0, 0);
-        currentY = addWrappedText(doc, ano.prescription_cctp || "N/A", margin + 30, currentY, contentWidth - 30, 5);
-
-        if (ano.references_normatives?.length > 0) {
-          doc.setFont("helvetica", "normal");
-          doc.setFontSize(8);
-          doc.setTextColor(100, 100, 100);
-          currentY = addWrappedText(doc, `Réf. normatives : ${ano.references_normatives.join(", ")}`, margin + 30, currentY, contentWidth - 30, 4);
-        }
-        
-        currentY += 4;
-      });
-      currentY += 6;
-    });
-    return currentY;
+  // Infos Projet à droite dans l'entête
+  doc.setFontSize(9);
+  doc.text(`Rapport généré le : ${new Date().toLocaleDateString('fr-FR')}`, 210 - margin, 18, { align: "right" });
+  doc.text(`Projet : ${project?.title || "Sans titre"}`, 210 - margin, 24, { align: "right" });
+  if (project?.location) {
+    doc.text(`Adresse : ${project.location}`, 210 - margin, 30, { align: "right" });
   }
 
-  if (run.mode === "aggregate") {
+  let y = 45;
+  doc.setTextColor(0, 0, 0);
+
+  // --- BLOC CONTEXTE (si présent dans le JSON) ---
+  const output = run.outputText?.trim() || "";
+  let jsonData: any = null;
+  try {
+    if (output.startsWith("{") || output.includes('"lots"')) {
+      const cleanJson = output.replace(/```json\n?/, "").replace(/```$/, "").replace(/\n/g, " ").trim();
+      jsonData = JSON.parse(cleanJson);
+    }
+  } catch (e) {
+    console.error("PDF: Erreur parsing JSON pour contexte", e);
+  }
+
+  if (jsonData?.contexte_projet) {
+    const ctx = jsonData.contexte_projet;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.text("SYNTHESE DES PATHOLOGIES PAR LOT", margin, y);
-    y += 8;
+    doc.text("1. CONTEXTE DE L'INTERVENTION", margin, y);
+    y += 6;
+    
+    doc.setFillColor(245, 247, 250);
+    doc.roundedRect(margin, y, contentWidth, 22, 2, 2, "F");
+    
+    doc.setFontSize(9);
+    doc.setFont("helvetica", "bold");
+    doc.text("Type :", margin + 5, y + 8);
+    doc.text("Phase :", margin + 5, y + 14);
+    doc.text("DPE Initial :", margin + 90, y + 8);
+    doc.text("Date Analyse :", margin + 90, y + 14);
 
-    // Détection si c'est du JSON ou du texte brut
-    const output = run.outputText?.trim() || "";
-    if (output.startsWith("{") || output.includes('"lots"')) {
-      try {
-        const jsonData = JSON.parse(output);
-        y = drawStructuredAnalysis(jsonData, y);
-      } catch (e) {
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(11);
-        y = addWrappedText(doc, stripMarkdown(output), margin, y, contentWidth, 6);
-      }
-    } else {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(11);
-      y = addWrappedText(doc, stripMarkdown(output), margin, y, contentWidth, 6);
-    }
+    doc.setFont("helvetica", "normal");
+    doc.text(String(ctx.type_intervention || "N/A"), margin + 25, y + 8);
+    doc.text(String(ctx.phase || "N/A"), margin + 25, y + 14);
+    doc.text(String(ctx.dpe_initial || "N/A"), margin + 115, y + 8);
+    doc.text(String(ctx.date_analyse || ctx.date_analysis || "N/A"), margin + 115, y + 14);
+    
+    y += 26;
 
-    if (run.items && run.items.length > 0) {
-      // Mettre le titre 'Détails par image' en tête d'une nouvelle page/section
-      y = pageBreak(doc);
+    if (ctx.reserve_generale) {
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(12);
-      y = drawSectionHeader(doc, "Détails par image", margin, y, contentWidth);
+      doc.text("RÉSERVE GÉNÉRALE :", margin, y);
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8);
+      y = addWrappedText(doc, ctx.reserve_generale, margin + 40, y, contentWidth - 40, 4);
+      y += 6;
+    }
+  }
 
-      // Première image sous le titre, suivantes chacune sur nouvelle page
-      let isFirst = true;
-      for (const item of run.items) {
-        if (!isFirst) {
-          y = pageBreak(doc);
-        } else {
-          // petite marge sous le cartouche
+  // --- ANALYSE PAR LOTS ---
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(12);
+  doc.text("2. SYNTHÈSE DES PATHOLOGIES PAR LOT", margin, y);
+  y += 8;
+
+  if (jsonData?.lots) {
+    jsonData.lots.forEach((lot: any) => {
+      // Entête de Lot stylisée
+      y = ensureSpace(doc, y, 20);
+      doc.setFillColor(51, 65, 85);
+      doc.rect(margin, y - 5, contentWidth, 8, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(11);
+      doc.text(`LOT : ${lot.lot || "Général"}`, margin + 3, y + 1);
+      doc.setTextColor(0, 0, 0);
+      y += 10;
+
+      lot.anomalies?.forEach((ano: any, aIdx: number) => {
+        y = ensureSpace(doc, y, 40);
+        if (aIdx > 0) {
+          doc.setDrawColor(230);
+          doc.line(margin + 10, y - 4, margin + contentWidth - 10, y - 4);
           y += 4;
         }
 
-        const img = images.find((i) => i.id === item.imageId);
-        const header = `Image: ${img?.name || item.imageId} ${img?.tag ? `(${img.tag})` : ""}`;
+        // ID et Localisation
+        doc.setFontSize(8);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(11);
-        y = drawSectionHeader(doc, header, margin, y, contentWidth);
+        doc.text(`${ano.id || "ANO"} | ${ano.image_ref || ""} | ${ano.localisation || ""}`, margin, y);
+        y += 5;
 
-        if (img?.dataUrl) {
-          y += 2;
-          const placedRes = await addImageBlock(doc, img.dataUrl, margin, y, Math.min(contentWidth, 100), 70);
-          y = placedRes.nextY + 4;
-
-          const boxes = item.boxes || [];
-          if (boxes.length > 0) {
-            drawBoxesOnPlaced(placedRes.placed, boxes);
-          }
-        }
-
+        // Description & Analyse (Deux colonnes)
+        doc.setFontSize(9);
+        doc.text("Description :", margin, y);
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(11);
-        const body = stripMarkdown(item.outputText?.trim() || (item.error ? `Erreur: ${item.error}` : "Pas de résultat disponible."));
-        y = addWrappedText(doc, body, margin, y, contentWidth, 6);
+        const descY = addWrappedText(doc, ano.description || "N/A", margin + 25, y, contentWidth - 25, 4.5);
+        
+        doc.setFont("helvetica", "bold");
+        doc.text("Analyse :", margin, descY);
+        doc.setFont("helvetica", "normal");
+        y = addWrappedText(doc, ano.analyse_technique || "N/A", margin + 25, descY, contentWidth - 25, 4.5);
 
-        isFirst = false;
-      }
-    }
+        // Risques (Rouge)
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(180, 0, 0);
+        doc.text("Risques :", margin, y);
+        doc.setFont("helvetica", "italic");
+        y = addWrappedText(doc, ano.risques_associes || "N/A", margin + 25, y, contentWidth - 25, 4.5);
+
+        // CCTP (Bleu + Gras)
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(0, 80, 160);
+        doc.text("CCTP :", margin, y);
+        y = addWrappedText(doc, ano.prescription_cctp || "N/A", margin + 25, y, contentWidth - 25, 4.5);
+
+        // Budget & Normes
+        doc.setTextColor(100, 100, 100);
+        doc.setFontSize(8);
+        doc.setFont("helvetica", "normal");
+        let extraInfo = "";
+        if (ano.references_normatives?.length) extraInfo += `Normes : ${ano.references_normatives.join(", ")} `;
+        if (ano.impact_energetique) extraInfo += `| Impact : ${ano.impact_energetique} `;
+        if (ano.estimation_budgetaire) extraInfo += `| Budget : ${ano.estimation_budgetaire}`;
+        
+        if (extraInfo) {
+          y = addWrappedText(doc, extraInfo, margin + 25, y, contentWidth - 25, 4);
+        }
+        
+        y += 6;
+      });
+      y += 4;
+    });
   } else {
+    // Fallback texte brut
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    y = addWrappedText(doc, stripMarkdown(output), margin, y, contentWidth, 5);
+  }
+
+  // --- SYNTHÈSE FINALE ---
+  if (jsonData?.synthese_energetique) {
+    y = pageBreak(doc);
+    const syn = jsonData.synthese_energetique;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.text("Rapports par image", margin, y);
+    doc.text("3. SYNTHÈSE ET PRÉCONISATIONS GLOBALES", margin, y);
     y += 8;
 
-    // Chaque image commence sur une nouvelle page
-    for (const item of run.items) {
-      y = pageBreak(doc);
+    doc.setFillColor(232, 245, 233); // Fond vert léger
+    doc.roundedRect(margin, y, contentWidth, 40, 2, 2, "F");
+    
+    doc.setFontSize(10);
+    doc.setTextColor(27, 94, 32);
+    doc.text("POINTS CRITIQUES :", margin + 5, y + 8);
+    doc.setFont("helvetica", "normal");
+    doc.setTextColor(0, 0, 0);
+    let synY = y + 13;
+    (syn.points_critiques || []).forEach((p: string) => {
+      synY = addWrappedText(doc, `• ${p}`, margin + 10, synY, contentWidth - 15, 5);
+    });
 
+    synY += 4;
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(27, 94, 32);
+    doc.text("IMPACT DPE ESTIMÉ :", margin + 5, synY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.text(String(syn.impact_dpe_estime || "Non évaluable"), margin + 50, synY);
+    
+    y = synY + 10;
+  }
+
+  // --- DÉTAILS IMAGES ---
+  if (run.items && run.items.length > 0) {
+    y = pageBreak(doc);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    y = drawSectionHeader(doc, "4. ANNEXE PHOTOGRAPHIQUE ET ANNOTATIONS", margin, y, contentWidth);
+
+    for (const item of run.items) {
+      y = ensureSpace(doc, y, 100);
       const img = images.find((i) => i.id === item.imageId);
-      const header = `Image: ${img?.name || item.imageId} ${img?.tag ? `(${img.tag})` : ""} • Statut: ${toFrenchStatus(item.status)}`;
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(11);
-      y = drawSectionHeader(doc, header, margin, y, contentWidth);
+      doc.setFontSize(10);
+      doc.text(`Réf : ${img?.name || item.imageId}`, margin, y);
+      y += 4;
 
       if (img?.dataUrl) {
-        y += 2;
-        const placedRes = await addImageBlock(doc, img.dataUrl, margin, y, Math.min(contentWidth, 100), 70);
-        y = placedRes.nextY + 4;
-
+        const placedRes = await addImageBlock(doc, img.dataUrl, margin, y, 120, 80);
         const boxes = item.boxes || [];
         if (boxes.length > 0) {
           drawBoxesOnPlaced(placedRes.placed, boxes);
         }
+        y = placedRes.nextY + 10;
       }
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(11);
-      const body = stripMarkdown(item.outputText?.trim() || (item.error ? `Erreur: ${item.error}` : "Pas de résultat disponible."));
-      y = addWrappedText(doc, body, margin, y, contentWidth, 6);
     }
   }
 
-  const filename =
-    run.mode === "aggregate"
-      ? `run_${run.projectId}_${run.id}_aggregate.pdf`
-      : `run_${run.projectId}_${run.id}_per_image.pdf`;
+  const filename = `ISOEDRE_VisionIA_Rapport_${project?.title || "Export"}_${new Date().toISOString().split('T')[0]}.pdf`;
   doc.save(filename);
 }
