@@ -211,50 +211,96 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
   doc.line(margin, y, margin + contentWidth, y);
   y += 8;
 
-  // Helper pour dessiner les boxes (orientées si angle)
-  function drawBoxesOnPlaced(placed: PlacedImage, boxes: NonNullable<Run["items"][number]["boxes"]>) {
-    boxes.forEach((b) => {
-      const px = placed.x + b.x * placed.w;
-      const py = placed.y + b.y * placed.h;
-      const pw = b.w * placed.w;
-      const ph = b.h * placed.h;
+  // Helper pour dessiner le JSON structuré (Lots/Anomalies)
+  function drawStructuredAnalysis(data: any, currentY: number) {
+    if (!data || !data.lots || !Array.isArray(data.lots)) return currentY;
 
-      let r = 34, g = 197, bcol = 94;
-      const col = b.color || "#22C55E";
-      try {
-        const rgb = hexToRgb(col);
-        r = rgb[0]; g = rgb[1]; bcol = rgb[2];
-      } catch {
-        // fallback
-      }
+    data.lots.forEach((lot: any) => {
+      // Entête de Lot
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(0, 0, 0);
+      currentY = ensureSpace(doc, currentY, 15);
+      
+      // Bandeau de lot
+      doc.setFillColor(235, 235, 235);
+      doc.rect(margin, currentY - 5, contentWidth, 8, "F");
+      doc.text(`LOT : ${lot.lot || "Général"}`, margin + 2, currentY + 1);
+      currentY += 10;
 
-      if (typeof b.angle === "number" && Math.abs(b.angle) > 0.01) {
-        drawRotatedRect(doc, px, py, pw, ph, b.angle, [r, g, bcol]);
-      } else {
-        doc.setDrawColor(r, g, bcol);
-        doc.setLineWidth(0.8);
-        doc.rect(px, py, pw, ph);
-      }
+      lot.anomalies?.forEach((ano: any, aIdx: number) => {
+        // Séparateur entre anomalies
+        if (aIdx > 0) {
+          doc.setDrawColor(220);
+          doc.line(margin + 5, currentY - 2, margin + contentWidth - 5, currentY - 2);
+          currentY += 4;
+        }
 
-      if (b.label) {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10);
+        doc.setTextColor(60, 60, 60);
+        doc.text("Description :", margin, currentY);
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        // Place le label légèrement au-dessus du coin gauche
-        doc.text(b.label, px + 1.5, Math.max(py - 1, 10));
-      }
+        doc.setTextColor(0, 0, 0);
+        currentY = addWrappedText(doc, ano.description || "N/A", margin + 30, currentY, contentWidth - 30, 5);
+
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(60, 60, 60);
+        doc.text("Analyse :", margin, currentY);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(0, 0, 0);
+        currentY = addWrappedText(doc, ano.analyse_technique || "N/A", margin + 30, currentY, contentWidth - 30, 5);
+
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(180, 50, 50); // Rouge pour les risques
+        doc.text("Risques :", margin, currentY);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(0, 0, 0);
+        currentY = addWrappedText(doc, ano.risques_associes || "N/A", margin + 30, currentY, contentWidth - 30, 5);
+
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(40, 80, 160); // Bleu pour CCTP
+        doc.text("CCTP :", margin, currentY);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(0, 0, 0);
+        currentY = addWrappedText(doc, ano.prescription_cctp || "N/A", margin + 30, currentY, contentWidth - 30, 5);
+
+        if (ano.references_normatives?.length > 0) {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(8);
+          doc.setTextColor(100, 100, 100);
+          currentY = addWrappedText(doc, `Réf. normatives : ${ano.references_normatives.join(", ")}`, margin + 30, currentY, contentWidth - 30, 4);
+        }
+        
+        currentY += 4;
+      });
+      currentY += 6;
     });
+    return currentY;
   }
 
   if (run.mode === "aggregate") {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.text("Rapport agrégé", margin, y);
+    doc.text("SYNTHESE DES PATHOLOGIES PAR LOT", margin, y);
     y += 8;
 
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    const text = stripMarkdown(run.outputText?.trim() || "Aucun contenu disponible (run non terminé).");
-    y = addWrappedText(doc, text, margin, y, contentWidth, 6);
+    // Détection si c'est du JSON ou du texte brut
+    const output = run.outputText?.trim() || "";
+    if (output.startsWith("{") || output.includes('"lots"')) {
+      try {
+        const jsonData = JSON.parse(output);
+        y = drawStructuredAnalysis(jsonData, y);
+      } catch (e) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        y = addWrappedText(doc, stripMarkdown(output), margin, y, contentWidth, 6);
+      }
+    } else {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(11);
+      y = addWrappedText(doc, stripMarkdown(output), margin, y, contentWidth, 6);
+    }
 
     if (run.items && run.items.length > 0) {
       // Mettre le titre 'Détails par image' en tête d'une nouvelle page/section

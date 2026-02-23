@@ -12,6 +12,79 @@ import { exportRunToPdf } from "@/utils/pdf";
 import RunLogDialog from "./RunLogDialog";
 import AnnotateDialog from "./AnnotateDialog";
 import AnomalyPreview from "./AnomalyPreview";
+import { Badge as UIWebBadge } from "@/components/ui/badge";
+
+// Ajout d'un composant pour afficher le JSON structuré par lots
+const StructuredAnalysisView = ({ text }: { text: string }) => {
+  try {
+    const data = JSON.parse(text);
+    if (!data.lots || !Array.isArray(data.lots)) return <pre className="whitespace-pre-wrap rounded-xl bg-white/5 p-3 text-sm">{text}</pre>;
+
+    return (
+      <div className="space-y-6 mt-2">
+        {data.lots.map((lot: any, idx: number) => (
+          <div key={idx} className="rounded-2xl border border-white/20 bg-white/10 overflow-hidden shadow-xl">
+            <div className="bg-white/20 px-4 py-2 border-b border-white/10 flex items-center justify-between">
+              <h3 className="font-bold text-white uppercase tracking-wider text-sm">LOT : {lot.lot || "Non spécifié"}</h3>
+              <UIWebBadge variant="secondary" className="bg-white/10 text-white border-white/20">
+                {lot.anomalies?.length || 0} anomalie(s)
+              </UIWebBadge>
+            </div>
+            <div className="divide-y divide-white/10">
+              {lot.anomalies?.map((ano: any, aIdx: number) => (
+                <div key={aIdx} className="p-4 space-y-3 bg-white/5 hover:bg-white/10 transition-colors">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <div className="text-[10px] uppercase font-bold text-white/50">Description</div>
+                      <p className="text-sm text-white/90 leading-relaxed font-medium">{ano.description}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-[10px] uppercase font-bold text-white/50">Analyse Technique</div>
+                      <p className="text-sm text-white/80 leading-relaxed">{ano.analyse_technique}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="grid gap-4 md:grid-cols-2 pt-2 border-t border-white/5">
+                    <div className="space-y-2">
+                      <div className="text-[10px] uppercase font-bold text-red-400/70">Risques Associés</div>
+                      <p className="text-sm text-white/80 italic">{ano.risques_associes}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-[10px] uppercase font-bold text-blue-400/70">Prescription CCTP</div>
+                      <p className="text-sm text-blue-100/90 font-medium bg-blue-500/10 p-2 rounded-lg border border-blue-500/20">
+                        {ano.prescription_cctp}
+                      </p>
+                    </div>
+                  </div>
+
+                  {ano.references_normatives?.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      {ano.references_normatives.map((ref: string, rIdx: number) => (
+                        <span key={rIdx} className="text-[10px] bg-white/10 px-2 py-0.5 rounded border border-white/20 text-white/70">
+                          Ref: {ref}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+              {(!lot.anomalies || lot.anomalies.length === 0) && (
+                <div className="p-4 text-center text-white/50 text-xs italic">Aucune anomalie détectée pour ce lot.</div>
+              )}
+            </div>
+          </div>
+        ))}
+        {data.lots.length === 0 && (
+          <div className="p-8 text-center bg-white/5 rounded-2xl border border-dashed border-white/20 text-white/60">
+            Aucune anomalie détectée sur l'ensemble des éléments analysés.
+          </div>
+        )}
+      </div>
+    );
+  } catch (e) {
+    return <pre className="whitespace-pre-wrap rounded-xl bg-white/5 p-3 text-sm">{text}</pre>;
+  }
+};
 
 const statusVariant = (s: string) =>
   s === "succeeded"
@@ -72,7 +145,7 @@ const RunsTab = ({ runs, images }: Props) => {
             {/* Onglet: runs par image (annotations) */}
             <TabsContent value="photos" className="space-y-4">
               {photoRuns.length === 0 ? (
-                <p className="text-sm text-white/80">Aucun run “par image” pour le moment.</p>
+                <p className="text-sm text-white/80">Aucun run "par image" pour le moment.</p>
               ) : (
                 photoRuns.map((run) => (
                   <div key={run.id} className="rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl">
@@ -83,7 +156,7 @@ const RunsTab = ({ runs, images }: Props) => {
                             type="button"
                             onClick={() => setLogRunId(run.id)}
                             className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-                            title="Voir le log d’erreur"
+                            title="Voir le log d'erreur"
                           >
                             <Badge variant={statusVariant(run.status)}>failed</Badge>
                           </button>
@@ -148,7 +221,7 @@ const RunsTab = ({ runs, images }: Props) => {
                                     variant="outline"
                                     className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm"
                                     onClick={() => { setAnnotateRunId(run.id); setAnnotateItemId(it.id); setAnnotateOpen(true); }}
-                                    title="Annoter l’image"
+                                    title="Annoter l'image"
                                   >
                                     <Pencil className="mr-2 h-4 w-4" />
                                     Annoter
@@ -156,7 +229,7 @@ const RunsTab = ({ runs, images }: Props) => {
                                 </div>
                               </div>
 
-                              {/* Aperçu rectangles d’anomalie */}
+                              {/* Aperçu rectangles d'anomalie */}
                               {img ? (
                                 <AnomalyPreview
                                   src={img.dataUrl}
@@ -197,7 +270,7 @@ const RunsTab = ({ runs, images }: Props) => {
                             variant="outline"
                             onClick={() => setLogRunId(run.id)}
                             className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm"
-                            title="Voir le log d’erreur"
+                            title="Voir le log d'erreur"
                           >
                             Voir le log
                           </Button>
@@ -225,7 +298,7 @@ const RunsTab = ({ runs, images }: Props) => {
             {/* Onglet: runs agrégés (résultats du prompt + détails par image) */}
             <TabsContent value="prompt" className="space-y-4">
               {promptRuns.length === 0 ? (
-                <p className="text-sm text-white/80">Aucun run “agrégé” pour le moment.</p>
+                <p className="text-sm text-white/80">Aucun run "agrégé" pour le moment.</p>
               ) : (
                 promptRuns.map((run) => (
                   <div key={run.id} className="rounded-2xl border border-white/20 bg-white/5 backdrop-blur-xl">
@@ -236,7 +309,7 @@ const RunsTab = ({ runs, images }: Props) => {
                             type="button"
                             onClick={() => setLogRunId(run.id)}
                             className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-white/50"
-                            title="Voir le log d’erreur"
+                            title="Voir le log d'erreur"
                           >
                             <Badge variant={statusVariant(run.status)}>failed</Badge>
                           </button>
@@ -278,10 +351,16 @@ const RunsTab = ({ runs, images }: Props) => {
                     </div>
 
                     <div className="p-3 space-y-4">
-                      {/* Texte global */}
-                      <pre className="whitespace-pre-wrap rounded-xl bg-white/5 p-3 text-sm">
-                        {run.outputText || (run.error ? `Erreur: ${run.error}` : "En cours...")}
-                      </pre>
+                      {/* Texte global optimisé pour JSON */}
+                      {run.outputText ? (
+                        <StructuredAnalysisView text={run.outputText} />
+                      ) : run.error ? (
+                        <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+                          Erreur: {run.error}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-white/70 italic p-4 text-center">Analyse en cours...</p>
+                      )}
 
                       {/* Détails par image si présents */}
                       {run.items && run.items.length > 0 ? (
@@ -310,7 +389,7 @@ const RunsTab = ({ runs, images }: Props) => {
                                         variant="outline"
                                         className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm"
                                         onClick={() => { setAnnotateRunId(run.id); setAnnotateItemId(it.id); setAnnotateOpen(true); }}
-                                        title="Annoter l’image"
+                                        title="Annoter l'image"
                                       >
                                         <Pencil className="mr-2 h-4 w-4" />
                                         Annoter
@@ -318,7 +397,7 @@ const RunsTab = ({ runs, images }: Props) => {
                                     </div>
                                   </div>
 
-                                  {/* Aperçu rectangles d’anomalie */}
+                                  {/* Aperçu rectangles d'anomalie */}
                                   {img ? (
                                     <AnomalyPreview
                                       src={img.dataUrl}
@@ -361,7 +440,7 @@ const RunsTab = ({ runs, images }: Props) => {
                             variant="outline"
                             onClick={() => setLogRunId(run.id)}
                             className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm"
-                            title="Voir le log d’erreur"
+                            title="Voir le log d'erreur"
                           >
                             Voir le log
                           </Button>
