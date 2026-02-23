@@ -43,3 +43,4 @@ dist-ssr
 
 # vercel
 .verceldataset_visio_ai.zip
+*.zip
