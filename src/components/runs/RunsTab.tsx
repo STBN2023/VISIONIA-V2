@@ -74,105 +74,114 @@ const StructuredAnalysisView = ({ text }: { text: string }) => {
   const lots = data.lots || [];
 
   return (
-    <div className="space-y-6 mt-2 animate-in fade-in slide-in-from-top-4 duration-500">
+    <div className="space-y-6 mt-2">
       {/* BLOC CONTEXTE PROJET */}
       {hasContext && (
-        <div className="rounded-2xl border border-blue-400/30 bg-blue-500/10 p-4 shadow-lg">
-          <h3 className="text-blue-200 font-bold uppercase text-xs tracking-widest mb-3 flex items-center gap-2">
-            <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
+        <div className="rounded-2xl border border-blue-400/40 bg-slate-900/80 p-5 shadow-2xl backdrop-blur-xl">
+          <h3 className="text-blue-300 font-bold uppercase text-xs tracking-widest mb-4 flex items-center gap-2">
+            <span className="w-2.5 h-2.5 bg-blue-400 rounded-full shadow-[0_0_8px_rgba(96,165,250,0.6)] animate-pulse"></span>
             Contexte de l'Audit
           </h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-[11px]">
-            <div>
-              <span className="text-white/50 block">Intervention</span>
-              <span className="text-white font-medium">{data.contexte_projet.type_intervention}</span>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-[12px]">
+            <div className="bg-white/5 p-2 rounded-lg border border-white/5">
+              <span className="text-white/40 block mb-0.5 text-[10px] uppercase font-semibold">Intervention</span>
+              <span className="text-white font-bold">{data.contexte_projet.type_intervention}</span>
             </div>
-            <div>
-              <span className="text-white/50 block">Phase</span>
-              <span className="text-white font-medium">{data.contexte_projet.phase}</span>
+            <div className="bg-white/5 p-2 rounded-lg border border-white/5">
+              <span className="text-white/40 block mb-0.5 text-[10px] uppercase font-semibold">Phase</span>
+              <span className="text-white font-bold">{data.contexte_projet.phase}</span>
             </div>
-            <div>
-              <span className="text-white/50 block">Date</span>
-              <span className="text-white font-medium">{data.contexte_projet.date_analysis || data.contexte_projet.date_analyse}</span>
+            <div className="bg-white/5 p-2 rounded-lg border border-white/5">
+              <span className="text-white/40 block mb-0.5 text-[10px] uppercase font-semibold">Date</span>
+              <span className="text-white font-bold">{data.contexte_projet.date_analysis || data.contexte_projet.date_analyse}</span>
             </div>
-            <div>
-              <span className="text-white/50 block">DPE Initial</span>
-              <span className="text-white font-medium">{data.contexte_projet.dpe_initial || "N/A"}</span>
+            <div className="bg-white/5 p-2 rounded-lg border border-white/5">
+              <span className="text-white/40 block mb-0.5 text-[10px] uppercase font-semibold">DPE Initial</span>
+              <span className="text-white font-bold">{data.contexte_projet.dpe_initial || "N/A"}</span>
             </div>
           </div>
           {data.contexte_projet.reserve_generale && (
-            <p className="mt-3 pt-3 border-t border-white/10 text-[10px] text-white/60 italic">
-              Note : {data.contexte_projet.reserve_generale}
-            </p>
+            <div className="mt-4 pt-3 border-t border-white/10">
+              <p className="text-[11px] text-white/70 italic leading-relaxed">
+                <span className="font-bold text-blue-300 not-italic mr-1">RÉSERVE GÉNÉRALE :</span> {data.contexte_projet.reserve_generale}
+              </p>
+            </div>
           )}
         </div>
       )}
 
       {/* LISTE DES LOTS ET ANOMALIES */}
       {lots.map((lot: any, idx: number) => (
-        <div key={idx} className="rounded-2xl border border-white/20 bg-white/10 overflow-hidden shadow-xl">
-          <div className="bg-white/20 px-4 py-2 border-b border-white/10 flex items-center justify-between">
-            <h3 className="font-bold text-white uppercase tracking-wider text-sm">LOT {lot.lot || "Non spécifié"}</h3>
-            <UIWebBadge variant="secondary" className="bg-white/10 text-white border-white/20">
-              {lot.anomalies?.length || 0} point(s) d'attention
+        <div key={idx} className="rounded-2xl border border-white/20 bg-slate-900/90 overflow-hidden shadow-2xl backdrop-blur-md">
+          <div className="bg-white/15 px-5 py-3 border-b border-white/10 flex items-center justify-between">
+            <h3 className="font-black text-white uppercase tracking-widest text-sm drop-shadow-sm">LOT {lot.lot || "Non spécifié"}</h3>
+            <UIWebBadge variant="secondary" className="bg-white/20 text-white border-white/30 font-bold px-3 py-1">
+              {lot.anomalies?.length || 0} POINT(S) D'ATTENTION
             </UIWebBadge>
           </div>
           <div className="divide-y divide-white/10">
             {lot.anomalies?.map((ano: any, aIdx: number) => (
-              <div key={aIdx} className="p-4 space-y-4 bg-white/5 hover:bg-white/10 transition-colors">
+              <div key={aIdx} className="p-5 space-y-5 bg-white/[0.02] hover:bg-white/[0.05] transition-colors">
                 <div className="flex justify-between items-start gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono bg-white/20 px-1.5 py-0.5 rounded text-white/70">{ano.id}</span>
-                      <span className="text-[10px] text-white/50">{ano.image_ref} • {ano.localisation}</span>
+                  <div className="space-y-1.5 flex-1">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-[10px] font-mono bg-blue-500/30 px-2 py-0.5 rounded border border-blue-400/30 text-blue-100 font-bold">{ano.id}</span>
+                      <span className="text-[11px] text-white/60 font-medium">IMAGE: {ano.image_ref}</span>
+                      <span className="text-[11px] text-white/40">•</span>
+                      <span className="text-[11px] text-white/60 font-medium">LOCALISATION: {ano.localisation}</span>
                     </div>
-                    <p className="text-sm text-white/90 leading-relaxed font-semibold">{ano.description}</p>
+                    <p className="text-base text-white font-bold leading-snug drop-shadow-sm">{ano.description}</p>
                   </div>
-                  <div className="flex flex-col gap-1 items-end shrink-0">
+                  <div className="flex flex-col gap-2 items-end shrink-0">
                     {ano.impact_energetique && (
-                      <span className={`text-[9px] px-2 py-0.5 rounded-full border uppercase font-bold ${
+                      <span className={`text-[10px] px-3 py-1 rounded-md border-2 uppercase font-black shadow-lg ${
                         ano.impact_energetique === 'fort' || ano.impact_energetique === 'critique' 
-                        ? 'bg-red-500/20 text-red-300 border-red-500/30' 
-                        : 'bg-orange-500/20 text-orange-300 border-orange-500/30'
+                        ? 'bg-red-600/40 text-red-50 border-red-500/50' 
+                        : 'bg-orange-600/40 text-orange-50 border-orange-500/50'
                       }`}>
-                        Impact {ano.impact_energetique}
+                        {ano.impact_energetique}
                       </span>
                     )}
                     {ano.priorite_intervention && (
-                      <span className="text-[9px] text-white/40 italic">{ano.priorite_intervention}</span>
+                      <span className="text-[10px] font-bold text-white/50 bg-white/5 px-2 py-0.5 rounded border border-white/5 uppercase tracking-tighter">
+                        {ano.priorite_intervention}
+                      </span>
                     )}
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-1">
-                    <div className="text-[10px] uppercase font-bold text-white/40">Analyse Technique</div>
-                    <p className="text-xs text-white/80 leading-relaxed">{ano.analyse_technique}</p>
+                <div className="grid gap-6 md:grid-cols-2">
+                  <div className="space-y-2 bg-black/20 p-3 rounded-xl border border-white/5">
+                    <div className="text-[10px] uppercase font-black text-white/40 tracking-wider">Analyse Technique</div>
+                    <p className="text-sm text-white/90 leading-relaxed">{ano.analyse_technique}</p>
                   </div>
-                  <div className="space-y-1">
-                    <div className="text-[10px] uppercase font-bold text-red-400/60">Risques & Durabilité</div>
-                    <p className="text-xs text-white/80 italic">{ano.risques_associes}</p>
+                  <div className="space-y-2 bg-red-950/20 p-3 rounded-xl border border-red-500/10">
+                    <div className="text-[10px] uppercase font-black text-red-400/70 tracking-wider">Risques & Durabilité</div>
+                    <p className="text-sm text-red-50/90 italic leading-relaxed">{ano.risques_associes}</p>
                   </div>
                 </div>
                 
-                <div className="bg-blue-500/10 p-3 rounded-xl border border-blue-500/20">
-                  <div className="text-[10px] uppercase font-bold text-blue-400/70 mb-1">Prescription CCTP</div>
-                  <p className="text-xs text-blue-100/90 font-medium leading-relaxed">
+                <div className="bg-blue-600/20 p-4 rounded-xl border-2 border-blue-400/30 shadow-inner">
+                  <div className="text-[10px] uppercase font-black text-blue-300 tracking-widest mb-2 flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                    Prescription CCTP (Action MOE)
+                  </div>
+                  <p className="text-sm text-blue-50 font-bold leading-relaxed">
                     {ano.prescription_cctp}
                   </p>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+                <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
                   <div className="flex flex-wrap gap-2">
                     {ano.references_normatives?.map((ref: string, rIdx: number) => (
-                      <span key={rIdx} className="text-[9px] bg-white/5 px-2 py-0.5 rounded border border-white/10 text-white/60">
+                      <span key={rIdx} className="text-[10px] bg-slate-800 px-3 py-1 rounded border border-white/20 text-white font-bold shadow-sm">
                         {ref}
                       </span>
                     ))}
                   </div>
                   {ano.estimation_budgetaire && (
-                    <div className="text-[10px] font-mono text-green-400/80 bg-green-500/5 px-2 py-1 rounded border border-green-500/10">
-                      Est. : {ano.estimation_budgetaire}
+                    <div className="text-[11px] font-black text-green-300 bg-green-900/40 px-3 py-1.5 rounded-lg border-2 border-green-500/30 shadow-lg">
+                      BUDGET EST. : {ano.estimation_budgetaire}
                     </div>
                   )}
                 </div>
@@ -184,29 +193,41 @@ const StructuredAnalysisView = ({ text }: { text: string }) => {
 
       {/* SYNTHESE ENERGETIQUE FINALE */}
       {data.synthese_energetique && (
-        <div className="rounded-2xl border border-green-400/30 bg-green-500/10 p-5 shadow-lg space-y-4">
-          <h3 className="text-green-300 font-bold uppercase text-xs tracking-widest flex items-center gap-2">
-            <span className="w-2 h-2 bg-green-400 rounded-full"></span>
+        <div className="rounded-2xl border border-green-400/40 bg-slate-900/95 p-6 shadow-2xl space-y-5 backdrop-blur-xl">
+          <h3 className="text-green-400 font-black uppercase text-sm tracking-widest flex items-center gap-3">
+            <span className="w-3 h-3 bg-green-500 rounded-full shadow-[0_0_10px_rgba(34,197,94,0.6)]"></span>
             Synthèse & Recommandations Globales
           </h3>
-          <div className="grid md:grid-cols-2 gap-6">
-            <div className="space-y-2">
-              <div className="text-[10px] uppercase font-bold text-white/40">Points Critiques</div>
-              <ul className="list-disc list-inside text-xs text-white/80 space-y-1">
-                {data.synthese_energetique.points_critiques?.map((p: string, i: number) => <li key={i}>{p}</li>)}
+          <div className="grid md:grid-cols-2 gap-8">
+            <div className="space-y-3 bg-black/20 p-4 rounded-2xl border border-white/5">
+              <div className="text-[11px] uppercase font-black text-white/40 tracking-widest border-b border-white/10 pb-2">Points Critiques</div>
+              <ul className="space-y-2">
+                {data.synthese_energetique.points_critiques?.map((p: string, i: number) => (
+                  <li key={i} className="text-xs text-white/90 flex gap-2">
+                    <span className="text-red-400 font-bold">•</span>
+                    {p}
+                  </li>
+                ))}
               </ul>
             </div>
-            <div className="space-y-2">
-              <div className="text-[10px] uppercase font-bold text-white/40">Recommandations</div>
-              <ul className="list-disc list-inside text-xs text-white/80 space-y-1">
-                {data.synthese_energetique.recommandations_globales?.map((r: string, i: number) => <li key={i}>{r}</li>)}
+            <div className="space-y-3 bg-white/5 p-4 rounded-2xl border border-white/5">
+              <div className="text-[11px] uppercase font-black text-white/40 tracking-widest border-b border-white/10 pb-2">Recommandations</div>
+              <ul className="space-y-2">
+                {data.synthese_energetique.recommandations_globales?.map((r: string, i: number) => (
+                  <li key={i} className="text-xs text-white/90 flex gap-2">
+                    <span className="text-green-400 font-bold">→</span>
+                    {r}
+                  </li>
+                ))}
               </ul>
             </div>
           </div>
           {data.synthese_energetique.impact_dpe_estime && (
-            <div className="pt-3 border-t border-white/10 flex justify-between items-center">
-              <span className="text-xs text-white/60">Impact DPE estimé :</span>
-              <span className="text-sm font-bold text-green-300">{data.synthese_energetique.impact_dpe_estime}</span>
+            <div className="pt-4 mt-2 border-t-2 border-green-500/20 flex justify-between items-center px-2">
+              <span className="text-sm text-white/70 font-bold">IMPACT DPE ESTIMÉ :</span>
+              <span className="text-xl font-black text-green-400 bg-green-500/10 px-4 py-1 rounded-full border border-green-500/30">
+                {data.synthese_energetique.impact_dpe_estime}
+              </span>
             </div>
           )}
         </div>
