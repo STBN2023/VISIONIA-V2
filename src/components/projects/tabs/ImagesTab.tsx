@@ -18,7 +18,7 @@ import { applyCorrectionPreference, recordCorrection } from "@/utils/corrections
 import { classifyDataUrl } from "@/utils/inference";
 import { updateProject } from "@/utils/storage";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/utils/supabase";
+import { supabase } from "@/integrations/supabase/client";
 
 // Helpers de normalisation (évite espaces en trop et casse différente)
 const normalizeTagLabel = (s: string) => s.trim().replace(/\s+/g, " ");
