@@ -33,6 +33,8 @@ export type Project = {
   images: ProjectImage[];
   notes?: string;
   tags: string[];
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 // Map database project to frontend Project
@@ -62,6 +64,8 @@ function mapDbToProject(dbProj: any): Project {
       } : undefined,
     })),
     tags: Array.isArray(dbProj.tags) ? dbProj.tags : [],
+    latitude: dbProj.latitude ?? null,
+    longitude: dbProj.longitude ?? null,
   };
 }
 
@@ -203,6 +207,8 @@ export async function updateProject(
   if (patch.prompt !== undefined) updateData.prompt = patch.prompt;
   if (patch.notes !== undefined) updateData.notes = patch.notes;
   if (patch.tags !== undefined) updateData.tags = patch.tags;
+  if (patch.latitude !== undefined) updateData.latitude = patch.latitude;
+  if (patch.longitude !== undefined) updateData.longitude = patch.longitude;
   updateData.updated_at = new Date().toISOString();
 
   const { error } = await supabase

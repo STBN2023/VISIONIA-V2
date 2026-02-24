@@ -7,7 +7,8 @@ import ImagesTab from "@/components/projects/tabs/ImagesTab";
 import PromptTab from "@/components/projects/tabs/PromptTab";
 import InfoTab from "@/components/projects/tabs/InfoTab";
 import RunsTab from "@/components/runs/RunsTab";
-import SynthesisTab from "@/components/projects/tabs/SynthesisTab";
+import LocationTab from "@/components/projects/tabs/LocationTab";
+import type { LatLng } from "@/components/projects/tabs/LocationTab";
 import { getProjectById, updateProject, type Project, type ProjectImage, fileToDataUrl, type ImageTag, type ProjectStatus } from "@/utils/storage";
 import { ensureSeedTemplates, getTemplates, getTemplateById, type PromptTemplate } from "@/utils/prompts";
 import { getRunsByProjectId, type Run } from "@/utils/runs";
@@ -58,7 +59,7 @@ const ProjectDetail = () => {
   const [type, setType] = useState("");
   const [status, setStatus] = useState<ProjectStatus>("Brouillon");
   const [notes, setNotes] = useState("");
-  const [activeTab, setActiveTab] = useState("synthesis");
+  const [activeTab, setActiveTab] = useState("location");
 
   // Templates
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
@@ -110,6 +111,16 @@ const ProjectDetail = () => {
     });
     return errors;
   }, [prompt]);
+
+  // Coordinates
+  const handleCoordinatesChange = async (coords: LatLng) => {
+    if (!project) return;
+    const updated = await updateProject(project.id, {
+      latitude: coords.lat,
+      longitude: coords.lng,
+    });
+    if (updated) setProject(updated);
+  };
 
   // Actions prompt/template
   const handleProjectTemplateChange = async (templateId: string | undefined) => {
@@ -397,15 +408,23 @@ const ProjectDetail = () => {
         <Separator className="mb-6 border-white/20" />
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="flex flex-wrap bg-white/10 text-white">
-            <TabsTrigger value="synthesis">Synthèse</TabsTrigger>
+            <TabsTrigger value="location">Localisation</TabsTrigger>
             <TabsTrigger value="images">Images</TabsTrigger>
             <TabsTrigger value="prompt">Analyse</TabsTrigger>
             <TabsTrigger value="infos">Infos</TabsTrigger>
             <TabsTrigger value="runs">Runs</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="synthesis">
-            <SynthesisTab runs={runs} images={project.images} tags={project.tags || []} />
+          <TabsContent value="location">
+            <LocationTab
+              address={project.address || ""}
+              coordinates={
+                project.latitude != null && project.longitude != null
+                  ? { lat: project.latitude, lng: project.longitude }
+                  : null
+              }
+              onCoordinatesChange={handleCoordinatesChange}
+            />
           </TabsContent>
 
           <TabsContent value="images">
