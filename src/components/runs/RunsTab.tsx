@@ -21,39 +21,37 @@ const StructuredAnalysisView = ({ text }: { text: string }) => {
   const parsedData = useMemo(() => {
     if (!text) return null;
     try {
-      // 1. Nettoyage agressif
+      // 1. Nettoyage initial : on enlève les blocs Markdown
       let cleanText = text.trim();
-      
-      // Enlever les blocs Markdown ```json ... ```
       const markdownMatch = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (markdownMatch) {
         cleanText = markdownMatch[1].trim();
       }
 
-      // 2. Extraire le premier objet JSON complet entre { et }
-      // On cherche la première accolade et la dernière pour isoler l'objet
+      // 2. Extraction du bloc JSON entre { et }
       const start = cleanText.indexOf('{');
       const end = cleanText.lastIndexOf('}');
       if (start === -1 || end === -1 || end <= start) return null;
-      
       let jsonCandidate = cleanText.substring(start, end + 1);
 
-      // 3. Réparer les retours à la ligne ILLEGAUX dans les chaînes de caractères
-      // Cette regex cherche les retours à la ligne qui NE sont PAS suivis par une structure JSON (clef ou fermeture)
-      // On simplifie : on remplace TOUS les retours à la ligne par des espaces, sauf s'ils sont suivis d'une virgule, d'un crochet ou d'une accolade
-      // Mais le plus sûr pour JSON.parse est de supprimer les retours à la ligne réels à l'intérieur des guillemets
-      
-      // Approche : on remplace les sauts de ligne par des espaces pour le parsing
-      // car JSON.parse accepte les espaces mais pas les \n non échappés dans les strings
-      const sanitized = jsonCandidate.replace(/\n/g, " ").replace(/\r/g, " ");
+      // 3. RÉPARATION CRITIQUE : Nettoyage des caractères de contrôle et sauts de ligne réels
+      // On remplace les sauts de ligne réels par des espaces car JSON.parse ne les tolère pas dans les strings
+      // On enlève aussi les tabulations réelles
+      const sanitized = jsonCandidate
+        .replace(/\r?\n|\r/g, " ") // Remplace tous les sauts de ligne par des espaces
+        .replace(/\t/g, " ")       // Remplace les tabulations par des espaces
+        .replace(/\\n/g, " ")      // Remplace les \n déjà échappés pour éviter les conflits
+        .replace(/\s+/g, " ");     // Normalise les espaces multiples
 
+      // 4. Tentative de parsing
       const data = JSON.parse(sanitized);
+      
       if (data.lots || data.contexte_projet) {
         return data;
       }
       return null;
     } catch (e) {
-      console.error("Erreur de parsing JSON structuré:", e);
+      console.error("Échec du parsing JSON réparé:", e);
       return null;
     }
   }, [text]);
