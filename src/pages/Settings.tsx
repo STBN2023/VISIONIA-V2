@@ -124,37 +124,38 @@ const Settings = () => {
 
         <div className="space-y-8">
           {/* BLOC SÉCURITÉ / MOT DE PASSE */}
-          <section className="rounded-3xl border border-white/20 bg-slate-900/90 p-6 shadow-2xl backdrop-blur-xl">
-            <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-              <span className="w-2 h-6 bg-blue-500 rounded-full"></span>
-              Sécurité du compte
-            </h2>
-            <div className="grid gap-4 max-w-md">
-              <div className="space-y-2">
-                <Label htmlFor="new-password">Nouveau mot de passe</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="new-password"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Min. 6 caractères"
-                    className="bg-white/10 border-white/20 text-white"
-                  />
-                  <Button 
-                    onClick={handleUpdatePassword} 
-                    disabled={updatingPassword}
-                    className="bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
-                  >
-                    {updatingPassword ? "Mise à jour..." : "Modifier"}
-                  </Button>
+          <Card className="rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
+            <CardHeader>
+              <CardTitle>Sécurité du compte</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-4 max-w-md">
+                <div className="space-y-2">
+                  <Label htmlFor="new-password">Nouveau mot de passe</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="new-password"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Min. 6 caractères"
+                      className="bg-white/10 border-white/20 text-white"
+                    />
+                    <Button 
+                      onClick={handleUpdatePassword} 
+                      disabled={updatingPassword}
+                      className="bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
+                    >
+                      {updatingPassword ? "Mise à jour..." : "Modifier"}
+                    </Button>
+                  </div>
                 </div>
+                <p className="text-[10px] text-white/40 italic">
+                  Note : Cette modification est immédiate et ne nécessite pas de confirmation par email (idéal pour contourner les limites du mode Free).
+                </p>
               </div>
-              <p className="text-[10px] text-white/40 italic">
-                Note : Cette modification est immédiate et ne nécessite pas de confirmation par email (idéal pour contourner les limites du mode Free).
-              </p>
-            </div>
-          </section>
+            </CardContent>
+          </Card>
 
           {/* Configuration API */}
           <Card className="rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
