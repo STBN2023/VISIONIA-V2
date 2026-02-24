@@ -27,8 +27,10 @@ const Prompts = () => {
   const selected = useMemo(() => templates.find((t) => t.id === selectedId) || null, [templates, selectedId]);
 
   useEffect(() => {
-    ensureSeedTemplates();
-    setTemplates(getTemplates());
+    (async () => {
+      await ensureSeedTemplates();
+      setTemplates(getTemplates());
+    })();
   }, []);
 
   useEffect(() => {

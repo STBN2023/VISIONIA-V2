@@ -67,8 +67,10 @@ const ProjectDetail = () => {
   const [runs, setRuns] = useState<Run[]>([]);
 
   useEffect(() => {
-    ensureSeedTemplates();
-    setTemplates(getTemplates());
+    (async () => {
+      await ensureSeedTemplates();
+      setTemplates(getTemplates());
+    })();
   }, []);
 
   useEffect(() => {

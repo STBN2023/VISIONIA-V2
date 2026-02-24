@@ -627,9 +627,9 @@ const RunsTab = ({ runs, images }: Props) => {
         onOpenChange={(o) => setAnnotateOpen(o)}
         image={annotateImage || ({} as any)}
         initialBoxes={annotateBoxes}
-        onSave={(newBoxes) => {
+        onSave={async (newBoxes) => {
           if (annotateRunId && annotateItemId) {
-            updateRunItemBoxes(annotateRunId, annotateItemId, newBoxes);
+            await updateRunItemBoxes(annotateRunId, annotateItemId, newBoxes);
             showSuccess("Annotations enregistrées");
           }
         }}
