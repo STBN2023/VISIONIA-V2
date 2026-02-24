@@ -48,9 +48,7 @@ async function geocodeAddress(
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
       address
     )}&limit=1&addressdetails=1`;
-    const resp = await fetch(url, {
-      headers: { "User-Agent": "ISOEDRE-App/1.0" },
-    });
+    const resp = await fetch(url);
     const data = await resp.json();
     if (data.length === 0) return null;
     return {
