@@ -266,7 +266,12 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
       doc.rect(margin, y - 5, contentWidth, 8, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(11);
-      doc.text(`LOT : ${lot.lot || "Général"}`, margin + 3, y + 1);
+      
+      // Nettoyage de la redondance "LOT : LOT"
+      let lotName = lot.lot || "Général";
+      const displayLot = lotName.toUpperCase().startsWith("LOT") ? lotName : `LOT : ${lotName}`;
+      
+      doc.text(displayLot, margin + 3, y + 1);
       doc.setTextColor(0, 0, 0);
       y += 10;
 
