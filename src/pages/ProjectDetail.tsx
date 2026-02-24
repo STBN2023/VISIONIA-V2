@@ -57,6 +57,7 @@ const ProjectDetail = () => {
   const [type, setType] = useState("");
   const [status, setStatus] = useState<ProjectStatus>("Brouillon");
   const [notes, setNotes] = useState("");
+  const [activeTab, setActiveTab] = useState("images");
 
   // Templates
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
@@ -397,7 +398,7 @@ const ProjectDetail = () => {
       <main className="mx-auto w-full max-w-6xl px-4 py-6 text-white">
         <ProjectHeader project={project} />
         <Separator className="mb-6 border-white/20" />
-        <Tabs defaultValue="images" className="w-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="flex flex-wrap bg-white/10 text-white">
             <TabsTrigger value="images">Images</TabsTrigger>
             <TabsTrigger value="prompt">Analyse</TabsTrigger>
@@ -438,6 +439,7 @@ const ProjectDetail = () => {
               onApplyTemplateToPrompt={applyTemplateToPrompt}
               onSaveProjectTemplateSelection={saveProjectTemplateSelection}
               tags={project.tags || []}
+              onRunStarted={() => setActiveTab("runs")}
             />
           </TabsContent>
 

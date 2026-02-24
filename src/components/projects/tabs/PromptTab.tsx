@@ -20,6 +20,7 @@ type Props = {
   onApplyTemplateToPrompt: () => void;
   onSaveProjectTemplateSelection: () => void;
   tags: string[];
+  onRunStarted?: () => void;
 };
 
 const PromptTab = ({
@@ -34,6 +35,7 @@ const PromptTab = ({
   onApplyTemplateToPrompt,
   onSaveProjectTemplateSelection,
   tags,
+  onRunStarted,
 }: Props) => {
   const [analysisTag, setAnalysisTag] = useState<string>("all");
 
@@ -134,7 +136,7 @@ Conformité réglementaire:
             projectId={projectId}
             prompt={prompt}
             images={imagesForRun}
-            onStarted={() => {}}
+            onStarted={() => onRunStarted?.()}
             disabled={prompt.trim().length === 0 || imagesForRun.length === 0}
             triggerLabel="Générer le compte rendu"
           />
