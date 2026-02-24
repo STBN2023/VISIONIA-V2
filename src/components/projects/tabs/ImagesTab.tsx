@@ -159,24 +159,70 @@ const ImagesTab = ({
 
   const handleClassifyAll = async () => {
     setIsClassifying(true);
-    const updatedImages = [...project.images];
+    
+    // Copie de travail locale
+    const processingImages = [...project.images];
+    const newResults: Record<string, { label: string, score: number }> = {};
 
-    for (let i = 0; i < updatedImages.length; i++) {
-      const img = updatedImages[i];
+    // 1. PHASE DE CALCUL RAPIDE (Local / WebGPU)
+    // On met à jour l'UI au fur et à mesure
+    for (let i = 0; i < processingImages.length; i++) {
+      const img = processingImages[i];
+      // Si déjà classé, on passe (sauf si on veut forcer, ici on optimise)
+      if (img.inferenceResult) continue;
+
       try {
-        // Utilisation de classifyImageToTag qui gère le mapping (français)
+        // Calcul local immédiat
         const result = await classifyImageToTag(img.dataUrl);
         const classification = { label: result.suggestedTag, score: result.topScore };
-        updatedImages[i] = { ...img, inferenceResult: classification };
+        
+        // Mise à jour de la mémoire tampon
+        newResults[img.id] = classification;
+        processingImages[i] = { ...img, inferenceResult: classification };
+        
+        // Mise à jour de l'affichage en temps réel (carte par carte)
+        setLocalClassifications(prev => ({ ...prev, [img.id]: classification }));
       } catch (e) {
-        console.error("Classification error for", img.name, e);
+        console.error("Erreur classification", img.name);
       }
     }
-    
-    setLocalClassifications({});
-    await updateProject(project.id, { images: updatedImages });
+
+    // 2. MISE A JOUR DE L'ETAT GLOBAL (Immédiat pour l'utilisateur)
+    // On met à jour le projet tout de suite pour que l'utilisateur voie le résultat final
+    // sans attendre la base de données.
+    const updatedProjectPromise = updateProject(project.id, { images: processingImages });
+
+    // 3. SAUVEGARDE ASYNCHRONE (En arrière-plan / Fire and Forget)
+    // On ne bloque pas l'UI pour ça.
+    syncResultsToSupabase(project.id, newResults).catch(console.error);
+
+    await updatedProjectPromise;
     setIsClassifying(false);
-    showSuccess("Analyse terminée (labels traduits)");
+    showSuccess("Classification terminée");
+  };
+
+  // Helper pour sauvegarder en masse sans bloquer l'UI
+  const syncResultsToSupabase = async (projectId: string, results: Record<string, any>) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const updates = Object.entries(results).map(([imgId, result]) => {
+      return supabase
+        .from('inspections')
+        .update({
+          detection_results: {
+            onnx: {
+              label: result.label,
+              score: result.score,
+              timestamp: new Date().toISOString()
+            }
+          }
+        })
+        .eq('id', imgId);
+    });
+    
+    // On lance tout en parallèle
+    await Promise.all(updates);
   };
 
   const handleResetClassifications = async () => {
