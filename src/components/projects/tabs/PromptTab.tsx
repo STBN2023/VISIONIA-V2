@@ -43,7 +43,9 @@ const PromptTab = ({
     images.forEach(img => {
       if (img.tag) allTags.add(img.tag);
     });
-    return Array.from(allTags).sort();
+    // Filter out internal/system tags like "pending"
+    const filtered = Array.from(allTags).filter(t => t !== "pending" && t !== "completed" && t !== "failed");
+    return filtered.sort();
   }, [tags, images]);
 
   const imagesForRun = useMemo(() => {
