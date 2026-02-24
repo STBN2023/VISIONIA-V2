@@ -7,7 +7,7 @@ export const MadeWithDyad = () => {
         rel="noopener noreferrer"
         className="text-sm text-white hover:text-gray-200 dark:text-white dark:hover:text-gray-200"
       >
-        Outil developpé pour le GROUPE VISIOEDRE
+        Outil developpé pour le GROUPE ISOEDRE
       </a>
     </div>
   );
