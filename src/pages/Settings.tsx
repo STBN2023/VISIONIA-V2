@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { showSuccess, showError } from "@/utils/toast";
-import { getSettings, saveSettings, type APIProvider, type BackgroundMode, type ThemePreset } from "@/utils/settings";
+import { type APIProvider, type BackgroundMode, type ThemePreset } from "@/utils/settings";
+import { useSettings } from "@/contexts/SettingsContext";
 import { GlassShell } from "@/components/layout/GlassShell";
 import DatasetCalibrateCard from "@/components/settings/DatasetCalibrateCard";
 import DatasetLabelerCard from "@/components/settings/DatasetLabelerCard";
@@ -13,9 +14,11 @@ import { AppearanceTab } from "@/components/settings/AppearanceTab";
 const MAX_BG_BYTES = 2.5 * 1024 * 1024; // ~2.5 Mo pour rester sous la limite de localStorage
 
 const Settings = () => {
+  const { settings, updateSettings } = useSettings();
+
   const [provider, setProvider] = useState<APIProvider>("openai");
   const [apiKey, setApiKey] = useState("");
-  const [model, setModel] = useState("gpt-4o"); // Valeur par défaut
+  const [model, setModel] = useState("gpt-4o"); 
   const [temperature, setTemperature] = useState<number | string>(0.2);
   const [maxTokens, setMaxTokens] = useState<number | string>(2000);
   const [endpoint, setEndpoint] = useState("");
@@ -29,33 +32,41 @@ const Settings = () => {
   const [themePreset, setThemePreset] = useState<ThemePreset>("violet");
   const [brightness, setBrightness] = useState<number>(100);
 
+  // Sync local state with context settings when they change (e.g. after cloud load)
   useEffect(() => {
-    const s = getSettings();
-    setProvider(s.provider);
-    setApiKey(s.apiKey ?? "");
-    setModel(s.model ?? "gpt-4o"); // Valeur par défaut
-    setTemperature(s.temperature ?? 0.2);
-    setMaxTokens(s.maxTokens ?? 2000);
-    setEndpoint(s.endpoint ?? "");
-    setAzureDeployment(s.azureDeployment ?? "");
-    setBackgroundMode((s.backgroundMode as BackgroundMode) ?? "image");
-    setBackgroundImage(s.backgroundImage ?? "");
-    setBackgroundColor(s.backgroundColor ?? "#0b1220");
-    setBackgroundDim(typeof s.backgroundDim === "number" ? s.backgroundDim : 20);
-    setThemePreset((s.themePreset as ThemePreset) ?? "violet");
-    setBrightness(typeof s.brightness === "number" ? s.brightness : 100);
-  }, []);
+    setProvider(settings.provider);
+    setApiKey(settings.apiKey ?? "");
+    setModel(settings.model ?? "gpt-4o");
+    setTemperature(settings.temperature ?? 0.2);
+    setMaxTokens(settings.maxTokens ?? 2000);
+    setEndpoint(settings.endpoint ?? "");
+    setAzureDeployment(settings.azureDeployment ?? "");
+    setBackgroundMode((settings.backgroundMode as BackgroundMode) ?? "image");
+    setBackgroundImage(settings.backgroundImage ?? "");
+    setBackgroundColor(settings.backgroundColor ?? "#0b1220");
+    setBackgroundDim(typeof settings.backgroundDim === "number" ? settings.backgroundDim : 20);
+    setThemePreset((settings.themePreset as ThemePreset) ?? "violet");
+    setBrightness(typeof settings.brightness === "number" ? settings.brightness : 100);
+  }, [settings]);
 
   const handleSave = () => {
+    // Note: We skip the size check here because AppearanceTab now handles upload to Supabase
+    // But for "offline" mode (base64), the check is done inside AppearanceTab component before calling setBackgroundImage
+    // Wait, setBackgroundImage just updates local state here. 
+    // The check for size should be done before updateSettings if it's base64?
+    // Actually, AppearanceTab handles the upload/conversion and calls setBackgroundImage with the result (URL or DataURL).
+    // If it's a huge DataURL, we might want to prevent saving it to Context if it exceeds limits?
+    // Let's keep the check for safety.
+    
     if (backgroundMode === "image" && backgroundImage.startsWith("data:")) {
-      const approxBytes = backgroundImage.length * 0.75; // estimation base64
-      if (approxBytes > MAX_BG_BYTES) {
-        showError("L'image de fond est trop lourde pour être enregistrée (quota localStorage). Choisissez une image plus légère.");
-        return;
-      }
+       const approxBytes = backgroundImage.length * 0.75; 
+       if (approxBytes > MAX_BG_BYTES) {
+         showError("L'image est trop lourde pour être enregistrée localement. Connectez-vous pour l'uploader.");
+         return;
+       }
     }
 
-    const next = saveSettings({
+    updateSettings({
       provider,
       apiKey: apiKey.trim() || undefined,
       model: model.trim() || undefined,
@@ -70,15 +81,6 @@ const Settings = () => {
       themePreset,
       brightness: Math.max(50, Math.min(150, Number(brightness))),
     });
-    // Update local state with saved values to ensure consistency
-    if (next) {
-      setBackgroundMode((next.backgroundMode as BackgroundMode) ?? "image");
-      setBackgroundImage(next.backgroundImage ?? "");
-      setBackgroundColor(next.backgroundColor ?? "#0b1220");
-      setBackgroundDim(next.backgroundDim ?? 20);
-      setThemePreset((next.themePreset as ThemePreset) ?? "violet");
-      setBrightness(next.brightness ?? 100);
-    }
     showSuccess("Paramètres enregistrés");
   };
 

@@ -8,7 +8,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import type { ProjectImage } from "@/utils/storage";
 import { createPendingRun, completeRunWithServer, failRun, type RunMode } from "@/utils/runs";
 import { showError, showSuccess } from "@/utils/toast";
-import { getSettings } from "@/utils/settings";
+import { useSettings } from "@/contexts/SettingsContext";
 import { classifyDataUrl } from "@/utils/inference";
 import { analyzeLLM, type AnalyzeErr } from "@/utils/analyze-client";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,6 +23,7 @@ type Props = {
 };
 
 const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, triggerLabel = "Lancer l'analyse" }: Props) => {
+  const { settings } = useSettings();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<RunMode>("aggregate");
   const [onlySuspects, setOnlySuspects] = useState(false);
@@ -34,8 +35,7 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
       showError("Ajoutez un prompt et au moins une image.");
       return;
     }
-    const s = getSettings();
-    if (!s.apiKey || s.apiKey.trim().length < 10) {
+    if (!settings.apiKey || settings.apiKey.trim().length < 10) {
       showError("Aucune clé API détectée. Renseignez votre clé dans Paramètres.");
       return;
     }
@@ -45,11 +45,11 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
     const { data: { user } } = await supabase.auth.getUser();
 
     if (onlySuspects) {
-      if (!s.modelRef) {
+      if (!settings.modelRef) {
         showError("Aucun modèle ONNX configuré (Paramètres > Dataset & Calibrage).");
         return;
       }
-      const threshold = s.inference?.threshold ?? 0.6;
+      const threshold = settings.inference?.threshold ?? 0.6;
       const suspects: typeof images = [];
       for (const im of images) {
         const result = await classifyDataUrl(im.dataUrl);
@@ -88,8 +88,8 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
       mode,
       prompt,
       images: imgs,
-      model: s.model,
-      temperature: s.temperature,
+      model: settings.model,
+      temperature: settings.temperature,
     });
 
     setOpen(false);
@@ -100,9 +100,9 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
       mode,
       prompt,
       images: imgs,
-      model: s.model,
-      temperature: s.temperature,
-      max_tokens: s.maxTokens,
+      model: settings.model,
+      temperature: settings.temperature,
+      max_tokens: settings.maxTokens,
     });
 
     if (!result.ok) {

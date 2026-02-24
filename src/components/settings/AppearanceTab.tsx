@@ -7,6 +7,9 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { type BackgroundMode, type ThemePreset } from "@/utils/settings";
 import { compressImageToBlob, blobToDataUrl } from "@/utils/image-compress";
+import { uploadUserAsset } from "@/utils/upload";
+import { showSuccess, showError } from "@/utils/toast";
+import { supabase } from "@/integrations/supabase/client";
 
 interface AppearanceTabProps {
   backgroundMode: BackgroundMode;
@@ -36,10 +39,33 @@ export function AppearanceTab({
 
   // Gestion image de fond locale
   async function handlePickBackgroundFile(f: File) {
-    // Compression rapide pour rester sous quota (sera amélioré avec Supabase Storage plus tard)
-    const blob = await compressImageToBlob(f, { maxWidth: 2400, quality: 0.82 });
-    const dataUrl = await blobToDataUrl(blob);
-    setBackgroundImage(dataUrl);
+    try {
+      // Compression
+      const blob = await compressImageToBlob(f, { maxWidth: 2400, quality: 0.82 });
+      
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (session) {
+        // Mode connecté : Upload vers Supabase Storage
+        const fileName = `background_${Date.now()}.${blob.type.split('/')[1] || 'jpg'}`;
+        const publicUrl = await uploadUserAsset(blob, fileName);
+        setBackgroundImage(publicUrl);
+        showSuccess("Image uploadée et définie !");
+      } else {
+        // Mode déconnecté : Base64 (fallback)
+        const dataUrl = await blobToDataUrl(blob);
+        // Vérification taille critique pour localStorage
+        if (dataUrl.length > 3 * 1024 * 1024) {
+          showError("Image trop volumineuse pour le mode hors connexion. Connectez-vous pour uploader des fichiers plus lourds.");
+          return;
+        }
+        setBackgroundImage(dataUrl);
+        showSuccess("Image définie (stockage local)");
+      }
+    } catch (err: any) {
+      console.error(err);
+      showError(err.message || "Erreur lors du traitement de l'image");
+    }
   }
 
   return (

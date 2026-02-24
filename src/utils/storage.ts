@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { uploadFile } from "@/utils/upload";
 
 export type ImageTag = string;
 
@@ -75,22 +76,19 @@ async function uploadAndRecordImage(projectId: string, image: ProjectImage): Pro
   if (image.dataUrl.startsWith('data:')) {
     const response = await fetch(image.dataUrl);
     const blob = await response.blob();
-    const fileName = `${user.id}/${projectId}/${image.id}.${blob.type.split('/')[1]}`;
+    const ext = blob.type.split('/')[1] || 'jpg';
+    const fileName = `${user.id}/${projectId}/${image.id}.${ext}`;
     
-    const { data: uploadData, error: uploadError } = await supabase.storage
-      .from('inspections')
-      .upload(fileName, blob, {
-        upsert: true,
-        contentType: blob.type
-      });
-
-    if (uploadError) {
-      console.error("Storage upload error:", uploadError);
-    } else {
-      const { data: { publicUrl } } = supabase.storage
-        .from('inspections')
-        .getPublicUrl(fileName);
-      imageUrl = publicUrl;
+    // Use shared upload utility
+    try {
+      imageUrl = await uploadFile(blob, 'inspections', fileName);
+    } catch (e) {
+      console.error("Storage upload error:", e);
+      // Fallback: keep dataUrl if upload fails? Or throw?
+      // Throwing might break the loop in updateProject, but maybe better to know.
+      // But for resilience, we might keep local URL if upload fails temporarily?
+      // No, let's stick to the URL returned or fail.
+      throw e;
     }
   }
 
