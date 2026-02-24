@@ -144,7 +144,7 @@ const Settings = () => {
                     <Button 
                       onClick={handleUpdatePassword} 
                       disabled={updatingPassword}
-                      className="bg-blue-600 hover:bg-blue-700 whitespace-nowrap"
+                      className="backdrop-blur-sm whitespace-nowrap"
                     >
                       {updatingPassword ? "Mise à jour..." : "Modifier"}
                     </Button>
