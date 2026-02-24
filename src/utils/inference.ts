@@ -25,7 +25,8 @@ function ensureOrtEnv() {
   if (ortEnvConfigured) return;
   ort.env.wasm.wasmPaths = ORT_WASM_CDN;
   ort.env.wasm.numThreads = 1; // single-threaded for broad compatibility
-  // ort.env.wasm.simd stays enabled by default when available
+  ort.env.wasm.proxy = false;  // disable proxy to avoid worker issues
+  ort.env.wasm.simd = false;   // disable SIMD to avoid "Unknown CPU vendor" crashes in some VMs/environments
   ortEnvConfigured = true;
 }
 
