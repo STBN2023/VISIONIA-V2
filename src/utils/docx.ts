@@ -12,7 +12,6 @@ import {
   WidthType,
   ShadingType,
   ImageRun,
-  type ISectionOptions,
 } from "docx";
 import { saveAs } from "file-saver";
 import type { Run } from "@/utils/runs";
