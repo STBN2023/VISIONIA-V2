@@ -112,85 +112,91 @@ const StructuredAnalysisView = ({ text }: { text: string }) => {
       )}
 
       {/* LISTE DES LOTS ET ANOMALIES */}
-      {lots.map((lot: any, idx: number) => (
-        <div key={idx} className="rounded-2xl border border-white/20 bg-slate-900/90 overflow-hidden shadow-2xl backdrop-blur-md">
-          <div className="bg-white/15 px-5 py-3 border-b border-white/10 flex items-center justify-between">
-            <h3 className="font-black text-white uppercase tracking-widest text-sm drop-shadow-sm">LOT {lot.lot || "Non spécifié"}</h3>
-            <UIWebBadge variant="secondary" className="bg-white/20 text-white border-white/30 font-bold px-3 py-1">
-              {lot.anomalies?.length || 0} POINT(S) D'ATTENTION
-            </UIWebBadge>
-          </div>
-          <div className="divide-y divide-white/10">
-            {lot.anomalies?.map((ano: any, aIdx: number) => (
-              <div key={aIdx} className="p-5 space-y-5 bg-white/[0.02] hover:bg-white/[0.05] transition-colors">
-                <div className="flex justify-between items-start gap-4">
-                  <div className="space-y-1.5 flex-1">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="text-[10px] font-mono bg-blue-500/30 px-2 py-0.5 rounded border border-blue-400/30 text-blue-100 font-bold">{ano.id}</span>
-                      <span className="text-[11px] text-white/60 font-medium">IMAGE: {ano.image_ref}</span>
-                      <span className="text-[11px] text-white/40">•</span>
-                      <span className="text-[11px] text-white/60 font-medium">LOCALISATION: {ano.localisation}</span>
+      {lots.map((lot: any, idx: number) => {
+        // Nettoyage de la redondance "LOT : LOT"
+        let lotName = lot.lot || "Général";
+        const displayLot = lotName.toUpperCase().startsWith("LOT") ? lotName : `LOT : ${lotName}`;
+        
+        return (
+          <div key={idx} className="rounded-2xl border border-white/20 bg-slate-900/90 overflow-hidden shadow-2xl backdrop-blur-md">
+            <div className="bg-white/15 px-5 py-3 border-b border-white/10 flex items-center justify-between">
+              <h3 className="font-black text-white uppercase tracking-widest text-sm drop-shadow-sm">{displayLot}</h3>
+              <UIWebBadge variant="secondary" className="bg-white/20 text-white border-white/30 font-bold px-3 py-1">
+                {lot.anomalies?.length || 0} POINT(S) D'ATTENTION
+              </UIWebBadge>
+            </div>
+            <div className="divide-y divide-white/10">
+              {lot.anomalies?.map((ano: any, aIdx: number) => (
+                <div key={aIdx} className="p-5 space-y-5 bg-white/[0.02] hover:bg-white/[0.05] transition-colors">
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="space-y-1.5 flex-1">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <span className="text-[10px] font-mono bg-blue-500/30 px-2 py-0.5 rounded border border-blue-400/30 text-blue-100 font-bold">{ano.id}</span>
+                        <span className="text-[11px] text-white/60 font-medium">IMAGE: {ano.image_ref}</span>
+                        <span className="text-[11px] text-white/40">•</span>
+                        <span className="text-[11px] text-white/60 font-medium">LOCALISATION: {ano.localisation}</span>
+                      </div>
+                      <p className="text-base text-white font-bold leading-snug drop-shadow-sm">{ano.description}</p>
                     </div>
-                    <p className="text-base text-white font-bold leading-snug drop-shadow-sm">{ano.description}</p>
-                  </div>
-                  <div className="flex flex-col gap-2 items-end shrink-0">
-                    {ano.impact_energetique && (
-                      <span className={`text-[10px] px-3 py-1 rounded-md border-2 uppercase font-black shadow-lg ${
-                        ano.impact_energetique === 'fort' || ano.impact_energetique === 'critique' 
-                        ? 'bg-red-600/40 text-red-50 border-red-500/50' 
-                        : 'bg-orange-600/40 text-orange-50 border-orange-500/50'
-                      }`}>
-                        {ano.impact_energetique}
-                      </span>
-                    )}
-                    {ano.priorite_intervention && (
-                      <span className="text-[10px] font-bold text-white/50 bg-white/5 px-2 py-0.5 rounded border border-white/5 uppercase tracking-tighter">
-                        {ano.priorite_intervention}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                <div className="grid gap-6 md:grid-cols-2">
-                  <div className="space-y-2 bg-black/20 p-3 rounded-xl border border-white/5">
-                    <div className="text-[10px] uppercase font-black text-white/40 tracking-wider">Analyse Technique</div>
-                    <p className="text-sm text-white/90 leading-relaxed">{ano.analyse_technique}</p>
-                  </div>
-                  <div className="space-y-2 bg-red-950/20 p-3 rounded-xl border border-red-500/10">
-                    <div className="text-[10px] uppercase font-black text-red-400/70 tracking-wider">Risques & Durabilité</div>
-                    <p className="text-sm text-red-50/90 italic leading-relaxed">{ano.risques_associes}</p>
-                  </div>
-                </div>
-                
-                <div className="bg-blue-600/20 p-4 rounded-xl border-2 border-blue-400/30 shadow-inner">
-                  <div className="text-[10px] uppercase font-black text-blue-300 tracking-widest mb-2 flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
-                    Prescription CCTP (Action MOE)
-                  </div>
-                  <p className="text-sm text-blue-50 font-bold leading-relaxed">
-                    {ano.prescription_cctp}
-                  </p>
-                </div>
-
-                <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
-                  <div className="flex flex-wrap gap-2">
-                    {ano.references_normatives?.map((ref: string, rIdx: number) => (
-                      <span key={rIdx} className="text-[10px] bg-slate-800 px-3 py-1 rounded border border-white/20 text-white font-bold shadow-sm">
-                        {ref}
-                      </span>
-                    ))}
-                  </div>
-                  {ano.estimation_budgetaire && (
-                    <div className="text-[11px] font-black text-green-300 bg-green-900/40 px-3 py-1.5 rounded-lg border-2 border-green-500/30 shadow-lg">
-                      BUDGET EST. : {ano.estimation_budgetaire}
+                    <div className="flex flex-col gap-2 items-end shrink-0">
+                      {ano.impact_energetique && (
+                        <span className={`text-[10px] px-3 py-1 rounded-md border-2 uppercase font-black shadow-lg ${
+                          ano.impact_energetique === 'fort' || ano.impact_energetique === 'critique' 
+                          ? 'bg-red-600/40 text-red-50 border-red-500/50' 
+                          : 'bg-orange-600/40 text-orange-50 border-orange-500/50'
+                        }`}>
+                          {ano.impact_energetique}
+                        </span>
+                      )}
+                      {ano.priorite_intervention && (
+                        <span className="text-[10px] font-bold text-white/50 bg-white/5 px-2 py-0.5 rounded border border-white/5 uppercase tracking-tighter">
+                          {ano.priorite_intervention}
+                        </span>
+                      )}
                     </div>
-                  )}
+                  </div>
+
+                  <div className="grid gap-6 md:grid-cols-2">
+                    <div className="space-y-2 bg-black/20 p-3 rounded-xl border border-white/5">
+                      <div className="text-[10px] uppercase font-black text-white/40 tracking-wider">Analyse Technique</div>
+                      <p className="text-sm text-white/90 leading-relaxed">{ano.analyse_technique}</p>
+                    </div>
+                    <div className="space-y-2 bg-red-950/20 p-3 rounded-xl border border-red-500/10">
+                      <div className="text-[10px] uppercase font-black text-red-400/70 tracking-wider">Risques & Durabilité</div>
+                      <p className="text-sm text-red-50/90 italic leading-relaxed">{ano.risques_associes}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-blue-600/20 p-4 rounded-xl border-2 border-blue-400/30 shadow-inner">
+                    <div className="text-[10px] uppercase font-black text-blue-300 tracking-widest mb-2 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 bg-blue-400 rounded-full"></span>
+                      Prescription CCTP (Action MOE)
+                    </div>
+                    <p className="text-sm text-blue-50 font-bold leading-relaxed">
+                      {ano.prescription_cctp}
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+                    <div className="flex flex-wrap gap-2">
+                      {ano.references_normatives?.map((ref: string, rIdx: number) => (
+                        <span key={rIdx} className="text-[10px] bg-slate-800 px-3 py-1 rounded border border-white/20 text-white font-bold shadow-sm">
+                          {ref}
+                        </span>
+                      ))}
+                    </div>
+                    {ano.estimation_budgetaire && (
+                      <div className="text-[11px] font-black text-green-300 bg-green-900/40 px-3 py-1.5 rounded-lg border-2 border-green-500/30 shadow-lg">
+                        BUDGET EST. : {ano.estimation_budgetaire}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* SYNTHESE ENERGETIQUE FINALE */}
       {data.synthese_energetique && (
