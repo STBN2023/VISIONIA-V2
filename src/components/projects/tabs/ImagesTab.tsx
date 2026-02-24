@@ -211,8 +211,8 @@ const ImagesTab = ({
         
         // Mise à jour de l'affichage en temps réel (carte par carte)
         setLocalClassifications(prev => ({ ...prev, [img.id]: classification }));
-      } catch (e) {
-        console.error("Erreur classification", img.name);
+      } catch (e: any) {
+        console.error("Erreur classification", img.name, e);
       }
     }
 

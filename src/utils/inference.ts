@@ -116,6 +116,7 @@ function centerCropSquare(img: HTMLImageElement): { sx: number; sy: number; s: n
 async function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    img.crossOrigin = "Anonymous"; // Permet l'utilisation dans canvas (si CORS headers présents)
     img.onload = () => resolve(img);
     img.onerror = () => reject(new Error("Échec chargement image"));
     img.src = dataUrl;
