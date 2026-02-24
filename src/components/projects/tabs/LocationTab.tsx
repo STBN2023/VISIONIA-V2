@@ -13,6 +13,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
+import { supabase } from "@/integrations/supabase/client";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -38,24 +39,27 @@ type Props = {
   onCoordinatesChange: (coords: LatLng) => void;
 };
 
-// --- Geocoding via Nominatim ---
+// --- Geocoding via Supabase Edge Function (proxy to Nominatim, no CORS issues) ---
+
+const GEOCODE_URL = "https://kmgbbcwsupzcoevaolva.supabase.co/functions/v1/geocode";
 
 async function geocodeAddress(
   address: string
 ): Promise<{ lat: number; lng: number; displayName: string } | null> {
   if (!address.trim()) return null;
   try {
-    const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-      address
-    )}&limit=1&addressdetails=1`;
-    const resp = await fetch(url);
-    const data = await resp.json();
-    if (data.length === 0) return null;
-    return {
-      lat: parseFloat(data[0].lat),
-      lng: parseFloat(data[0].lon),
-      displayName: data[0].display_name,
-    };
+    const { data: { session } } = await supabase.auth.getSession();
+    const resp = await fetch(GEOCODE_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${session?.access_token || ""}`,
+        "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImttZ2JiY3dzdXB6Y29ldmFvbHZhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4MzkwODQsImV4cCI6MjA4NzQxNTA4NH0.g2NnbzPQQYCqRN9C0Lp3n4-Wd5B9K449mfoxd3vbnfg",
+      },
+      body: JSON.stringify({ address }),
+    });
+    const json = await resp.json();
+    return json.result || null;
   } catch {
     return null;
   }
