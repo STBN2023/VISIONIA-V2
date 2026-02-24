@@ -18,6 +18,7 @@ import { applyCorrectionPreference, recordCorrection } from "@/utils/corrections
 import { classifyDataUrl } from "@/utils/inference";
 import { updateProject } from "@/utils/storage";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/utils/supabase";
 
 // Helpers de normalisation (évite espaces en trop et casse différente)
 const normalizeTagLabel = (s: string) => s.trim().replace(/\s+/g, " ");
@@ -180,14 +181,33 @@ const ImagesTab = ({
     if (!confirm("Réinitialiser toutes les classifications de ce projet ?")) return;
     
     setIsClassifying(true);
+    setLocalClassifications({});
+    
+    // 1. Mise à jour locale pour retour immédiat
     const resetImages = project.images.map(img => ({
       ...img,
       inferenceResult: undefined
     }));
 
-    setLocalClassifications({});
+    // 2. Mise à jour forcée dans la base de données
+    // On doit s'assurer que detection_results est vidé pour chaque inspection
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      for (const img of project.images) {
+        await supabase
+          .from('inspections')
+          .update({
+            detection_results: null // Efface physiquement les résultats ONNX et LLM
+          })
+          .eq('id', img.id);
+      }
+    }
+
+    // 3. Rafraîchir l'état du projet via le storage helper
     await updateProject(project.id, { images: resetImages });
+    
     setIsClassifying(false);
+    showSuccess("Classifications réinitialisées");
   };
 
   return (
