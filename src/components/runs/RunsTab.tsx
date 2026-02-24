@@ -7,8 +7,9 @@ import type { ProjectImage } from "@/utils/storage";
 import type { Run } from "@/utils/runs";
 import { cancelRun, retryFailedItems, deleteRun, updateRunItemBoxes } from "@/utils/runs";
 import { showSuccess } from "@/utils/toast";
-import { FileText, Trash2, Pencil } from "lucide-react";
+import { FileText, Trash2, Pencil, FileDown } from "lucide-react";
 import { exportRunToPdf } from "@/utils/pdf";
+import { exportRunToDocx } from "@/utils/docx";
 import RunLogDialog from "./RunLogDialog";
 import AnnotateDialog from "./AnnotateDialog";
 import AnomalyPreview from "./AnomalyPreview";
@@ -341,7 +342,20 @@ const RunsTab = ({ runs, images }: Props) => {
                           title={run.status === "succeeded" ? "Exporter en PDF" : "Disponible lorsque le run est terminé"}
                         >
                           <FileText className="mr-2 h-4 w-4" />
-                          Export PDF
+                          PDF
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={run.status !== "succeeded"}
+                          onClick={async () => {
+                            await exportRunToDocx(run, images);
+                          }}
+                          className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm disabled:opacity-50"
+                          title={run.status === "succeeded" ? "Exporter en DOCX" : "Disponible lorsque le run est terminé"}
+                        >
+                          <FileDown className="mr-2 h-4 w-4" />
+                          DOCX
                         </Button>
                         <Button
                           size="icon"
@@ -494,7 +508,20 @@ const RunsTab = ({ runs, images }: Props) => {
                           title={run.status === "succeeded" ? "Exporter en PDF" : "Disponible lorsque le run est terminé"}
                         >
                           <FileText className="mr-2 h-4 w-4" />
-                          Export PDF
+                          PDF
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={run.status !== "succeeded"}
+                          onClick={async () => {
+                            await exportRunToDocx(run, images);
+                          }}
+                          className="border-white/30 bg-transparent text-white hover:bg-white/10 backdrop-blur-sm disabled:opacity-50"
+                          title={run.status === "succeeded" ? "Exporter en DOCX" : "Disponible lorsque le run est terminé"}
+                        >
+                          <FileDown className="mr-2 h-4 w-4" />
+                          DOCX
                         </Button>
                         <Button
                           size="icon"

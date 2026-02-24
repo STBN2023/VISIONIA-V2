@@ -427,24 +427,3 @@ export async function updateRunItemBoxes(runId: string, itemId: string, boxes: B
 
   _runsCache.clear();
 }
-
-// Legacy simulation functions (kept as no-ops for backward compat)
-export function createRun(input: CreateRunInput): Run {
-  // Redirect to async version — caller should use createPendingRun instead
-  const now = new Date().toISOString();
-  const run: Run = {
-    id: crypto.randomUUID(),
-    projectId: input.projectId,
-    mode: input.mode,
-    status: "queued",
-    prompt: input.prompt,
-    model: input.model,
-    temperature: input.temperature,
-    createdAt: now,
-    updatedAt: now,
-    items: [],
-  };
-  // Fire and forget the async creation
-  createPendingRun(input).catch(console.error);
-  return run;
-}

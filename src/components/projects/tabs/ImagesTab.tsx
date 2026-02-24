@@ -37,7 +37,6 @@ type Props = {
   onApplyTagsPatch: (patch: Record<string, ImageTag | undefined>) => Promise<void>;
   // nouvelle prop optionnelle pour un apply atomique
   onApplyTagsBatch?: (input: { createTags: string[]; patch: Record<string, ImageTag | undefined> }) => Promise<void>;
-  onUpdateImages?: (images: ProjectImage[]) => Promise<void>;
   onProjectChange?: (project: Project) => void;
 };
 
@@ -56,7 +55,6 @@ const ImagesTab = ({
   onDeleteTag,
   onApplyTagsPatch,
   onApplyTagsBatch,
-  onUpdateImages,
   onProjectChange,
 }: Props) => {
   const [selectMode, setSelectMode] = useState(false);
@@ -101,15 +99,6 @@ const ImagesTab = ({
 
   // Scores/labels de classification en mémoire (non persistés)
   const [classifMap, setClassifMap] = useState<Record<string, { score: number; label: string }>>({});
-
-  // Wrapper: enregistre une correction quand l'utilisateur modifie un tag après une suggestion
-  const handleUpdateTagWithLearning = async (imgId: string, tag?: ImageTag) => {
-    const prevSuggested = classifMap[imgId]?.label; // tag suggéré affiché
-    await onUpdateTag(imgId, tag);
-    if (prevSuggested && tag && prevSuggested !== tag) {
-      recordCorrection(prevSuggested, tag);
-    }
-  };
 
   const addTag = async () => {
     const label = normalizeTagLabel(newTag);
@@ -237,9 +226,6 @@ const ImagesTab = ({
       if (updatedProject) {
         if (onProjectChange) {
           onProjectChange(updatedProject);
-        } else if (onUpdateImages) {
-          // Fallback partiel si onProjectChange n'est pas fourni (deprecated)
-          await onUpdateImages(processingImages);
         }
       }
       showSuccess("Classification et taggage terminés");
@@ -249,30 +235,6 @@ const ImagesTab = ({
     } finally {
       setIsClassifying(false);
     }
-  };
-
-  // Helper pour sauvegarder en masse sans bloquer l'UI
-  const syncResultsToSupabase = async (projectId: string, results: Record<string, any>) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-
-    const updates = Object.entries(results).map(([imgId, result]) => {
-      return supabase
-        .from('inspections')
-        .update({
-          detection_results: {
-            onnx: {
-              label: result.label,
-              score: result.score,
-              timestamp: new Date().toISOString()
-            }
-          }
-        })
-        .eq('id', imgId);
-    });
-    
-    // On lance tout en parallèle
-    await Promise.all(updates);
   };
 
   const handleResetClassifications = async () => {

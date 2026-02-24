@@ -68,7 +68,7 @@ export function ApiTab({
               placeholder="sk-..."
               className="bg-white/10 text-white placeholder:text-white/60"
             />
-            <p className="text-xs text-white/70">Note: la clé est stockée localement (navigateur) pour la démo.</p>
+            <p className="text-xs text-white/70">Note: la clé est stockée dans votre profil et transmise de manière sécurisée via un proxy serveur. Elle n'est jamais exposée côté navigateur.</p>
           </div>
         </div>
 
