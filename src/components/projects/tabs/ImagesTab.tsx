@@ -164,50 +164,55 @@ const ImagesTab = ({
     for (let i = 0; i < updatedImages.length; i++) {
       const img = updatedImages[i];
       try {
-        const result = await classifyDataUrl(img.dataUrl);
-        const classification = { label: result.topLabel, score: result.topScore };
+        // Utilisation de classifyImageToTag qui gère le mapping (français)
+        const result = await classifyImageToTag(img.dataUrl);
+        const classification = { label: result.suggestedTag, score: result.topScore };
         updatedImages[i] = { ...img, inferenceResult: classification };
       } catch (e) {
         console.error("Classification error for", img.name, e);
       }
     }
     
-    setLocalClassifications({}); // Clear temporary state
+    setLocalClassifications({});
     await updateProject(project.id, { images: updatedImages });
     setIsClassifying(false);
+    showSuccess("Analyse terminée (labels traduits)");
   };
 
   const handleResetClassifications = async () => {
     if (!confirm("Réinitialiser toutes les classifications de ce projet ?")) return;
     
     setIsClassifying(true);
+    
+    // 1. Mise à jour immédiate de l'état local pour que les badges disparaissent sans refresh
     setLocalClassifications({});
     
-    // 1. Mise à jour locale pour retour immédiat
+    // 2. Préparation des images réinitialisées pour l'état local
     const resetImages = project.images.map(img => ({
       ...img,
       inferenceResult: undefined
     }));
 
-    // 2. Mise à jour forcée dans la base de données
-    // On doit s'assurer que detection_results est vidé pour chaque inspection
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      for (const img of project.images) {
+    // 3. Mise à jour physique dans Supabase
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        // On vide la colonne detection_results pour toutes les images du projet
         await supabase
           .from('inspections')
-          .update({
-            detection_results: null // Efface physiquement les résultats ONNX et LLM
-          })
-          .eq('id', img.id);
+          .update({ detection_results: null })
+          .eq('project_id', project.id);
       }
-    }
 
-    // 3. Rafraîchir l'état du projet via le storage helper
-    await updateProject(project.id, { images: resetImages });
-    
-    setIsClassifying(false);
-    showSuccess("Classifications réinitialisées");
+      // 4. Mettre à jour l'état du projet parent pour déclencher le re-rendu de la liste
+      await updateProject(project.id, { images: resetImages });
+      
+      showSuccess("Classifications réinitialisées");
+    } catch (e) {
+      console.error("Erreur lors de la réinitialisation:", e);
+    } finally {
+      setIsClassifying(false);
+    }
   };
 
   return (
