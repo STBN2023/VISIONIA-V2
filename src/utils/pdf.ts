@@ -65,7 +65,17 @@ function pageBreak(doc: jsPDF) {
 }
 
 function ensureSpace(doc: jsPDF, y: number, needed: number) {
-  return y + needed > PAGE_BOTTOM ? pageBreak(doc) : y;
+  // Marge de sécurité de 10mm en bas de page
+  if (y + needed > PAGE_BOTTOM - 10) {
+    return pageBreak(doc);
+  }
+  return y;
+}
+
+// Helper pour calculer la hauteur d'un texte sans l'écrire
+function getTextHeight(doc: jsPDF, text: string, maxWidth: number, lineHeight: number): number {
+  const lines = doc.splitTextToSize(text, maxWidth);
+  return lines.length * lineHeight;
 }
 
 function drawSectionHeader(doc: jsPDF, text: string, x: number, y: number, width: number) {
@@ -292,14 +302,15 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
 
   if (jsonData?.lots) {
     jsonData.lots.forEach((lot: any) => {
-      // Entête de Lot stylisée
+      // Calcul hauteur estimée du titre du lot
       y = ensureSpace(doc, y, 20);
+      
+      // Entête de Lot
       doc.setFillColor(51, 65, 85);
       doc.rect(margin, y - 5, contentWidth, 8, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(11);
       
-      // Nettoyage de la redondance "LOT : LOT"
       let lotName = lot.lot || "Général";
       const displayLot = lotName.toUpperCase().startsWith("LOT") ? lotName : `LOT : ${lotName}`;
       
@@ -308,7 +319,18 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
       y += 10;
 
       lot.anomalies?.forEach((ano: any, aIdx: number) => {
-        y = ensureSpace(doc, y, 40);
+        // Pré-calcul de la hauteur totale nécessaire pour cette anomalie
+        // pour éviter qu'elle ne soit coupée en deux
+        const descH = getTextHeight(doc, ano.description || "N/A", contentWidth - 25, 4.5);
+        const anaH = getTextHeight(doc, ano.analyse_technique || "N/A", contentWidth - 25, 4.5);
+        const riskH = getTextHeight(doc, ano.risques_associes || "N/A", contentWidth - 25, 4.5);
+        const cctpH = getTextHeight(doc, ano.prescription_cctp || "N/A", contentWidth - 25, 4.5);
+        const extraH = 15; // Marges et ligne de titre
+
+        const totalH = descH + anaH + riskH + cctpH + extraH;
+
+        y = ensureSpace(doc, y, totalH);
+        
         if (aIdx > 0) {
           doc.setDrawColor(230);
           doc.line(margin + 10, y - 4, margin + contentWidth - 10, y - 4);
@@ -321,31 +343,37 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
         doc.text(`${ano.id || "ANO"} | ${ano.image_ref || ""} | ${ano.localisation || ""}`, margin, y);
         y += 5;
 
-        // Description & Analyse (Deux colonnes)
+        // Description
         doc.setFontSize(9);
         doc.text("Description :", margin, y);
         doc.setFont("helvetica", "normal");
-        const descY = addWrappedText(doc, ano.description || "N/A", margin + 25, y, contentWidth - 25, 4.5);
+        y = addWrappedText(doc, ano.description || "N/A", margin + 25, y, contentWidth - 25, 4.5);
         
+        // Analyse
         doc.setFont("helvetica", "bold");
-        doc.text("Analyse :", margin, descY);
+        doc.text("Analyse :", margin, y);
         doc.setFont("helvetica", "normal");
-        y = addWrappedText(doc, ano.analyse_technique || "N/A", margin + 25, descY, contentWidth - 25, 4.5);
+        y = addWrappedText(doc, ano.analyse_technique || "N/A", margin + 25, y, contentWidth - 25, 4.5);
 
-        // Risques (Rouge)
+        // Risques
         doc.setFont("helvetica", "bold");
         doc.setTextColor(180, 0, 0);
         doc.text("Risques :", margin, y);
         doc.setFont("helvetica", "italic");
+        doc.setTextColor(0, 0, 0); // Reset color for text body if wanted, but here risks are red? 
+        // Let's keep risks text red or make it black italic? Previous code had it italic.
+        // Let's make the label red and text black italic as per design
+        doc.setTextColor(0, 0, 0);
         y = addWrappedText(doc, ano.risques_associes || "N/A", margin + 25, y, contentWidth - 25, 4.5);
 
-        // CCTP (Bleu + Gras)
+        // CCTP
         doc.setFont("helvetica", "bold");
         doc.setTextColor(0, 80, 160);
         doc.text("CCTP :", margin, y);
+        doc.setTextColor(0, 0, 0);
         y = addWrappedText(doc, ano.prescription_cctp || "N/A", margin + 25, y, contentWidth - 25, 4.5);
 
-        // Budget & Normes
+        // Extras
         doc.setTextColor(100, 100, 100);
         doc.setFontSize(8);
         doc.setFont("helvetica", "normal");
@@ -359,6 +387,7 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
         }
         
         y += 6;
+        doc.setTextColor(0, 0, 0); // Reset final
       });
       y += 4;
     });
