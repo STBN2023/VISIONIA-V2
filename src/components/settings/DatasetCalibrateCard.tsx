@@ -8,7 +8,8 @@ import Dropzone from "@/components/uploader/Dropzone";
 import { showError, showSuccess } from "@/utils/toast";
 import { getSettings, saveSettings, type APISettings } from "@/utils/settings";
 import { deleteDataset, deleteOnnxModel, getDatasetManifest, importDatasetFromZip, storeOnnxModelToIdb, type DatasetManifest } from "@/utils/dataset";
-import { calibrateOnVal } from "@/utils/inference";
+import { calibrateOnVal, classifyDataUrl } from "@/utils/inference";
+import { blobToDataUrl, compressImageToBlob } from "@/utils/image-compress";
 
 const zipAccept = "application/zip,application/x-zip-compressed,.zip";
 const onnxAccept = ".onnx,application/octet-stream";
@@ -38,11 +39,11 @@ function parseClassesOrder(text: string): string[] {
 const DatasetCalibrateCard = () => {
   const [manifest, setManifest] = useState<DatasetManifest | null>(null);
   const [isImporting, setIsImporting] = useState(false);
-  const [mapping, setMapping] = useState<ClassMapping>({});
+  const [mapping, setMapping] = useState<ClassMapping>({}); 
   const [datasetName, setDatasetName] = useState("");
-  const [modelFileName, setModelFileName] = useState<string>("");
+  const [modelFileName, setModelFileName] = useState<string>(""); 
   const [inputSize, setInputSize] = useState<number>(224);
-  const [classesOrderText, setClassesOrderText] = useState<string>("");
+  const [classesOrderText, setClassesOrderText] = useState<string>(""); 
   const [onnxUrl, setOnnxUrl] = useState<string>("");
 
   const settings = useMemo(() => getSettings(), []);
@@ -74,7 +75,7 @@ const DatasetCalibrateCard = () => {
     // Afficher l'état si un modèle local (IDB) est déjà configuré
     if (settings.modelRef?.source === "idb" && settings.modelRef.value) {
       const id = settings.modelRef.value;
-      setModelFileName(`Modèle local (id: ${id.slice(0, 8)}…)`);
+      setModelFileName(`Modèle local (id: ${id.slice(0, 8)}…)`); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -214,7 +215,7 @@ const DatasetCalibrateCard = () => {
     }
     try {
       const { modelId } = await storeOnnxModelToIdb(f);
-      setModelFileName(`${f.name} (id: ${modelId.slice(0, 8)}…)`);
+      setModelFileName(`${f.name} (id: ${modelId.slice(0, 8)}…)`); 
       showSuccess("Modèle ONNX importé en local.");
     } catch (e: any) {
       showError(e?.message || "Échec de l'import du modèle ONNX.");
@@ -241,6 +242,30 @@ const DatasetCalibrateCard = () => {
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [perClass, setPerClass] = useState<number>(10);
   const [calibSummary, setCalibSummary] = useState<string>("");
+
+  // Test unitaire manuel
+  const [testImage, setTestImage] = useState<string>("");
+  const [testResult, setTestResult] = useState<{ label: string; score: number; probs: number[] } | null>(null);
+
+  const handleTestFile = async (files: FileList | File[] | null) => {
+    const f = files && (files[0] as File);
+    if (!f) return;
+    try {
+      const blob = await compressImageToBlob(f, { maxWidth: 1024 });
+      const url = await blobToDataUrl(blob);
+      setTestImage(url);
+      setTestResult(null);
+
+      const res = await classifyDataUrl(url);
+      setTestResult({
+        label: res.topLabel,
+        score: res.topScore,
+        probs: res.probs
+      });
+    } catch (e: any) {
+      showError(e?.message || "Erreur de classification test");
+    }
+  };
 
   return (
     <Card className="mt-6 rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
@@ -338,9 +363,8 @@ const DatasetCalibrateCard = () => {
                     <Label className="text-xs text-white/70">{cls}</Label>
                     <Input
                       value={mapping[cls] ?? ""}
-                      onChange={(e) => setMapping((m) => ({ ...m, [cls]: e.target.value }))}
-                      placeholder={defaultTagForClass(cls) || "tag (vide = aucun)"
-                      }
+                      onChange={(e) => setMapping((m) => ({ ...m, [cls]: e.target.value }))} 
+                      placeholder={defaultTagForClass(cls) || "tag (vide = aucun)"} 
                       className="bg-white/10 text-white placeholder:text-white/50"
                     />
                   </div>
@@ -460,6 +484,43 @@ const DatasetCalibrateCard = () => {
             ) : null}
           </div>
         </div>
+
+        {/* Test Manuel Rapide */}
+        {(modelFileName || onnxUrl) && (
+          <div className="space-y-2 pt-4 border-t border-white/10">
+            <Label>Test de classification rapide</Label>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <Dropzone
+                  accept="image/*"
+                  multiple={false}
+                  onFiles={handleTestFile}
+                  label="Tester une image"
+                  hint="Glissez ou cliquez"
+                  className="h-32"
+                />
+              </div>
+              {testImage && (
+                <div className="flex gap-4 rounded-xl border border-white/10 bg-white/5 p-3">
+                  <img src={testImage} alt="Test" className="h-24 w-24 rounded-lg object-cover" />
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold">Résultat :</p>
+                    {testResult ? (
+                      <>
+                        <Badge variant={testResult.label === "plain" ? "secondary" : "destructive"}>
+                          {testResult.label}
+                        </Badge>
+                        <p className="text-xs text-white/70">Confiance: {(testResult.score * 100).toFixed(1)}%</p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-white/50 animate-pulse">Analyse...</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </CardContent>
       <CardFooter className="justify-end">
         {isImporting ? (

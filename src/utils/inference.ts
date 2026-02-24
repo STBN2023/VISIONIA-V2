@@ -66,6 +66,7 @@ async function loadModelBytesFromSettings(): Promise<Uint8Array> {
   const resp = await fetch(ref.value);
   if (!resp.ok) throw new Error("Échec du chargement du modèle via URL.");
   const buf = await resp.arrayBuffer();
+  console.log(`[ONNX] Loaded model from URL: ${ref.value} (${buf.byteLength} bytes)`);
   return new Uint8Array(buf);
 }
 
@@ -79,6 +80,7 @@ export async function getOrCreateSession(): Promise<ort.InferenceSession> {
 
   // Ensure ORT env is configured before first session
   ensureOrtEnv();
+  console.log(`[ONNX] Initializing session with backends: ${epOrder.join(", ")}`);
 
   const bytes = await loadModelBytesFromSettings();
 
@@ -86,14 +88,17 @@ export async function getOrCreateSession(): Promise<ort.InferenceSession> {
   let lastErr: unknown = null;
   for (const ep of epOrder) {
     try {
+      console.log(`[ONNX] Trying backend: ${ep}`);
       const session = await ort.InferenceSession.create(bytes, {
         executionProviders: [ep],
         graphOptimizationLevel: "all",
       } as any);
       cachedSession = session;
       cachedKey = key;
+      console.log(`[ONNX] Session initialized successfully with ${ep}`);
       return session;
     } catch (e) {
+      console.warn(`[ONNX] Failed to initialize ${ep}:`, e);
       lastErr = e;
       // continue with next EP
     }
@@ -198,6 +203,8 @@ export async function classifyDataUrl(dataUrl: string): Promise<ClassifyResult> 
   const topIndex = probs.reduce((best, v, i, arr) => (v > arr[best] ? i : best), 0);
   const topScore = probs[topIndex] || 0;
   const topLabel = s.modelMeta?.classesOrder?.[topIndex] || String(topIndex);
+  
+  console.log(`[ONNX] Inference result: ${topLabel} (${(topScore * 100).toFixed(1)}%)`, { probs, topIndex });
   return { probs, topIndex, topScore, topLabel };
 }
 
