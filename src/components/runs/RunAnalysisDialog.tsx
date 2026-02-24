@@ -31,159 +31,164 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
   const canStart = !disabled && prompt.trim().length > 0 && images.length > 0;
 
   const onStart = async () => {
-    if (!canStart) {
-      showError("Ajoutez un prompt et au moins une image.");
-      return;
-    }
-    if (!settings.apiKey || settings.apiKey.trim().length < 10) {
-      showError("Aucune clé API détectée. Renseignez votre clé dans Paramètres.");
-      return;
-    }
-    
-    // Filtrage optionnel: uniquement les suspectes (selon classifieur ONNX)
-    let imgs = images;
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (onlySuspects) {
-      if (!settings.modelRef) {
-        showError("Aucun modèle ONNX configuré (Paramètres > Dataset & Calibrage).");
+    try {
+      if (!canStart) {
+        showError("Ajoutez un prompt et au moins une image.");
         return;
       }
-      const threshold = settings.inference?.threshold ?? 0.6;
-      const suspects: typeof images = [];
-      for (const im of images) {
-        const result = await classifyDataUrl(im.dataUrl);
-        const { topLabel, topScore } = result;
+      if (!settings.apiKey || settings.apiKey.trim().length < 10) {
+        showError("Aucune clé API détectée. Renseignez votre clé dans Paramètres.");
+        return;
+      }
+      
+      // Filtrage optionnel: uniquement les suspectes (selon classifieur ONNX)
+      let imgs = images;
+      const { data: { user } } = await supabase.auth.getUser();
 
-        // Save local ONNX results to Supabase for later auditing
-        if (user) {
-          await supabase
-            .from('inspections')
-            .update({
-              detection_results: {
-                onnx: {
-                  label: topLabel,
-                  score: topScore,
-                  probs: result.probs,
-                  timestamp: new Date().toISOString()
+      if (onlySuspects) {
+        if (!settings.modelRef) {
+          showError("Aucun modèle ONNX configuré (Paramètres > Dataset & Calibrage).");
+          return;
+        }
+        const threshold = settings.inference?.threshold ?? 0.6;
+        const suspects: typeof images = [];
+        for (const im of images) {
+          const result = await classifyDataUrl(im.dataUrl);
+          const { topLabel, topScore } = result;
+
+          // Save local ONNX results to Supabase for later auditing
+          if (user) {
+            await supabase
+              .from('inspections')
+              .update({
+                detection_results: {
+                  onnx: {
+                    label: topLabel,
+                    score: topScore,
+                    probs: result.probs,
+                    timestamp: new Date().toISOString()
+                  }
                 }
-              }
-            })
-            .eq('id', im.id);
-        }
+              })
+              .eq('id', im.id);
+          }
 
-        if (topLabel !== "plain" && topScore >= threshold) {
-          suspects.push(im);
+          if (topLabel !== "plain" && topScore >= threshold) {
+            suspects.push(im);
+          }
         }
+        if (suspects.length === 0) {
+          showError("Aucune image suspecte selon le seuil calibré.");
+          return;
+        }
+        imgs = suspects;
       }
-      if (suspects.length === 0) {
-        showError("Aucune image suspecte selon le seuil calibré.");
+
+      const run = createPendingRun({
+        projectId,
+        mode,
+        prompt,
+        images: imgs,
+        model: settings.model,
+        temperature: typeof settings.temperature === "number" ? settings.temperature : 0.2, // Fix: Ensure number type
+      });
+
+      setOpen(false);
+      showSuccess("Analyse démarrée");
+      onStarted?.(run.id);
+
+      const result = await analyzeLLM({
+        mode,
+        prompt,
+        images: imgs,
+        model: settings.model,
+        temperature: typeof settings.temperature === "number" ? settings.temperature : 0.2,
+        max_tokens: typeof settings.maxTokens === "number" ? settings.maxTokens : 2000,
+      });
+
+      if (!result.ok) {
+        const err = result as AnalyzeErr;
+        failRun(run.id, err.error);
+        showError(err.error);
         return;
       }
-      imgs = suspects;
-    }
 
-    const run = createPendingRun({
-      projectId,
-      mode,
-      prompt,
-      images: imgs,
-      model: settings.model,
-      temperature: settings.temperature,
-    });
+      if (result.mode === "aggregate") {
+        completeRunWithServer(run.id, { mode: "aggregate", outputText: result.outputText, items: result.items });
+        
+        // Update each inspection with its specific LLM result
+        if (user && result.items) {
+          for (const item of result.items) {
+            // Fix: Use imageId instead of imageName, and map properties correctly
+            const matchingImg = imgs.find(img => img.id === item.imageId);
+            if (matchingImg) {
+              const { data: currentIns } = await supabase
+                .from('inspections')
+                .select('detection_results')
+                .eq('id', matchingImg.id)
+                .single();
+              
+              const currentResults = (currentIns?.detection_results as any) || {};
+              const anomalyDetected = (item.boxes && item.boxes.length > 0) || false;
+              
+              await supabase
+                .from('inspections')
+                .update({
+                  detection_results: {
+                    ...currentResults,
+                    llm: {
+                      analysis: item.outputText, // mapped from analysis
+                      anomalyDetected: anomalyDetected,
+                      timestamp: new Date().toISOString()
+                    }
+                  },
+                  status: anomalyDetected ? 'defect' : 'clear'
+                })
+                .eq('id', matchingImg.id);
+            }
+          }
+        }
+      } else {
+        completeRunWithServer(run.id, { mode: "per_image", items: result.items });
+        
+        // Update inspections for per_image mode
+        if (user && result.items) {
+          for (const item of result.items) {
+            // Fix: Use imageId instead of imageName, and map properties correctly
+            const matchingImg = imgs.find(img => img.id === item.imageId);
+            if (matchingImg) {
+              const { data: currentIns } = await supabase
+                .from('inspections')
+                .select('detection_results')
+                .eq('id', matchingImg.id)
+                .single();
+              
+              const currentResults = (currentIns?.detection_results as any) || {};
+              const anomalyDetected = (item.boxes && item.boxes.length > 0) || false;
 
-    setOpen(false);
-    showSuccess("Analyse démarrée");
-    onStarted?.(run.id);
-
-    const result = await analyzeLLM({
-      mode,
-      prompt,
-      images: imgs,
-      model: settings.model,
-      temperature: settings.temperature,
-      max_tokens: settings.maxTokens,
-    });
-
-    if (!result.ok) {
-      const err = result as AnalyzeErr;
-      failRun(run.id, err.error);
-      showError(err.error);
-      return;
-    }
-
-    if (result.mode === "aggregate") {
-      completeRunWithServer(run.id, { mode: "aggregate", outputText: result.outputText, items: result.items });
-      
-      // Update each inspection with its specific LLM result
-      if (user && result.items) {
-        for (const item of result.items) {
-          // Fix: Use imageId instead of imageName, and map properties correctly
-          const matchingImg = imgs.find(img => img.id === item.imageId);
-          if (matchingImg) {
-            const { data: currentIns } = await supabase
-              .from('inspections')
-              .select('detection_results')
-              .eq('id', matchingImg.id)
-              .single();
-            
-            const currentResults = (currentIns?.detection_results as any) || {};
-            const anomalyDetected = (item.boxes && item.boxes.length > 0) || false;
-            
-            await supabase
-              .from('inspections')
-              .update({
-                detection_results: {
-                  ...currentResults,
-                  llm: {
-                    analysis: item.outputText, // mapped from analysis
-                    anomalyDetected: anomalyDetected,
-                    timestamp: new Date().toISOString()
-                  }
-                },
-                status: anomalyDetected ? 'defect' : 'clear'
-              })
-              .eq('id', matchingImg.id);
+              await supabase
+                .from('inspections')
+                .update({
+                  detection_results: {
+                    ...currentResults,
+                    llm: {
+                      analysis: item.outputText, // mapped from analysis
+                      anomalyDetected: anomalyDetected,
+                      timestamp: new Date().toISOString()
+                    }
+                  },
+                  status: anomalyDetected ? 'defect' : 'clear'
+                })
+                .eq('id', matchingImg.id);
+            }
           }
         }
       }
-    } else {
-      completeRunWithServer(run.id, { mode: "per_image", items: result.items });
-      
-      // Update inspections for per_image mode
-      if (user && result.items) {
-        for (const item of result.items) {
-          // Fix: Use imageId instead of imageName, and map properties correctly
-          const matchingImg = imgs.find(img => img.id === item.imageId);
-          if (matchingImg) {
-            const { data: currentIns } = await supabase
-              .from('inspections')
-              .select('detection_results')
-              .eq('id', matchingImg.id)
-              .single();
-            
-            const currentResults = (currentIns?.detection_results as any) || {};
-            const anomalyDetected = (item.boxes && item.boxes.length > 0) || false;
-
-            await supabase
-              .from('inspections')
-              .update({
-                detection_results: {
-                  ...currentResults,
-                  llm: {
-                    analysis: item.outputText, // mapped from analysis
-                    anomalyDetected: anomalyDetected,
-                    timestamp: new Date().toISOString()
-                  }
-                },
-                status: anomalyDetected ? 'defect' : 'clear'
-              })
-              .eq('id', matchingImg.id);
-          }
-        }
-      }
+      showSuccess("Analyse terminée");
+    } catch (e: any) {
+      console.error("Erreur lors du démarrage de l'analyse:", e);
+      showError(e.message || "Une erreur est survenue lors du démarrage.");
     }
-    showSuccess("Analyse terminée");
   };
 
   return (
