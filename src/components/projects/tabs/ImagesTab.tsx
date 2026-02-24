@@ -40,6 +40,7 @@ type Props = {
   onApplyTagsPatch: (patch: Record<string, ImageTag | undefined>) => Promise<void>;
   // nouvelle prop optionnelle pour un apply atomique
   onApplyTagsBatch?: (input: { createTags: string[]; patch: Record<string, ImageTag | undefined> }) => Promise<void>;
+  onUpdateImages?: (images: ProjectImage[]) => Promise<void>;
 };
 
 const ImagesTab = ({
@@ -57,6 +58,7 @@ const ImagesTab = ({
   onDeleteTag,
   onApplyTagsPatch,
   onApplyTagsBatch,
+  onUpdateImages,
 }: Props) => {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -180,6 +182,11 @@ const ImagesTab = ({
   };
 
   const handleClassifyAll = async () => {
+    if (!isModelConfigured()) {
+      showError("Aucun modèle configuré. Allez dans Paramètres > Dataset pour charger un modèle.");
+      return;
+    }
+
     setIsClassifying(true);
     
     // Copie de travail locale
@@ -212,7 +219,12 @@ const ImagesTab = ({
     // 2. MISE A JOUR DE L'ETAT GLOBAL (Immédiat pour l'utilisateur)
     // On met à jour le projet tout de suite pour que l'utilisateur voie le résultat final
     // sans attendre la base de données.
-    const updatedProjectPromise = updateProject(project.id, { images: processingImages });
+    let updatedProjectPromise;
+    if (onUpdateImages) {
+       updatedProjectPromise = onUpdateImages(processingImages);
+    } else {
+       updatedProjectPromise = updateProject(project.id, { images: processingImages });
+    }
 
     // 3. SAUVEGARDE ASYNCHRONE (En arrière-plan / Fire and Forget)
     // On ne bloque pas l'UI pour ça.

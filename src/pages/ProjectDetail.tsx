@@ -316,6 +316,12 @@ const ProjectDetail = () => {
     setProject(updated);
   };
 
+  const handleUpdateImages = async (newImages: ProjectImage[]) => {
+    if (!project) return;
+    const updated = await updateProject(project.id, { images: newImages })!;
+    setProject(updated);
+  };
+
   // Nouvelle version atomique: création de tags + patch images en UNE seule écriture
   const handleApplyTagsBatch = async (input: { createTags: string[]; patch: Record<string, ImageTag | undefined> }) => {
     if (!project) return;
@@ -415,6 +421,7 @@ const ProjectDetail = () => {
               onDeleteTag={handleDeleteTag}
               onApplyTagsPatch={handleApplyTagsPatch}
               onApplyTagsBatch={handleApplyTagsBatch}
+              onUpdateImages={handleUpdateImages}
             />
           </TabsContent>
 
