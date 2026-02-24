@@ -81,6 +81,7 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [userPosition, setUserPosition] = useState<LatLng | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
+  const [mapReady, setMapReady] = useState(false);
 
   // Leaflet map refs
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -89,33 +90,52 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
   const userMarkerRef = useRef<L.Marker | null>(null);
 
   const defaultCenter: LatLng = { lat: 46.603354, lng: 1.888334 };
-  const center = coordinates || defaultCenter;
-  const defaultZoom = coordinates ? 16 : 6;
 
-  // Initialize map once
+  // Initialize map
   useEffect(() => {
-    if (!mapContainerRef.current || mapRef.current) return;
+    if (!mapContainerRef.current) return;
+    // Prevent double init
+    if (mapRef.current) return;
 
-    const map = L.map(mapContainerRef.current).setView(
-      [center.lat, center.lng],
-      defaultZoom
-    );
+    const startCenter = coordinates || defaultCenter;
+    const startZoom = coordinates ? 16 : 6;
+
+    const map = L.map(mapContainerRef.current, {
+      center: [startCenter.lat, startCenter.lng],
+      zoom: startZoom,
+      zoomControl: true,
+    });
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution:
         '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom: 19,
     }).addTo(map);
 
     mapRef.current = map;
 
-    // Add project marker if coordinates exist
+    // Add project marker if coordinates exist at init
     if (coordinates) {
       markerRef.current = L.marker([coordinates.lat, coordinates.lng])
         .addTo(map)
         .bindPopup(address || "Chantier");
     }
 
+    // Fix: invalidateSize after a short delay to handle tab rendering
+    const timer = setTimeout(() => {
+      map.invalidateSize();
+      setMapReady(true);
+    }, 200);
+
+    // Also listen for resize / visibility changes
+    const resizeObserver = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    resizeObserver.observe(mapContainerRef.current);
+
     return () => {
+      clearTimeout(timer);
+      resizeObserver.disconnect();
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
@@ -123,31 +143,30 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Update project marker when coordinates change
+  // Update project marker when coordinates change (after init)
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || !mapReady) return;
+    if (!coordinates) return;
 
-    if (coordinates) {
-      if (markerRef.current) {
-        markerRef.current.setLatLng([coordinates.lat, coordinates.lng]);
-      } else {
-        markerRef.current = L.marker([coordinates.lat, coordinates.lng]).addTo(
-          map
-        );
-      }
-      markerRef.current.bindPopup(
-        `<div style="font-weight:600">${address || "Chantier"}</div>${
-          resolvedAddress
-            ? `<div style="font-size:11px;color:#666;margin-top:4px">${resolvedAddress}</div>`
-            : ""
-        }`
+    if (markerRef.current) {
+      markerRef.current.setLatLng([coordinates.lat, coordinates.lng]);
+    } else {
+      markerRef.current = L.marker([coordinates.lat, coordinates.lng]).addTo(
+        map
       );
-      map.flyTo([coordinates.lat, coordinates.lng], 16, { duration: 1.2 });
     }
-  }, [coordinates, address, resolvedAddress]);
+    markerRef.current.bindPopup(
+      `<div style="font-weight:600">${address || "Chantier"}</div>${
+        resolvedAddress
+          ? `<div style="font-size:11px;color:#666;margin-top:4px">${resolvedAddress}</div>`
+          : ""
+      }`
+    );
+    map.flyTo([coordinates.lat, coordinates.lng], 16, { duration: 1.2 });
+  }, [coordinates, address, resolvedAddress, mapReady]);
 
-  // Update user marker when user position changes
+  // Update user marker
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !userPosition) return;
@@ -298,12 +317,11 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
         </CardContent>
       </Card>
 
-      {/* Map */}
+      {/* Map container — explicit height + relative position for Leaflet */}
       <Card className="rounded-2xl border-white/20 bg-white/10 text-white backdrop-blur-2xl overflow-hidden">
         <div
           ref={mapContainerRef}
-          className="h-[400px] w-full"
-          style={{ zIndex: 0 }}
+          style={{ height: "400px", width: "100%", position: "relative", zIndex: 0 }}
         />
       </Card>
 
