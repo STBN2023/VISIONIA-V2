@@ -37,6 +37,15 @@ const PromptTab = ({
 }: Props) => {
   const [analysisTag, setAnalysisTag] = useState<string>("all");
 
+  const uniqueTags = useMemo(() => {
+    // Collect all tags from images and project tags
+    const allTags = new Set(tags);
+    images.forEach(img => {
+      if (img.tag) allTags.add(img.tag);
+    });
+    return Array.from(allTags).sort();
+  }, [tags, images]);
+
   const imagesForRun = useMemo(() => {
     if (analysisTag === "all") return images;
     return images.filter((i) => i.tag === analysisTag);
@@ -88,7 +97,7 @@ const PromptTab = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Toutes les images</SelectItem>
-                  {tags.map((t) => (
+                  {uniqueTags.map((t) => (
                     <SelectItem key={t} value={t}>
                       {t}
                     </SelectItem>
