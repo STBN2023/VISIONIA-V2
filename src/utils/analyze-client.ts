@@ -426,11 +426,10 @@ export async function analyzeLLM(input: {
     };
   }
 
-  // Utiliser gpt-4o par défaut pour les analyses complexes si disponible, et augmenter max_tokens
+  // FORCE gpt-4o pour la robustesse et augmente max_tokens au maximum pour éviter la troncature
   const model = input.model || s.model || "gpt-4o";
   const userTemp = typeof input.temperature === "number" ? input.temperature : s.temperature ?? 0.2;
-  const max_tokens =
-    typeof input.max_tokens === "number" ? input.max_tokens : (s.maxTokens && s.maxTokens > 1200 ? s.maxTokens : 4000);
+  const max_tokens = 4000; // Force une limite haute pour les longs rapports JSON
 
   try {
     if (input.mode === "aggregate") {

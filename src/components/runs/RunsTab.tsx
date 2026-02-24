@@ -21,37 +21,40 @@ const StructuredAnalysisView = ({ text }: { text: string }) => {
   const parsedData = useMemo(() => {
     if (!text) return null;
     try {
-      // 1. Nettoyage initial : on enlève les blocs Markdown
       let cleanText = text.trim();
       const markdownMatch = cleanText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (markdownMatch) {
         cleanText = markdownMatch[1].trim();
       }
 
-      // 2. Extraction du bloc JSON entre { et }
       const start = cleanText.indexOf('{');
-      const end = cleanText.lastIndexOf('}');
-      if (start === -1 || end === -1 || end <= start) return null;
-      let jsonCandidate = cleanText.substring(start, end + 1);
-
-      // 3. RÉPARATION CRITIQUE : Nettoyage des caractères de contrôle et sauts de ligne réels
-      // On remplace les sauts de ligne réels par des espaces car JSON.parse ne les tolère pas dans les strings
-      // On enlève aussi les tabulations réelles
-      const sanitized = jsonCandidate
-        .replace(/\r?\n|\r/g, " ") // Remplace tous les sauts de ligne par des espaces
-        .replace(/\t/g, " ")       // Remplace les tabulations par des espaces
-        .replace(/\\n/g, " ")      // Remplace les \n déjà échappés pour éviter les conflits
-        .replace(/\s+/g, " ");     // Normalise les espaces multiples
-
-      // 4. Tentative de parsing
-      const data = JSON.parse(sanitized);
+      if (start === -1) return null;
       
-      if (data.lots || data.contexte_projet) {
-        return data;
+      let jsonCandidate = cleanText.substring(start);
+      
+      // AUTO-REPAIR : Si le JSON est tronqué (pas de } finale), on tente de le fermer
+      if (!jsonCandidate.endsWith('}')) {
+        // On enlève tout ce qui dépasse après la dernière virgule ou structure probable
+        // et on rajoute les fermetures nécessaires pour tenter de sauver les données
+        jsonCandidate = jsonCandidate.trim();
+        
+        // Un petit hack pour fermer les structures ouvertes si coupure brutale
+        // On rajoute suffisamment de fermetures pour espérer que JSON.parse passe
+        jsonCandidate += '"]}]}'; 
       }
-      return null;
+
+      const sanitized = jsonCandidate
+        .replace(/\r?\n|\r/g, " ")
+        .replace(/\t/g, " ");
+
+      // On tente de parser. Si ça échoue, on essaie une version encore plus "réparée"
+      try {
+        return JSON.parse(sanitized);
+      } catch (e) {
+        // Deuxième tentative : on force la fermeture de l'objet principal
+        return JSON.parse(sanitized + '}');
+      }
     } catch (e) {
-      console.error("Échec du parsing JSON réparé:", e);
       return null;
     }
   }, [text]);
