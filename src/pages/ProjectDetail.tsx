@@ -59,7 +59,7 @@ const ProjectDetail = () => {
   const [type, setType] = useState("");
   const [status, setStatus] = useState<ProjectStatus>("Brouillon");
   const [notes, setNotes] = useState("");
-  const [activeTab, setActiveTab] = useState("location");
+  const [activeTab, setActiveTab] = useState("infos");
 
   // Templates
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
@@ -408,10 +408,10 @@ const ProjectDetail = () => {
         <Separator className="mb-6 border-white/20" />
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="flex flex-wrap bg-white/10 text-white">
+            <TabsTrigger value="infos">Infos</TabsTrigger>
             <TabsTrigger value="location">Localisation</TabsTrigger>
             <TabsTrigger value="images">Images</TabsTrigger>
             <TabsTrigger value="prompt">Analyse</TabsTrigger>
-            <TabsTrigger value="infos">Infos</TabsTrigger>
             <TabsTrigger value="runs">Runs</TabsTrigger>
           </TabsList>
 
