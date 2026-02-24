@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Image as ImageIcon, Upload, X, Sparkles, RefreshCcw } from "lucide-react";
+import { Image as ImageIcon, Upload, X, RefreshCcw } from "lucide-react";
 import type { ImageTag, Project, ProjectImage } from "@/utils/storage";
 import type { PromptTemplate } from "@/utils/prompts";
 import ImageCard from "@/components/uploader/ImageCard";

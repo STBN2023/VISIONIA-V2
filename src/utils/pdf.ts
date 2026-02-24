@@ -54,18 +54,6 @@ function checkPageBreak(doc: jsPDF, currentY: number, heightNeeded: number): num
   return currentY;
 }
 
-function drawSectionHeader(doc: jsPDF, text: string, x: number, y: number, width: number) {
-  const lines = doc.splitTextToSize(text, width - 4);
-  const boxHeight = lines.length * 5 + 6; // padding + lignes
-  y = checkPageBreak(doc, y, boxHeight + 4);
-  doc.setFillColor(245, 245, 245);
-  (doc as any).roundedRect(x, y - 4, width, boxHeight, 2, 2, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
-  y = addWrappedText(doc, text, x + 2, y, width - 4, 5);
-  return y + 4;
-}
-
 function getMimeFromDataUrl(dataUrl: string): string {
   const m = dataUrl.match(/^data:([^;]+);base64,/);
   return m ? m[1] : "";

@@ -12,7 +12,6 @@ import { exportRunToPdf } from "@/utils/pdf";
 import RunLogDialog from "./RunLogDialog";
 import AnnotateDialog from "./AnnotateDialog";
 import AnomalyPreview from "./AnomalyPreview";
-import { Badge as UIWebBadge } from "@/components/ui/badge";
 
 // Ajout d'un composant pour afficher le JSON structuré par lots
 const StructuredAnalysisView = ({ text }: { text: string }) => {
@@ -121,9 +120,9 @@ const StructuredAnalysisView = ({ text }: { text: string }) => {
           <div key={idx} className="rounded-2xl border border-white/20 bg-slate-900/90 overflow-hidden shadow-2xl backdrop-blur-md">
             <div className="bg-white/15 px-5 py-3 border-b border-white/10 flex items-center justify-between">
               <h3 className="font-black text-white uppercase tracking-widest text-sm drop-shadow-sm">{displayLot}</h3>
-              <UIWebBadge variant="secondary" className="bg-white/20 text-white border-white/30 font-bold px-3 py-1">
+              <Badge variant="secondary" className="bg-white/20 text-white border-white/30 font-bold px-3 py-1">
                 {lot.anomalies?.length || 0} POINT(S) D'ATTENTION
-              </UIWebBadge>
+              </Badge>
             </div>
             <div className="divide-y divide-white/10">
               {lot.anomalies?.map((ano: any, aIdx: number) => (
