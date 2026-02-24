@@ -42,12 +42,31 @@ const PromptTab = ({
   const uniqueTags = useMemo(() => {
     // Collect all tags from images and project tags
     const allTags = new Set(tags);
+    const counts: Record<string, number> = {};
+    
+    // Init counts for project tags
+    tags.forEach(t => counts[t] = 0);
+
     images.forEach(img => {
-      if (img.tag) allTags.add(img.tag);
+      if (img.tag) {
+        allTags.add(img.tag);
+        counts[img.tag] = (counts[img.tag] || 0) + 1;
+      }
     });
+
     // Filter out internal/system tags like "pending"
-    const filtered = Array.from(allTags).filter(t => t !== "pending" && t !== "completed" && t !== "failed");
-    return filtered.sort();
+    const filtered = Array.from(allTags).filter(t => 
+      t && 
+      t !== "pending" && 
+      t !== "completed" && 
+      t !== "failed" &&
+      t.trim().length > 0
+    );
+    
+    return filtered.sort().map(t => ({
+      value: t,
+      label: `${t} (${counts[t] || 0})`
+    }));
   }, [tags, images]);
 
   const imagesForRun = useMemo(() => {
@@ -100,10 +119,10 @@ const PromptTab = ({
                   <SelectValue placeholder="Toutes les images" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Toutes les images</SelectItem>
+                  <SelectItem value="all">Toutes les images ({images.length})</SelectItem>
                   {uniqueTags.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
+                    <SelectItem key={t.value} value={t.value}>
+                      {t.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

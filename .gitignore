@@ -45,3 +45,4 @@ dist-ssr
 .verceldataset_visio_ai.zip
 *.zip
 data/
+.dyad/

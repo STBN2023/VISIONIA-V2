@@ -263,6 +263,14 @@ const RunsTab = ({ runs, images }: Props) => {
   const photoRuns = useMemo(() => runs.filter((r) => r.mode === "per_image"), [runs]);
   const promptRuns = useMemo(() => runs.filter((r) => r.mode === "aggregate"), [runs]);
 
+  // Determine default tab based on latest run type, defaulting to "prompt" (Reports)
+  const defaultTab = useMemo(() => {
+    if (runs.length > 0) {
+      return runs[0].mode === "aggregate" ? "prompt" : "photos";
+    }
+    return "prompt";
+  }, [runs]);
+
   const [logRunId, setLogRunId] = useState<string | null>(null);
   const logRun = useMemo(() => runs.find((r) => r.id === logRunId) ?? null, [runs, logRunId]);
 
@@ -293,10 +301,10 @@ const RunsTab = ({ runs, images }: Props) => {
           <CardTitle>Historique des analyses</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Tabs defaultValue="photos" className="w-full">
+          <Tabs defaultValue={defaultTab} className="w-full">
             <TabsList className="bg-white/10 text-white">
-              <TabsTrigger value="photos">Photos & annotations</TabsTrigger>
-              <TabsTrigger value="prompt">Résultats du prompt</TabsTrigger>
+              <TabsTrigger value="prompt">Comptes rendus (Prompt)</TabsTrigger>
+              <TabsTrigger value="photos">Analyses par image</TabsTrigger>
             </TabsList>
 
             {/* Onglet: runs par image (annotations) */}
