@@ -192,13 +192,13 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
   const project = await getProjectById(run.projectId);
 
   // --- PAGE DE GARDE ---
-  doc.setFillColor(30, 41, 59); // Bleu nuit ISOEDRE
+  doc.setFillColor(30, 41, 59); // Bleu nuit VISIOEDRE
   doc.rect(0, 0, 210, 297, "F"); // Fond page entière
 
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(36);
-  doc.text("ISOEDRE", 105, 100, { align: "center" });
+  doc.text("VISIOEDRE", 105, 100, { align: "center" });
   
   doc.setFontSize(14);
   doc.setFont("helvetica", "normal");
@@ -521,6 +521,6 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
     }
   }
 
-  const filename = `Rapport_ISOEDRE_${project?.title || "Projet"}.pdf`;
+  const filename = `Rapport_VISIOEDRE_${project?.title || "Projet"}.pdf`;
   doc.save(filename);
 }

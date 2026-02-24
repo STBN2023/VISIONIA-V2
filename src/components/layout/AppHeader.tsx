@@ -50,7 +50,7 @@ export const AppHeader = ({
         <div className="flex items-center justify-between rounded-3xl border border-white/20 bg-white/10 px-4 py-3 shadow-2xl backdrop-blur-2xl">
           <Link to="/" className="flex items-center gap-2 text-base font-semibold text-white">
             <BrandLogo height={32} />
-            <span>ISOEDRE Vision IA</span>
+            <span>VISIOEDRE</span>
           </Link>
           <nav className="flex items-center gap-1">
             <NavItem to="/projects" label="Projets" icon={FolderClosed} />

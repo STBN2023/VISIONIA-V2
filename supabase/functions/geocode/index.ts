@@ -26,7 +26,7 @@ serve(async (req) => {
     const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=1`
     
     const resp = await fetch(url, {
-      headers: { 'User-Agent': 'ISOEDRE-App/1.0 (contact@isoedre.fr)' },
+      headers: { 'User-Agent': 'VISIOEDRE-App/1.0' },
     })
 
     if (!resp.ok) {
