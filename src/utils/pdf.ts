@@ -175,6 +175,38 @@ function drawRotatedRect(doc: jsPDF, x: number, y: number, w: number, h: number,
   }
 }
 
+function drawBoxesOnPlaced(doc: jsPDF, placed: PlacedImage, boxes: any[]) {
+  boxes.forEach((b: any) => {
+    const px = placed.x + b.x * placed.w;
+    const py = placed.y + b.y * placed.h;
+    const pw = b.w * placed.w;
+    const ph = b.h * placed.h;
+
+    let r = 34, g = 197, bcol = 94;
+    const col = b.color || "#22C55E";
+    try {
+      const rgb = hexToRgb(col);
+      r = rgb[0]; g = rgb[1]; bcol = rgb[2];
+    } catch {
+      // fallback
+    }
+
+    if (typeof b.angle === "number" && Math.abs(b.angle) > 0.01) {
+      drawRotatedRect(doc, px, py, pw, ph, b.angle, [r, g, bcol]);
+    } else {
+      doc.setDrawColor(r, g, bcol);
+      doc.setLineWidth(0.8);
+      doc.rect(px, py, pw, ph);
+    }
+
+    if (b.label) {
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.text(b.label, px + 1.5, Math.max(py - 1, 10));
+    }
+  });
+}
+
 export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const margin = 15;
@@ -389,7 +421,7 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
         const placedRes = await addImageBlock(doc, img.dataUrl, margin, y, 120, 80);
         const boxes = item.boxes || [];
         if (boxes.length > 0) {
-          drawBoxesOnPlaced(placedRes.placed, boxes);
+          drawBoxesOnPlaced(doc, placedRes.placed, boxes);
         }
         y = placedRes.nextY + 10;
       }
