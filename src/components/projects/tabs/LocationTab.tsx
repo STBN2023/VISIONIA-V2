@@ -70,16 +70,6 @@ const userIcon = L.divIcon({
   iconAnchor: [8, 8],
 });
 
-// --- Helpers ---
-
-function coordsEqual(a?: LatLng | null, b?: LatLng | null): boolean {
-  if (!a && !b) return true;
-  if (!a || !b) return false;
-  return (
-    Math.abs(a.lat - b.lat) < 0.000001 && Math.abs(a.lng - b.lng) < 0.000001
-  );
-}
-
 // --- Main component ---
 
 const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
@@ -95,10 +85,7 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
   const mapRef = useRef<L.Map | null>(null);
   const markerRef = useRef<L.Marker | null>(null);
   const userMarkerRef = useRef<L.Marker | null>(null);
-
-  // Track what the map is currently showing to avoid redundant flyTo
-  const currentCoordsRef = useRef<LatLng | null>(null);
-  const prevAddressRef = useRef(address);
+  const lastFlyRef = useRef<string>(""); // "lat,lng" of last flyTo to avoid repeat
 
   const defaultCenter: LatLng = { lat: 46.603354, lng: 1.888334 };
 
@@ -127,14 +114,13 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
       markerRef.current = L.marker([coordinates.lat, coordinates.lng])
         .addTo(map)
         .bindPopup(address || "Chantier");
-      currentCoordsRef.current = coordinates;
+      lastFlyRef.current = `${coordinates.lat.toFixed(5)},${coordinates.lng.toFixed(5)}`;
     }
 
-    // Fix tile rendering after tab switch — single invalidateSize with delay
-    const timer = setTimeout(() => map.invalidateSize(), 300);
+    // Fix tile rendering after tab becomes visible
+    setTimeout(() => map.invalidateSize(), 300);
 
     return () => {
-      clearTimeout(timer);
       map.remove();
       mapRef.current = null;
       markerRef.current = null;
@@ -142,38 +128,42 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // --- Move map to new coordinates (only when they actually change) ---
-  const flyToCoords = useCallback((coords: LatLng, popupHtml: string) => {
-    const map = mapRef.current;
-    if (!map) return;
+  // --- Helper: move map + marker to coords ---
+  const moveMapTo = useCallback(
+    (coords: LatLng, popupLabel?: string) => {
+      const map = mapRef.current;
+      if (!map) return;
 
-    // Update or create marker
-    if (markerRef.current) {
-      markerRef.current.setLatLng([coords.lat, coords.lng]);
-    } else {
-      markerRef.current = L.marker([coords.lat, coords.lng]).addTo(map);
-    }
-    markerRef.current.bindPopup(popupHtml);
+      // Update or create marker
+      if (markerRef.current) {
+        markerRef.current.setLatLng([coords.lat, coords.lng]);
+      } else {
+        markerRef.current = L.marker([coords.lat, coords.lng]).addTo(map);
+      }
+      if (popupLabel) {
+        markerRef.current.bindPopup(popupLabel);
+      }
 
-    // Only fly if position actually changed
-    if (!coordsEqual(currentCoordsRef.current, coords)) {
-      currentCoordsRef.current = coords;
-      map.flyTo([coords.lat, coords.lng], 16, { duration: 1.2 });
-    }
-  }, []);
+      // Only flyTo if position actually changed
+      const key = `${coords.lat.toFixed(5)},${coords.lng.toFixed(5)}`;
+      if (lastFlyRef.current !== key) {
+        lastFlyRef.current = key;
+        map.flyTo([coords.lat, coords.lng], 16, { duration: 1.2 });
+      }
+    },
+    []
+  );
 
-  // React to coordinates prop changes
+  // --- React to coordinates prop changes ---
   useEffect(() => {
     if (!coordinates) return;
-    if (coordsEqual(currentCoordsRef.current, coordinates)) return;
-
-    const popupHtml = `<div style="font-weight:600">${address || "Chantier"}</div>${
+    const label = `<div style="font-weight:600">${address || "Chantier"}</div>${
       resolvedAddress
         ? `<div style="font-size:11px;color:#666;margin-top:4px">${resolvedAddress}</div>`
         : ""
     }`;
-    flyToCoords(coordinates, popupHtml);
-  }, [coordinates, address, resolvedAddress, flyToCoords]);
+    moveMapTo(coordinates, label);
+  }, [coordinates, address, resolvedAddress, moveMapTo]);
 
   // --- User marker ---
   useEffect(() => {
@@ -197,20 +187,25 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
       setDistance(null);
       return;
     }
-    const from = L.latLng(userPosition.lat, userPosition.lng);
-    const to = L.latLng(coordinates.lat, coordinates.lng);
-    setDistance(from.distanceTo(to));
+    setDistance(
+      L.latLng(userPosition.lat, userPosition.lng).distanceTo(
+        L.latLng(coordinates.lat, coordinates.lng)
+      )
+    );
   }, [coordinates, userPosition]);
 
-  // --- Auto-geocode when address changes ---
+  // --- Auto-geocode when address prop changes ---
+  const isFirstMount = useRef(true);
   useEffect(() => {
-    const addressChanged = prevAddressRef.current !== address;
-    prevAddressRef.current = address;
-
     if (!address) return;
-    // On mount: geocode only if no coordinates. On change: always re-geocode.
-    if (!addressChanged && coordinates) return;
 
+    // On first mount, only geocode if no coordinates saved
+    if (isFirstMount.current) {
+      isFirstMount.current = false;
+      if (coordinates) return; // already have coords, skip
+    }
+
+    // Address changed → always re-geocode
     let cancelled = false;
     setIsGeocoding(true);
     geocodeAddress(address).then((result) => {
