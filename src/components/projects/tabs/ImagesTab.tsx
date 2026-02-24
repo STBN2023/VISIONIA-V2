@@ -65,10 +65,32 @@ const ImagesTab = ({
   // Local state for classification results to provide immediate feedback
   const [localClassifications, setLocalClassifications] = useState<Record<string, { label: string, score: number }>>({});
 
+  // Fusionner les tags manuels ET les labels IA détectés pour le filtre
+  const allAvailableFilters = useMemo(() => {
+    const manualTags = project.tags || [];
+    const aiLabels = new Set<string>();
+    
+    project.images.forEach(img => {
+      const label = localClassifications[img.id]?.label || img.inferenceResult?.label;
+      if (label) aiLabels.add(label);
+    });
+
+    // On combine tout et on trie
+    return Array.from(new Set([...manualTags, ...Array.from(aiLabels)])).sort();
+  }, [project.tags, project.images, localClassifications]);
+
   const filteredImages = useMemo(() => {
     if (tagFilter === "all") return project.images;
-    return project.images.filter((img) => img.tag === tagFilter);
-  }, [project.images, tagFilter]);
+    
+    return project.images.filter((img) => {
+      // Le filtre marche si c'est un tag manuel OU un label IA
+      const manualMatch = img.tag === tagFilter;
+      const aiLabel = localClassifications[img.id]?.label || img.inferenceResult?.label;
+      const aiMatch = aiLabel === tagFilter;
+      
+      return manualMatch || aiMatch;
+    });
+  }, [project.images, tagFilter, localClassifications]);
 
   const [newTag, setNewTag] = useState("");
   const [classifying, setClassifying] = useState(false);
@@ -392,14 +414,17 @@ const ImagesTab = ({
           >
             {selectMode ? "Quitter sélection" : "Mode sélection"}
           </Button>
-          <Label className="text-xs text-white/80">Filtrer par tag</Label>
-          <Select value={tagFilter} onValueChange={(v) => setTagFilter((v as ImageTag) || "all")}>
-            <SelectTrigger className="w-[240px] bg-white/10 text-white">
-              <SelectValue placeholder="Tous les tags" />
+          <Label className="text-xs text-white/80">Filtrer par tag / label :</Label>
+          <Select
+            value={tagFilter}
+            onValueChange={(v) => setTagFilter(v as ImageTag | "all")}
+          >
+            <SelectTrigger className="h-9 min-w-[180px] bg-white/10 text-white backdrop-blur-sm">
+              <SelectValue placeholder="Tous" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">Tous</SelectItem>
-              {project.tags.map((t) => (
+              {allAvailableFilters.map((t) => (
                 <SelectItem key={t} value={t}>
                   {t}
                 </SelectItem>
