@@ -90,6 +90,22 @@ function getMimeFromDataUrl(dataUrl: string): string {
   return m ? m[1] : "";
 }
 
+function isRemoteUrl(url: string): boolean {
+  return url.startsWith("http://") || url.startsWith("https://");
+}
+
+async function fetchAsDataUrl(url: string): Promise<string> {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`Fetch failed: ${resp.status}`);
+  const blob = await resp.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("FileReader error"));
+    reader.readAsDataURL(blob);
+  });
+}
+
 function loadImage(dataUrl: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -117,11 +133,28 @@ async function toJpegDataUrl(dataUrl: string, quality = 0.9): Promise<string> {
 type PlacedImage = { x: number; y: number; w: number; h: number };
 
 async function addImageBlock(doc: jsPDF, dataUrl: string, x: number, y: number, maxWidth: number, maxHeight: number): Promise<{ nextY: number; placed: PlacedImage }> {
-  const mime = getMimeFromDataUrl(dataUrl);
+  // If it's a remote URL (Supabase Storage), fetch it as a data URL first
+  let resolvedUrl = dataUrl;
+  if (isRemoteUrl(dataUrl)) {
+    try {
+      resolvedUrl = await fetchAsDataUrl(dataUrl);
+    } catch (e) {
+      console.error("Failed to fetch remote image for PDF:", e);
+      // Return a placeholder
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(9);
+      doc.setTextColor(150, 150, 150);
+      doc.text("[Image non disponible]", x, y + 10);
+      doc.setTextColor(0, 0, 0);
+      return { nextY: y + 20, placed: { x, y, w: 0, h: 0 } };
+    }
+  }
+
+  const mime = getMimeFromDataUrl(resolvedUrl);
   const isPng = mime === "image/png";
   const needsConvert = !(mime === "image/jpeg" || mime === "image/jpg" || isPng);
 
-  const usableUrl = needsConvert ? await toJpegDataUrl(dataUrl) : dataUrl;
+  const usableUrl = needsConvert ? await toJpegDataUrl(resolvedUrl) : resolvedUrl;
   const img = await loadImage(usableUrl);
 
   const iw = img.naturalWidth || img.width;
@@ -137,7 +170,8 @@ async function addImageBlock(doc: jsPDF, dataUrl: string, x: number, y: number, 
     drawY = 20;
   }
 
-  const format = isPng ? "PNG" : "JPEG";
+  const finalMime = getMimeFromDataUrl(usableUrl);
+  const format = finalMime === "image/png" ? "PNG" : "JPEG";
   doc.addImage(usableUrl, format as any, x, drawY, w, h);
   return { nextY: drawY + h, placed: { x, y: drawY, w, h } };
 }

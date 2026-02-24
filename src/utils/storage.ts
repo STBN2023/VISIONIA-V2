@@ -61,7 +61,7 @@ function mapDbToProject(dbProj: any): Project {
         score: ins.detection_results.onnx.score
       } : undefined,
     })),
-    tags: dbProj.tags || [],
+    tags: Array.isArray(dbProj.tags) ? dbProj.tags : [],
   };
 }
 
@@ -177,7 +177,8 @@ export async function createProject(input: {
       name: input.title.trim(),
       location: input.address?.trim(),
       description: input.type?.trim(),
-      status: 'Brouillon'
+      status: 'Brouillon',
+      tags: [],
     })
     .select()
     .single();
@@ -201,6 +202,7 @@ export async function updateProject(
   if (patch.templateId !== undefined) updateData.template_id = patch.templateId;
   if (patch.prompt !== undefined) updateData.prompt = patch.prompt;
   if (patch.notes !== undefined) updateData.notes = patch.notes;
+  if (patch.tags !== undefined) updateData.tags = patch.tags;
   updateData.updated_at = new Date().toISOString();
 
   const { error } = await supabase
@@ -212,25 +214,47 @@ export async function updateProject(
 
   // Handle images update
   if (patch.images) {
-    // 1. Get current images to handle deletions
+    // 1. Get current images to handle deletions and detect changes
     const { data: currentInspections } = await supabase
       .from('inspections')
       .select('id, image_url')
       .eq('project_id', id);
 
-    const currentIds = new Set((currentInspections || []).map(ins => ins.id));
+    const currentMap = new Map((currentInspections || []).map(ins => [ins.id, ins.image_url]));
     const newIds = new Set(patch.images.map(img => img.id));
 
     // 2. Delete removed images
     const toDelete = (currentInspections || []).filter(ins => !newIds.has(ins.id));
     for (const ins of toDelete) {
       await supabase.from('inspections').delete().eq('id', ins.id);
-      // Optional: Delete from Storage too if needed
     }
 
-    // 3. Upload/Update images
+    // 3. Upload/Update images — only upload new ones (dataUrl starts with 'data:')
     for (const img of patch.images) {
-      await uploadAndRecordImage(id, img);
+      const existingUrl = currentMap.get(img.id);
+      // If the image already exists in DB and its dataUrl is NOT a new data: blob, skip re-upload
+      if (existingUrl && !img.dataUrl.startsWith('data:')) {
+        // Only update metadata (tag, name, inferenceResult, etc.) without re-uploading
+        const detection_results: any = {};
+        if (img.inferenceResult) {
+          detection_results.onnx = {
+            label: img.inferenceResult.label,
+            score: img.inferenceResult.score,
+            timestamp: new Date().toISOString()
+          };
+        }
+        await supabase
+          .from('inspections')
+          .update({
+            name: img.name,
+            status: img.tag,
+            detection_results: Object.keys(detection_results).length > 0 ? detection_results : undefined,
+          })
+          .eq('id', img.id);
+      } else {
+        // New image or re-upload needed
+        await uploadAndRecordImage(id, img);
+      }
     }
   }
 

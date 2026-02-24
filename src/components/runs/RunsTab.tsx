@@ -347,9 +347,9 @@ const RunsTab = ({ runs, images }: Props) => {
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => {
+                          onClick={async () => {
                             if (confirm("Supprimer ce run ?")) {
-                              deleteRun(run.id);
+                              await deleteRun(run.id);
                               showSuccess("Run supprimé");
                             }
                           }}
@@ -422,7 +422,7 @@ const RunsTab = ({ runs, images }: Props) => {
                           <Button
                             size="sm"
                             variant="secondary"
-                            onClick={() => cancelRun(run.id)}
+                            onClick={async () => { await cancelRun(run.id); }}
                             className="border border-white/25 bg-white/15 text-white hover:bg-white/25 backdrop-blur-sm"
                             title="Annuler ce run"
                           >
@@ -444,8 +444,8 @@ const RunsTab = ({ runs, images }: Props) => {
                           <Button
                             variant="secondary"
                             size="sm"
-                            onClick={() => {
-                              retryFailedItems(run.id, images);
+                            onClick={async () => {
+                              await retryFailedItems(run.id, images);
                               showSuccess("Relance des items en échec");
                             }}
                             className="backdrop-blur-sm"
@@ -500,9 +500,9 @@ const RunsTab = ({ runs, images }: Props) => {
                         <Button
                           size="icon"
                           variant="ghost"
-                          onClick={() => {
+                          onClick={async () => {
                             if (confirm("Supprimer ce run ?")) {
-                              deleteRun(run.id);
+                              await deleteRun(run.id);
                               showSuccess("Run supprimé");
                             }
                           }}
@@ -592,7 +592,7 @@ const RunsTab = ({ runs, images }: Props) => {
                           <Button
                             size="sm"
                             variant="secondary"
-                            onClick={() => cancelRun(run.id)}
+                            onClick={async () => { await cancelRun(run.id); }}
                             className="border border-white/25 bg-white/15 text-white hover:bg-white/25 backdrop-blur-sm"
                             title="Annuler ce run"
                           >

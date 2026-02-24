@@ -379,7 +379,7 @@ function toBoxes(obj: any): { boxes: Box[]; summary?: string } {
   return { boxes, summary };
 }
 
-function buildDetectionInstruction(userPrompt: string): string {
+function buildCombinedInstruction(userPrompt: string): string {
   const example = [
     "{",
     '  "anomalies": [',
@@ -391,15 +391,18 @@ function buildDetectionInstruction(userPrompt: string): string {
     '      "box": { "x": 0.12, "y": 0.34, "w": 0.22, "h": 0.15 }',
     "    }",
     "  ],",
-    '  "summary": "Résumé technique concis (FR)"',
+    '  "analysis": "Analyse technique détaillée de l\'image (FR)"',
     "}",
   ].join("\n");
 
   return [
-    "Détecte UNIQUEMENT les anomalies VISIBLES (fissure, infiltration, humidite, isolation, pont_thermique, menuiserie, toiture, moisissure, structure, electrique, plomberie, vegetation, autre).",
+    "Tu es un expert en pathologies du bâtiment. Analyse cette image et produis un JSON avec :",
+    "1. Les anomalies VISIBLES avec leurs bounding boxes normalisées (0..1)",
+    "2. Une analyse technique détaillée dans le champ 'analysis'",
+    "",
+    "Types d'anomalies: fissure, infiltration, humidite, isolation, pont_thermique, menuiserie, toiture, moisissure, structure, electrique, plomberie, vegetation, autre.",
     "Réponds STRICTEMENT en JSON valide (aucun texte avant/après, pas de markdown).",
-    "Coordonnées normalisées 0..1 (x,y,w,h). Alias acceptés: {left,top,width,height} ou {x1,y1,x2,y2}. Pourcentages acceptés (0..100).",
-    "Optionnel: angle (en degrés, -90..90 recommandé) pour orienter le rectangle autour de son centre (champ: angle ou rotation).",
+    "Coordonnées normalisées 0..1 (x,y,w,h). Optionnel: angle en degrés.",
     "Contraintes: anomalies: [] si aucune certaine; boîtes serrées; max 6 anomalies pertinentes.",
     "Exemple:",
     example,
@@ -409,6 +412,8 @@ function buildDetectionInstruction(userPrompt: string): string {
   ].join("\n");
 }
 
+export type ProgressCallback = (current: number, total: number, phase: string) => void;
+
 export async function analyzeLLM(input: {
   mode: RunMode;
   prompt: string;
@@ -416,6 +421,7 @@ export async function analyzeLLM(input: {
   model?: string;
   temperature?: number;
   max_tokens?: number;
+  onProgress?: ProgressCallback;
 }): Promise<AnalyzeOk | AnalyzeErr> {
   const s = getSettings();
   if (!s.apiKey || s.apiKey.trim().length < 10) {
@@ -426,13 +432,14 @@ export async function analyzeLLM(input: {
     };
   }
 
-  // FORCE gpt-4o pour la robustesse et augmente max_tokens au maximum pour éviter la troncature
   const model = input.model || s.model || "gpt-4o";
   const userTemp = typeof input.temperature === "number" ? input.temperature : s.temperature ?? 0.2;
-  const max_tokens = 4000; // Force une limite haute pour les longs rapports JSON
+  const max_tokens = 4000;
 
   try {
     if (input.mode === "aggregate") {
+      // Phase 1: Rapport agrégé global (1 appel avec toutes les images)
+      input.onProgress?.(0, input.images.length + 1, "Génération du rapport global...");
       const aggregateText = await callOpenAI({
         apiKey: s.apiKey!,
         model,
@@ -442,76 +449,64 @@ export async function analyzeLLM(input: {
         max_tokens,
       });
 
-      const detectionInstruction = buildDetectionInstruction(input.prompt);
-      const detectionTemp = 0.2;
+      // Phase 2: Détection + analyse combinées par image (1 seul appel par image au lieu de 2)
+      const combinedInstruction = buildCombinedInstruction(input.prompt);
 
-      const items = await Promise.all(
-        input.images.map(async (img) => {
-          const detectionRaw = await callOpenAI({
-            apiKey: s.apiKey!,
-            model,
-            temperature: detectionTemp,
-            prompt: detectionInstruction,
-            images: [{ dataUrl: img.dataUrl }],
-            max_tokens,
-          });
-          const parsed = extractFirstJsonObject(detectionRaw);
-          const { boxes, summary } = parsed ? toBoxes(parsed) : { boxes: [], summary: undefined };
+      const items: { imageId: string; outputText: string; boxes: Box[] }[] = [];
+      for (let i = 0; i < input.images.length; i++) {
+        const img = input.images[i];
+        input.onProgress?.(i + 1, input.images.length + 1, `Analyse image ${i + 1}/${input.images.length}...`);
 
-          const perImageText = await callOpenAI({
-            apiKey: s.apiKey!,
-            model,
-            temperature: userTemp,
-            prompt: input.prompt,
-            images: [{ dataUrl: img.dataUrl }],
-            max_tokens,
-          });
+        const raw = await callOpenAI({
+          apiKey: s.apiKey!,
+          model,
+          temperature: 0.2,
+          prompt: combinedInstruction,
+          images: [{ dataUrl: img.dataUrl }],
+          max_tokens,
+        });
 
-          const baseText = (perImageText && String(perImageText)) || "";
-          const finalText = isLikelyRefusal(baseText)
-            ? ((summary && String(summary)) || "")
-            : baseText;
-
-          return {
-            imageId: img.id,
-            outputText: finalText,
-            boxes,
-          };
-        }),
-      );
+        const parsed = extractFirstJsonObject(raw);
+        if (parsed) {
+          const { boxes } = toBoxes(parsed);
+          const analysisText = typeof parsed.analysis === "string" ? parsed.analysis : "";
+          const finalText = isLikelyRefusal(analysisText) ? "" : analysisText;
+          items.push({ imageId: img.id, outputText: finalText, boxes });
+        } else {
+          items.push({ imageId: img.id, outputText: isLikelyRefusal(raw) ? "" : raw, boxes: [] });
+        }
+      }
 
       return { ok: true, mode: "aggregate", outputText: aggregateText, items };
     } else {
-      const instruction = buildDetectionInstruction(input.prompt);
-      const detectionTemp = 0.2;
-      const items = await Promise.all(
-        input.images.map(async (img) => {
-          const raw = await callOpenAI({
-            apiKey: s.apiKey!,
-            model,
-            temperature: detectionTemp,
-            prompt: instruction,
-            images: [{ dataUrl: img.dataUrl }],
-            max_tokens,
-          });
+      // Mode per_image: 1 appel combiné par image
+      const combinedInstruction = buildCombinedInstruction(input.prompt);
 
-          const parsed = extractFirstJsonObject(raw);
-          if (parsed) {
-            const { boxes, summary } = toBoxes(parsed);
-            return {
-              imageId: img.id,
-              outputText: (summary && String(summary)) || (isLikelyRefusal(raw) ? "" : raw),
-              boxes,
-            };
-          } else {
-            return {
-              imageId: img.id,
-              outputText: isLikelyRefusal(raw) ? "" : raw,
-              boxes: [],
-            };
-          }
-        }),
-      );
+      const items: { imageId: string; outputText: string; boxes: Box[] }[] = [];
+      for (let i = 0; i < input.images.length; i++) {
+        const img = input.images[i];
+        input.onProgress?.(i + 1, input.images.length, `Analyse image ${i + 1}/${input.images.length}...`);
+
+        const raw = await callOpenAI({
+          apiKey: s.apiKey!,
+          model,
+          temperature: 0.2,
+          prompt: combinedInstruction,
+          images: [{ dataUrl: img.dataUrl }],
+          max_tokens,
+        });
+
+        const parsed = extractFirstJsonObject(raw);
+        if (parsed) {
+          const { boxes, summary } = toBoxes(parsed);
+          const analysisText = typeof parsed.analysis === "string" ? parsed.analysis : "";
+          const finalText = analysisText || (summary && String(summary)) || (isLikelyRefusal(raw) ? "" : raw);
+          items.push({ imageId: img.id, outputText: finalText, boxes });
+        } else {
+          items.push({ imageId: img.id, outputText: isLikelyRefusal(raw) ? "" : raw, boxes: [] });
+        }
+      }
+
       return { ok: true, mode: "per_image", items };
     }
   } catch (e: any) {
