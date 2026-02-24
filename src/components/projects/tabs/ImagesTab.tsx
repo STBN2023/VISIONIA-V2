@@ -41,6 +41,7 @@ type Props = {
   // nouvelle prop optionnelle pour un apply atomique
   onApplyTagsBatch?: (input: { createTags: string[]; patch: Record<string, ImageTag | undefined> }) => Promise<void>;
   onUpdateImages?: (images: ProjectImage[]) => Promise<void>;
+  onProjectChange?: (project: Project) => void;
 };
 
 const ImagesTab = ({
@@ -59,6 +60,7 @@ const ImagesTab = ({
   onApplyTagsPatch,
   onApplyTagsBatch,
   onUpdateImages,
+  onProjectChange,
 }: Props) => {
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -191,15 +193,15 @@ const ImagesTab = ({
     
     // Copie de travail locale
     const processingImages = [...project.images];
+    const newTags = new Set(project.tags);
     const newResults: Record<string, { label: string, score: number }> = {};
 
     // 1. PHASE DE CALCUL RAPIDE (Local / WebGPU)
     // On met à jour l'UI au fur et à mesure
     for (let i = 0; i < processingImages.length; i++) {
       const img = processingImages[i];
-      // Si déjà classé, on passe (sauf si on veut forcer, ici on optimise)
-      if (img.inferenceResult) continue;
-
+      // Si déjà classé, on passe ? Non, on force la re-classification si l'utilisateur le demande explicitement
+      
       try {
         // Calcul local immédiat
         const result = await classifyImageToTag(img.dataUrl);
@@ -207,7 +209,19 @@ const ImagesTab = ({
         
         // Mise à jour de la mémoire tampon
         newResults[img.id] = classification;
-        processingImages[i] = { ...img, inferenceResult: classification };
+        
+        // Application automatique du tag si pertinent (non vide)
+        let updatedTag = img.tag;
+        if (result.suggestedTag) {
+          updatedTag = result.suggestedTag;
+          newTags.add(updatedTag);
+        }
+
+        processingImages[i] = { 
+          ...img, 
+          inferenceResult: classification,
+          tag: updatedTag 
+        };
         
         // Mise à jour de l'affichage en temps réel (carte par carte)
         setLocalClassifications(prev => ({ ...prev, [img.id]: classification }));
@@ -216,23 +230,29 @@ const ImagesTab = ({
       }
     }
 
-    // 2. MISE A JOUR DE L'ETAT GLOBAL (Immédiat pour l'utilisateur)
-    // On met à jour le projet tout de suite pour que l'utilisateur voie le résultat final
-    // sans attendre la base de données.
-    let updatedProjectPromise;
-    if (onUpdateImages) {
-       updatedProjectPromise = onUpdateImages(processingImages);
-    } else {
-       updatedProjectPromise = updateProject(project.id, { images: processingImages });
+    // 2. MISE A JOUR GLOBALE ET PERSISTANCE
+    // On sauvegarde tout le projet d'un coup (images + nouveaux tags)
+    try {
+      const updatedProject = await updateProject(project.id, { 
+        images: processingImages,
+        tags: Array.from(newTags).sort()
+      });
+      
+      if (updatedProject) {
+        if (onProjectChange) {
+          onProjectChange(updatedProject);
+        } else if (onUpdateImages) {
+          // Fallback partiel si onProjectChange n'est pas fourni (deprecated)
+          await onUpdateImages(processingImages);
+        }
+      }
+      showSuccess("Classification et taggage terminés");
+    } catch (e) {
+      console.error("Erreur sauvegarde projet", e);
+      showError("Erreur lors de la sauvegarde des résultats");
+    } finally {
+      setIsClassifying(false);
     }
-
-    // 3. SAUVEGARDE ASYNCHRONE (En arrière-plan / Fire and Forget)
-    // On ne bloque pas l'UI pour ça.
-    syncResultsToSupabase(project.id, newResults).catch(console.error);
-
-    await updatedProjectPromise;
-    setIsClassifying(false);
-    showSuccess("Classification terminée");
   };
 
   // Helper pour sauvegarder en masse sans bloquer l'UI

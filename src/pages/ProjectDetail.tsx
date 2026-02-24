@@ -421,7 +421,7 @@ const ProjectDetail = () => {
               onDeleteTag={handleDeleteTag}
               onApplyTagsPatch={handleApplyTagsPatch}
               onApplyTagsBatch={handleApplyTagsBatch}
-              onUpdateImages={handleUpdateImages}
+              onProjectChange={setProject}
             />
           </TabsContent>
 
