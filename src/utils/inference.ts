@@ -39,8 +39,8 @@ function dataUrlToUint8Array(dataUrl: string): Uint8Array {
 }
 
 function softmax(logits: Float32Array | number[]): number[] {
-  const max = Math.max(...Array.from(logits as any));
-  const exps = Array.from(logits as any).map((v: number) => Math.exp(v - max));
+  const max = Math.max(...(Array.from(logits) as number[]));
+  const exps = (Array.from(logits) as number[]).map((v: number) => Math.exp(v - max));
   const sum = exps.reduce((a: number, b: number) => a + b, 0);
   return exps.map((v: number) => v / (sum || 1));
 }
@@ -329,6 +329,6 @@ export async function warmupSession(): Promise<void> {
   const inputName = (session.inputNames && session.inputNames[0]) || "images";
   const outputName = (session.outputNames && session.outputNames[0]) || "output";
   await session.run({ [inputName]: inputTensor });
-  // On ne lit pas la sortie; l’objectif est d’initialiser l’EP/compilations
+  // On ne lit pas la sortie; l'objectif est d'initialiser l'EP/compilations
   didWarmup = true;
 }

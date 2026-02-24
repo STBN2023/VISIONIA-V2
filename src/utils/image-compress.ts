@@ -44,7 +44,7 @@ function drawToCanvas(
     (canvas as HTMLCanvasElement).width = width;
     (canvas as HTMLCanvasElement).height = height;
   }
-  const ctx = canvas.getContext("2d");
+  const ctx = canvas.getContext("2d") as CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null;
   if (!ctx) throw new Error("Context 2D non disponible");
   if (source.bitmap) {
     ctx.drawImage(source.bitmap, 0, 0, width, height);

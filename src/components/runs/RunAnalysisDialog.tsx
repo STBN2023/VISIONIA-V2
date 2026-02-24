@@ -10,7 +10,7 @@ import { createPendingRun, completeRunWithServer, failRun, type RunMode } from "
 import { showError, showSuccess } from "@/utils/toast";
 import { getSettings } from "@/utils/settings";
 import { classifyDataUrl } from "@/utils/inference";
-import { analyzeLLM } from "@/utils/analyze-client";
+import { analyzeLLM, type AnalyzeErr } from "@/utils/analyze-client";
 import { supabase } from "@/integrations/supabase/client";
 
 type Props = {
@@ -105,79 +105,85 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
       max_tokens: s.maxTokens,
     });
 
-    if (result.ok) {
-      if (result.mode === "aggregate") {
-        completeRunWithServer(run.id, { mode: "aggregate", outputText: result.outputText, items: result.items });
-        
-        // Update each inspection with its specific LLM result
-        if (user && result.items) {
-          for (const item of result.items) {
-            const matchingImg = imgs.find(img => img.name === item.imageName);
-            if (matchingImg) {
-              const { data: currentIns } = await supabase
-                .from('inspections')
-                .select('detection_results')
-                .eq('id', matchingImg.id)
-                .single();
-              
-              const currentResults = (currentIns?.detection_results as any) || {};
-              
-              await supabase
-                .from('inspections')
-                .update({
-                  detection_results: {
-                    ...currentResults,
-                    llm: {
-                      analysis: item.analysis,
-                      anomalyDetected: item.anomalyDetected,
-                      timestamp: new Date().toISOString()
-                    }
-                  },
-                  status: item.anomalyDetected ? 'defect' : 'clear'
-                })
-                .eq('id', matchingImg.id);
-            }
-          }
-        }
-      } else {
-        completeRunWithServer(run.id, { mode: "per_image", items: result.items });
-        
-        // Update inspections for per_image mode
-        if (user && result.items) {
-          for (const item of result.items) {
-            const matchingImg = imgs.find(img => img.name === item.imageName);
-            if (matchingImg) {
-              const { data: currentIns } = await supabase
-                .from('inspections')
-                .select('detection_results')
-                .eq('id', matchingImg.id)
-                .single();
-              
-              const currentResults = (currentIns?.detection_results as any) || {};
+    if (!result.ok) {
+      const err = result as AnalyzeErr;
+      failRun(run.id, err.error);
+      showError(err.error);
+      return;
+    }
 
-              await supabase
-                .from('inspections')
-                .update({
-                  detection_results: {
-                    ...currentResults,
-                    llm: {
-                      analysis: item.analysis,
-                      anomalyDetected: item.anomalyDetected,
-                      timestamp: new Date().toISOString()
-                    }
-                  },
-                  status: item.anomalyDetected ? 'defect' : 'clear'
-                })
-                .eq('id', matchingImg.id);
-            }
+    if (result.mode === "aggregate") {
+      completeRunWithServer(run.id, { mode: "aggregate", outputText: result.outputText, items: result.items });
+      
+      // Update each inspection with its specific LLM result
+      if (user && result.items) {
+        for (const item of result.items) {
+          // Fix: Use imageId instead of imageName, and map properties correctly
+          const matchingImg = imgs.find(img => img.id === item.imageId);
+          if (matchingImg) {
+            const { data: currentIns } = await supabase
+              .from('inspections')
+              .select('detection_results')
+              .eq('id', matchingImg.id)
+              .single();
+            
+            const currentResults = (currentIns?.detection_results as any) || {};
+            const anomalyDetected = (item.boxes && item.boxes.length > 0) || false;
+            
+            await supabase
+              .from('inspections')
+              .update({
+                detection_results: {
+                  ...currentResults,
+                  llm: {
+                    analysis: item.outputText, // mapped from analysis
+                    anomalyDetected: anomalyDetected,
+                    timestamp: new Date().toISOString()
+                  }
+                },
+                status: anomalyDetected ? 'defect' : 'clear'
+              })
+              .eq('id', matchingImg.id);
           }
         }
       }
-      showSuccess("Analyse terminée");
     } else {
-      failRun(run.id, result.error);
-      showError(result.error);
+      completeRunWithServer(run.id, { mode: "per_image", items: result.items });
+      
+      // Update inspections for per_image mode
+      if (user && result.items) {
+        for (const item of result.items) {
+          // Fix: Use imageId instead of imageName, and map properties correctly
+          const matchingImg = imgs.find(img => img.id === item.imageId);
+          if (matchingImg) {
+            const { data: currentIns } = await supabase
+              .from('inspections')
+              .select('detection_results')
+              .eq('id', matchingImg.id)
+              .single();
+            
+            const currentResults = (currentIns?.detection_results as any) || {};
+            const anomalyDetected = (item.boxes && item.boxes.length > 0) || false;
+
+            await supabase
+              .from('inspections')
+              .update({
+                detection_results: {
+                  ...currentResults,
+                  llm: {
+                    analysis: item.outputText, // mapped from analysis
+                    anomalyDetected: anomalyDetected,
+                    timestamp: new Date().toISOString()
+                  }
+                },
+                status: anomalyDetected ? 'defect' : 'clear'
+              })
+              .eq('id', matchingImg.id);
+          }
+        }
+      }
     }
+    showSuccess("Analyse terminée");
   };
 
   return (
