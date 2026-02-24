@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Image as ImageIcon, Upload, X, Sparkles } from "lucide-react";
+import { Image as ImageIcon, Upload, X, Sparkles, RefreshCcw } from "lucide-react";
 import type { ImageTag, Project, ProjectImage } from "@/utils/storage";
 import type { PromptTemplate } from "@/utils/prompts";
 import ImageCard from "@/components/uploader/ImageCard";
@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { applyCorrectionPreference, recordCorrection } from "@/utils/corrections";
 import { classifyDataUrl } from "@/utils/inference";
 import { updateProject } from "@/utils/storage";
+import { cn } from "@/utils/classnames";
 
 // Helpers de normalisation (évite espaces en trop et casse différente)
 const normalizeTagLabel = (s: string) => s.trim().replace(/\s+/g, " ");
@@ -157,25 +158,35 @@ const ImagesTab = ({
 
   const handleClassifyAll = async () => {
     setIsClassifying(true);
-    const patch: Record<string, { label: string, score: number }> = {};
     const updatedImages = [...project.images];
 
     for (let i = 0; i < updatedImages.length; i++) {
       const img = updatedImages[i];
-      // Skip if already has a persistent result unless we want to force re-classify
       try {
         const result = await classifyDataUrl(img.dataUrl);
         const classification = { label: result.topLabel, score: result.topScore };
-        patch[img.id] = classification;
         updatedImages[i] = { ...img, inferenceResult: classification };
       } catch (e) {
         console.error("Classification error for", img.name, e);
       }
     }
     
-    setLocalClassifications(patch);
-    // Persist to database
+    setLocalClassifications({}); // Clear temporary state
     await updateProject(project.id, { images: updatedImages });
+    setIsClassifying(false);
+  };
+
+  const handleResetClassifications = async () => {
+    if (!confirm("Réinitialiser toutes les classifications de ce projet ?")) return;
+    
+    setIsClassifying(true);
+    const resetImages = project.images.map(img => ({
+      ...img,
+      inferenceResult: undefined
+    }));
+
+    setLocalClassifications({});
+    await updateProject(project.id, { images: resetImages });
     setIsClassifying(false);
   };
 
@@ -276,15 +287,26 @@ const ImagesTab = ({
         </div>
         <div className="flex items-center gap-2">
           <Button
-            type="button"
             onClick={handleClassifyAll}
-            disabled={isClassifying || filteredImages.length === 0}
-            className="backdrop-blur-sm"
-            title="Utilise le modèle ONNX pour proposer et appliquer des tags"
+            disabled={isClassifying || project.images.length === 0}
+            className="bg-slate-900/80 text-white border border-white/20 hover:bg-slate-800"
           >
-            <Sparkles className="mr-2 h-4 w-4" />
-            {isClassifying ? "Classement..." : "Classer et taguer"}
+            <RefreshCcw className={cn("mr-2 h-4 w-4", { "animate-spin": isClassifying })} />
+            {isClassifying ? "Analyse..." : "Classer et taguer"}
           </Button>
+
+          {project.images.some(img => img.inferenceResult) && (
+            <Button
+              variant="ghost"
+              onClick={handleResetClassifications}
+              disabled={isClassifying}
+              className="text-white/60 hover:text-white hover:bg-white/10"
+            >
+              Réinitialiser
+            </Button>
+          )}
+
+          <div className="h-8 w-px bg-white/10 mx-2 hidden sm:block" />
           <Button
             type="button"
             variant={selectMode ? "secondary" : "outline"}
