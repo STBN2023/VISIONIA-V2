@@ -6,15 +6,19 @@ import { Link, useNavigate } from "react-router-dom";
 import GlassPanel from "@/components/ui/GlassPanel";
 import { GlassShell } from "@/components/layout/GlassShell";
 import { supabase } from "@/integrations/supabase/client";
+import { loadSettingsFromCloud } from "@/utils/settings";
 
 const Index = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       if (!session) {
         navigate('/login');
+      } else {
+        // Charger les réglages depuis le cloud dès que la session est OK
+        await loadSettingsFromCloud();
       }
       setLoading(false);
     });
