@@ -54,25 +54,6 @@ function checkPageBreak(doc: jsPDF, currentY: number, heightNeeded: number): num
   return currentY;
 }
 
-// Ajout: traductions FR pour mode/statut
-function toFrenchMode(mode: Run["mode"]): string {
-  return mode === "aggregate" ? "agrégé" : "par image";
-}
-function toFrenchStatus(status: Run["status"]): string {
-  switch (status) {
-    case "succeeded":
-      return "terminé";
-    case "running":
-      return "en cours";
-    case "queued":
-      return "en file d'attente";
-    case "failed":
-      return "échoué";
-    default:
-      return String(status);
-  }
-}
-
 function drawSectionHeader(doc: jsPDF, text: string, x: number, y: number, width: number) {
   const lines = doc.splitTextToSize(text, width - 4);
   const boxHeight = lines.length * 5 + 6; // padding + lignes
@@ -188,31 +169,6 @@ function hexToRgb(hex: string): [number, number, number] {
   const g = parseInt(s.slice(2, 4), 16);
   const b = parseInt(s.slice(4, 6), 16);
   return [r, g, b];
-}
-
-function drawRotatedRect(doc: jsPDF, x: number, y: number, w: number, h: number, angleDeg: number, color: [number, number, number]) {
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-  const rad = (angleDeg * Math.PI) / 180;
-
-  const corners: [number, number][] = [
-    [-w / 2, -h / 2],
-    [w / 2, -h / 2],
-    [w / 2, h / 2],
-    [-w / 2, h / 2],
-  ].map(([dx, dy]) => {
-    const rx = dx * Math.cos(rad) - dy * Math.sin(rad);
-    const ry = dx * Math.sin(rad) + dy * Math.cos(rad);
-    return [cx + rx, cy + ry];
-  });
-
-  doc.setDrawColor(color[0], color[1], color[2]);
-  doc.setLineWidth(0.8);
-  for (let i = 0; i < 4; i++) {
-    const [x1, y1] = corners[i];
-    const [x2, y2] = corners[(i + 1) % 4];
-    doc.line(x1, y1, x2, y2);
-  }
 }
 
 function drawBoxesOnPlaced(doc: jsPDF, placed: PlacedImage, boxes: any[]) {

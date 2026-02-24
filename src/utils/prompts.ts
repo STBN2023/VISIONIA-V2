@@ -98,8 +98,6 @@ function invalidateCache() {
 
 // ---- Seed templates ----
 
-const SEED_DONE_KEY = "prompt_templates_seeded_v2";
-
 export async function ensureSeedTemplates() {
   // Check if already seeded in Supabase
   const { data: { user } } = await supabase.auth.getUser();

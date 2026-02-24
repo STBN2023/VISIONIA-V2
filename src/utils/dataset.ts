@@ -1,6 +1,6 @@
 import JSZip from "jszip";
 import { idbSet, idbGet, idbDel } from "@/utils/idb";
-import { saveSettings, getSettings, type APISettings } from "@/utils/settings";
+import { saveSettings, getSettings, type Settings } from "@/utils/settings";
 import { blobToDataUrl } from "@/utils/image-compress";
 
 export type DatasetSplit = "train" | "val" | "test";
@@ -159,7 +159,7 @@ export async function importDatasetFromZip(file: File, name?: string): Promise<D
 
   // Mémoriser la référence dataset dans les settings
   const s = getSettings();
-  const next: Partial<APISettings> = {
+  const next: Partial<Settings> = {
     datasetRef: { datasetId: manifest.id, datasetName: manifest.name },
     classesDetected: {
       unionClasses: classes,

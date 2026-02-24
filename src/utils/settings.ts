@@ -28,38 +28,6 @@ export type InferenceSettings = {
   warmup?: boolean;
 };
 
-export type APISettings = {
-  provider: APIProvider;
-  apiKey?: string;
-  model?: string;
-  temperature?: number;
-  maxTokens?: number;
-  endpoint?: string;
-  azureDeployment?: string;
-  // Apparence
-  backgroundMode?: BackgroundMode;
-  backgroundImage?: string;
-  backgroundColor?: string;
-  backgroundDim?: number;
-  themePreset?: ThemePreset;
-  brightness?: number;
-  // Dataset & IA
-  datasetRef?: DatasetRef;
-  classesDetected?: ClassesDetected;
-  classMapping?: Record<string, string>;
-  modelRef?: ModelRef;
-  modelMeta?: ModelMeta;
-  inference?: InferenceSettings;
-  calibrationReport?: {
-    date: string;
-    sampleSize?: number;
-    criterion?: string;
-    thresholdRecommended?: number;
-    metricsSummary?: string;
-  };
-  updatedAt: string;
-};
-
 export type Settings = {
   apiKey?: string;
   provider: APIProvider;

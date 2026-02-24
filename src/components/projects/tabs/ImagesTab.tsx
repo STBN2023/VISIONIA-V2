@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import Dropzone from "@/components/uploader/Dropzone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -12,10 +12,7 @@ import type { PromptTemplate } from "@/utils/prompts";
 import ImageCard from "@/components/uploader/ImageCard";
 import { showSuccess, showError } from "@/utils/toast";
 import { classifyImageToTag, isModelConfigured } from "@/utils/classifier";
-import { warmupSession } from "@/utils/inference";
-import { toast } from "sonner";
-import { applyCorrectionPreference, recordCorrection } from "@/utils/corrections";
-import { classifyDataUrl } from "@/utils/inference";
+import { recordCorrection } from "@/utils/corrections";
 import { updateProject } from "@/utils/storage";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -97,7 +94,6 @@ const ImagesTab = ({
   }, [project.images, tagFilter, localClassifications]);
 
   const [newTag, setNewTag] = useState("");
-  const [classifying, setClassifying] = useState(false);
 
   // Choix du tag à appliquer en masse
   const [bulkExistingTag, setBulkExistingTag] = useState<"none" | string>("none");

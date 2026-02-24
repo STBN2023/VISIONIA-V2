@@ -3,6 +3,7 @@ import type { RunMode } from "@/utils/runs";
 import type { Box } from "@/utils/runs";
 import { getSettings } from "@/utils/settings";
 import { colorFor, guessType } from "@/utils/anomaly-colors";
+import { supabase } from "@/integrations/supabase/client";
 
 export type AnalyzeOk =
   | {
@@ -20,7 +21,6 @@ export type AnalyzeOk =
 export type AnalyzeErr = { ok: false; error: string };
 
 type OpenAIArgs = {
-  apiKey: string;
   model: string;
   temperature: number;
   prompt: string;
@@ -28,8 +28,9 @@ type OpenAIArgs = {
   max_tokens?: number;
 };
 
+const PROXY_URL = "https://kmgbbcwsupzcoevaolva.supabase.co/functions/v1/openai-proxy";
+
 async function callOpenAI({
-  apiKey,
   model,
   temperature,
   prompt,
@@ -47,11 +48,17 @@ async function callOpenAI({
   // Determine if we should force JSON mode
   const isJsonPrompt = prompt.toLowerCase().includes("json") || prompt.includes("{");
 
-  const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+  // Get the current session token for auth
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error("Session expirée. Veuillez vous reconnecter.");
+  }
+
+  const resp = await fetch(PROXY_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
+      "Authorization": `Bearer ${session.access_token}`,
     },
     body: JSON.stringify({
       model,
@@ -66,9 +73,9 @@ async function callOpenAI({
   const data = await resp.json().catch(() => ({}));
   if (!resp.ok) {
     const msg =
-      (data && (data.error?.message || data.message)) ||
-      `OpenAI error (status ${resp.status})`;
-    throw new Error(msg);
+      (data && (data.error?.message || data.error || data.message)) ||
+      `Erreur proxy OpenAI (status ${resp.status})`;
+    throw new Error(typeof msg === "string" ? msg : JSON.stringify(msg));
   }
   const text =
     data?.choices?.[0]?.message?.content ?? 
@@ -424,13 +431,6 @@ export async function analyzeLLM(input: {
   onProgress?: ProgressCallback;
 }): Promise<AnalyzeOk | AnalyzeErr> {
   const s = getSettings();
-  if (!s.apiKey || s.apiKey.trim().length < 10) {
-    return {
-      ok: false,
-      error:
-        "Aucune clé API détectée. Renseignez votre clé dans Paramètres pour lancer l'analyse.",
-    };
-  }
 
   const model = input.model || s.model || "gpt-4o";
   const userTemp = typeof input.temperature === "number" ? input.temperature : s.temperature ?? 0.2;
@@ -441,7 +441,6 @@ export async function analyzeLLM(input: {
       // Phase 1: Rapport agrégé global (1 appel avec toutes les images)
       input.onProgress?.(0, input.images.length + 1, "Génération du rapport global...");
       const aggregateText = await callOpenAI({
-        apiKey: s.apiKey!,
         model,
         temperature: userTemp,
         prompt: input.prompt,
@@ -458,7 +457,6 @@ export async function analyzeLLM(input: {
         input.onProgress?.(i + 1, input.images.length + 1, `Analyse image ${i + 1}/${input.images.length}...`);
 
         const raw = await callOpenAI({
-          apiKey: s.apiKey!,
           model,
           temperature: 0.2,
           prompt: combinedInstruction,
@@ -488,7 +486,6 @@ export async function analyzeLLM(input: {
         input.onProgress?.(i + 1, input.images.length, `Analyse image ${i + 1}/${input.images.length}...`);
 
         const raw = await callOpenAI({
-          apiKey: s.apiKey!,
           model,
           temperature: 0.2,
           prompt: combinedInstruction,

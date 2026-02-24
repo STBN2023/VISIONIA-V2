@@ -42,10 +42,6 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
         showError("Ajoutez un prompt et au moins une image.");
         return;
       }
-      if (!settings.apiKey || settings.apiKey.trim().length < 10) {
-        showError("Aucune clé API détectée. Renseignez votre clé dans Paramètres.");
-        return;
-      }
 
       setIsRunning(true);
       setProgressCurrent(0);
@@ -300,7 +296,7 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
 
             <div className="rounded-md border border-white/20 bg-white/10 p-3 text-sm text-white/80">
               <p>
-                L'analyse utilise votre clé OpenAI stockée localement (Paramètres).
+                L'analyse utilise votre clé OpenAI via un proxy sécurisé (la clé n'est jamais exposée côté navigateur).
               </p>
             </div>
             <div className="flex justify-end gap-2">

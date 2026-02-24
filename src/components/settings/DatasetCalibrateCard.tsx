@@ -6,7 +6,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import Dropzone from "@/components/uploader/Dropzone";
 import { showError, showSuccess } from "@/utils/toast";
-import { getSettings, saveSettings, type APISettings } from "@/utils/settings";
+import { getSettings, saveSettings, type Settings } from "@/utils/settings";
 import { deleteDataset, deleteOnnxModel, getDatasetManifest, importDatasetFromZip, storeOnnxModelToIdb, type DatasetManifest } from "@/utils/dataset";
 import { calibrateOnVal, classifyDataUrl } from "@/utils/inference";
 import { blobToDataUrl, compressImageToBlob } from "@/utils/image-compress";
@@ -112,7 +112,7 @@ const DatasetCalibrateCard = () => {
 
   const saveMapping = () => {
     if (!manifest) return;
-    const next: Partial<APISettings> = {
+    const next: Partial<Settings> = {
       classMapping: mapping,
     };
     saveSettings(next);
