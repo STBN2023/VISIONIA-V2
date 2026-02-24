@@ -430,12 +430,12 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
     doc.setTextColor(0, 0, 0);
   }
 
-  // 4. ANNEXE IMAGES
+  // 4. ANNEXE IMAGES ET DÉTAILS
   doc.addPage();
   y = 20;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(14);
-  doc.text("4. ANNEXE PHOTOGRAPHIQUE", MARGIN, y);
+  doc.text("4. FICHES DÉTAILLÉES PAR IMAGE", MARGIN, y);
   y += 10;
 
   if (run.items) {
@@ -443,31 +443,105 @@ export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
       const img = images.find(i => i.id === item.imageId);
       if (!img || !img.dataUrl) continue;
 
-      // On s'assure d'avoir la place pour une image (hauteur ~90mm)
-      y = checkPageBreak(doc, y, 100);
+      // Estimer si on a besoin d'une nouvelle page pour commencer cette fiche
+      // Une fiche prend environ la moitié de la page (image + texte)
+      y = checkPageBreak(doc, y, 120);
 
+      // Titre Fiche
+      doc.setFillColor(240, 240, 240);
+      doc.rect(MARGIN, y, CONTENT_WIDTH, 8, "F");
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text(`Réf : ${img.name}`, MARGIN, y);
-      y += 5;
+      doc.setTextColor(0, 0, 0);
+      doc.text(`Réf : ${img.name}`, MARGIN + 2, y + 5);
+      y += 12;
 
       // Image
       try {
-        const placed = await addImageBlock(doc, img.dataUrl, MARGIN, y, 140, 90); // Image plus grande
-        // Annotations
+        const placed = await addImageBlock(doc, img.dataUrl, MARGIN, y, 100, 75); 
+        // Annotations sur l'image
         if (item.boxes && item.boxes.length > 0) {
           drawBoxesOnPlaced(doc, placed.placed, item.boxes);
         }
-        y = placed.nextY + 15; // Marge après image
+        
+        // On positionne le texte à droite de l'image si possible, ou en dessous
+        // Ici, on va faire simple et robuste : en dessous
+        y = placed.nextY + 8;
       } catch (e) {
-        console.error("Erreur image PDF", e);
         doc.text("[Image non disponible]", MARGIN, y + 10);
         y += 20;
       }
+
+      // --- ANALYSE TEXTUELLE DE L'IMAGE ---
+      const rawText = item.outputText || "";
+      let itemData: any = null;
+      
+      // Tentative de parsing du JSON spécifique à l'image
+      try {
+        if (rawText.includes("{")) {
+          const clean = rawText.replace(/```json\n?/, "").replace(/```$/, "").replace(/[\r\n\t]/g, " ").trim();
+          const start = clean.indexOf('{');
+          // On tente de fermer si tronqué (rudimentaire)
+          let candidate = clean.substring(start);
+          if (!candidate.endsWith("}")) candidate += "}]}]}"; 
+          itemData = JSON.parse(candidate);
+        }
+      } catch (e) {
+        // echec silencieux, on affichera le texte brut
+      }
+
+      if (itemData && itemData.lots) {
+        // Affichage structuré des anomalies trouvées sur CETTE image
+        itemData.lots.forEach((lot: any) => {
+          lot.anomalies?.forEach((ano: any) => {
+            // Pas de saut de page sauvage au milieu d'une description
+            y = checkPageBreak(doc, y, 40);
+
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(9);
+            doc.text("Observation :", MARGIN, y);
+            doc.setFont("helvetica", "normal");
+            y = addWrappedText(doc, ano.description || "", MARGIN + 25, y, CONTENT_WIDTH - 25, 4.5);
+            
+            doc.setFont("helvetica", "bold");
+            doc.text("Analyse :", MARGIN, y);
+            doc.setFont("helvetica", "normal");
+            y = addWrappedText(doc, ano.analyse_technique || "", MARGIN + 25, y, CONTENT_WIDTH - 25, 4.5);
+
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(180, 0, 0);
+            doc.text("Risques :", MARGIN, y);
+            doc.setTextColor(0, 0, 0);
+            doc.setFont("helvetica", "italic");
+            y = addWrappedText(doc, ano.risques_associes || "", MARGIN + 25, y, CONTENT_WIDTH - 25, 4.5);
+
+            doc.setFont("helvetica", "bold");
+            doc.setTextColor(0, 80, 180);
+            doc.text("Action :", MARGIN, y);
+            doc.setTextColor(0, 0, 0);
+            y = addWrappedText(doc, ano.prescription_cctp || "", MARGIN + 25, y, CONTENT_WIDTH - 25, 4.5);
+            
+            y += 4;
+          });
+        });
+      } else {
+        // Si pas de JSON valide, on affiche le texte brut nettoyé
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        const cleanRaw = stripMarkdown(rawText).substring(0, 1500); // Limite pour éviter débordement fou
+        if (cleanRaw.length > 10) {
+           doc.text("Analyse brute :", MARGIN, y);
+           y += 5;
+           y = addWrappedText(doc, cleanRaw, MARGIN, y, CONTENT_WIDTH, 4.5);
+        }
+      }
+
+      y += 10; // Séparateur entre fiches images
+      doc.setDrawColor(200);
+      doc.line(MARGIN, y - 5, MARGIN + CONTENT_WIDTH, y - 5);
     }
   }
 
-  // Save
   const filename = `Rapport_ISOEDRE_${project?.title || "Projet"}.pdf`;
   doc.save(filename);
 }
