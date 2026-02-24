@@ -76,8 +76,8 @@ function toFrenchStatus(status: Run["status"]): string {
 function drawSectionHeader(doc: jsPDF, text: string, x: number, y: number, width: number) {
   const lines = doc.splitTextToSize(text, width - 4);
   const boxHeight = lines.length * 5 + 6; // padding + lignes
-  y = ensureSpace(doc, y, boxHeight + 4);
-  doc.setFillColor(245);
+  y = checkPageBreak(doc, y, boxHeight + 4);
+  doc.setFillColor(245, 245, 245);
   (doc as any).roundedRect(x, y - 4, width, boxHeight, 2, 2, "F");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(11);
