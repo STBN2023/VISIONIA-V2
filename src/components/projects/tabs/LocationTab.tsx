@@ -13,9 +13,6 @@ import {
   Loader2,
 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
-
-// Leaflet imports
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -66,31 +63,14 @@ async function geocodeAddress(
   }
 }
 
-async function reverseGeocode(
-  lat: number,
-  lng: number
-): Promise<string | null> {
-  try {
-    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`;
-    const resp = await fetch(url, {
-      headers: { "User-Agent": "ISOEDRE-App/1.0" },
-    });
-    const data = await resp.json();
-    return data.display_name || null;
-  } catch {
-    return null;
-  }
-}
+// --- User position marker icon ---
 
-// --- Map sub-component to fly to new coords ---
-
-function FlyToCoords({ coords }: { coords: LatLng }) {
-  const map = useMap();
-  useEffect(() => {
-    map.flyTo([coords.lat, coords.lng], 16, { duration: 1.2 });
-  }, [coords.lat, coords.lng, map]);
-  return null;
-}
+const userIcon = L.divIcon({
+  className: "",
+  html: `<div style="width:16px;height:16px;background:#3B82F6;border:3px solid white;border-radius:50%;box-shadow:0 0 8px rgba(59,130,246,0.6);"></div>`,
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
+});
 
 // --- Main component ---
 
@@ -101,15 +81,100 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [userPosition, setUserPosition] = useState<LatLng | null>(null);
   const [distance, setDistance] = useState<number | null>(null);
-  const mapRef = useRef<L.Map | null>(null);
 
-  // Default center: France
+  // Leaflet map refs
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const markerRef = useRef<L.Marker | null>(null);
+  const userMarkerRef = useRef<L.Marker | null>(null);
+
   const defaultCenter: LatLng = { lat: 46.603354, lng: 1.888334 };
+  const center = coordinates || defaultCenter;
   const defaultZoom = coordinates ? 16 : 6;
 
-  const center = coordinates || defaultCenter;
+  // Initialize map once
+  useEffect(() => {
+    if (!mapContainerRef.current || mapRef.current) return;
 
-  // Auto-geocode project address on mount if no coordinates
+    const map = L.map(mapContainerRef.current).setView(
+      [center.lat, center.lng],
+      defaultZoom
+    );
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    }).addTo(map);
+
+    mapRef.current = map;
+
+    // Add project marker if coordinates exist
+    if (coordinates) {
+      markerRef.current = L.marker([coordinates.lat, coordinates.lng])
+        .addTo(map)
+        .bindPopup(address || "Chantier");
+    }
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+      markerRef.current = null;
+      userMarkerRef.current = null;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Update project marker when coordinates change
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (coordinates) {
+      if (markerRef.current) {
+        markerRef.current.setLatLng([coordinates.lat, coordinates.lng]);
+      } else {
+        markerRef.current = L.marker([coordinates.lat, coordinates.lng]).addTo(
+          map
+        );
+      }
+      markerRef.current.bindPopup(
+        `<div style="font-weight:600">${address || "Chantier"}</div>${
+          resolvedAddress
+            ? `<div style="font-size:11px;color:#666;margin-top:4px">${resolvedAddress}</div>`
+            : ""
+        }`
+      );
+      map.flyTo([coordinates.lat, coordinates.lng], 16, { duration: 1.2 });
+    }
+  }, [coordinates, address, resolvedAddress]);
+
+  // Update user marker when user position changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !userPosition) return;
+
+    if (userMarkerRef.current) {
+      userMarkerRef.current.setLatLng([userPosition.lat, userPosition.lng]);
+    } else {
+      userMarkerRef.current = L.marker([userPosition.lat, userPosition.lng], {
+        icon: userIcon,
+      })
+        .addTo(map)
+        .bindPopup("Votre position");
+    }
+  }, [userPosition]);
+
+  // Calculate distance
+  useEffect(() => {
+    if (!coordinates || !userPosition) {
+      setDistance(null);
+      return;
+    }
+    const from = L.latLng(userPosition.lat, userPosition.lng);
+    const to = L.latLng(coordinates.lat, coordinates.lng);
+    setDistance(from.distanceTo(to));
+  }, [coordinates, userPosition]);
+
+  // Auto-geocode on mount if no coordinates
   useEffect(() => {
     if (coordinates || !address) return;
     let cancelled = false;
@@ -126,17 +191,6 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
       cancelled = true;
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Calculate distance when both positions are available
-  useEffect(() => {
-    if (!coordinates || !userPosition) {
-      setDistance(null);
-      return;
-    }
-    const from = L.latLng(userPosition.lat, userPosition.lng);
-    const to = L.latLng(coordinates.lat, coordinates.lng);
-    setDistance(from.distanceTo(to));
-  }, [coordinates, userPosition]);
 
   const handleSearch = useCallback(async () => {
     const query = searchQuery.trim() || address;
@@ -160,7 +214,7 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
     }
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
-      async (pos) => {
+      (pos) => {
         const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setUserPosition(coords);
         setIsLocating(false);
@@ -195,18 +249,6 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
     if (meters < 1000) return `${Math.round(meters)} m`;
     return `${(meters / 1000).toFixed(1)} km`;
   };
-
-  // Custom red marker for user position
-  const userIcon = useMemo(
-    () =>
-      L.divIcon({
-        className: "",
-        html: `<div style="width:16px;height:16px;background:#3B82F6;border:3px solid white;border-radius:50%;box-shadow:0 0 8px rgba(59,130,246,0.6);"></div>`,
-        iconSize: [16, 16],
-        iconAnchor: [8, 8],
-      }),
-    []
-  );
 
   return (
     <div className="mt-4 space-y-4">
@@ -258,48 +300,11 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
 
       {/* Map */}
       <Card className="rounded-2xl border-white/20 bg-white/10 text-white backdrop-blur-2xl overflow-hidden">
-        <div className="h-[400px] w-full">
-          <MapContainer
-            center={[center.lat, center.lng]}
-            zoom={defaultZoom}
-            className="h-full w-full z-0"
-            ref={mapRef}
-          >
-            <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-
-            {coordinates && (
-              <>
-                <FlyToCoords coords={coordinates} />
-                <Marker position={[coordinates.lat, coordinates.lng]}>
-                  <Popup>
-                    <div className="text-sm font-medium">
-                      {address || "Chantier"}
-                    </div>
-                    {resolvedAddress && (
-                      <div className="text-xs text-gray-500 mt-1">
-                        {resolvedAddress}
-                      </div>
-                    )}
-                  </Popup>
-                </Marker>
-              </>
-            )}
-
-            {userPosition && (
-              <Marker
-                position={[userPosition.lat, userPosition.lng]}
-                icon={userIcon}
-              >
-                <Popup>
-                  <div className="text-sm font-medium">Votre position</div>
-                </Popup>
-              </Marker>
-            )}
-          </MapContainer>
-        </div>
+        <div
+          ref={mapContainerRef}
+          className="h-[400px] w-full"
+          style={{ zIndex: 0 }}
+        />
       </Card>
 
       {/* Info cards */}
