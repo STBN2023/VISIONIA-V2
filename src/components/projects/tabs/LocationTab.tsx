@@ -193,9 +193,16 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
     setDistance(from.distanceTo(to));
   }, [coordinates, userPosition]);
 
-  // Auto-geocode on mount if no coordinates
+  // Auto-geocode when address changes (or on mount if no coordinates)
+  const prevAddressRef = useRef(address);
   useEffect(() => {
-    if (coordinates || !address) return;
+    const addressChanged = prevAddressRef.current !== address;
+    prevAddressRef.current = address;
+
+    // Skip if no address, or if coordinates exist and address hasn't changed
+    if (!address) return;
+    if (coordinates && !addressChanged) return;
+
     let cancelled = false;
     setIsGeocoding(true);
     geocodeAddress(address).then((result) => {
@@ -209,7 +216,7 @@ const LocationTab = ({ address, coordinates, onCoordinatesChange }: Props) => {
     return () => {
       cancelled = true;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [address]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearch = useCallback(async () => {
     const query = searchQuery.trim() || address;
