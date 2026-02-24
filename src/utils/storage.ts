@@ -13,6 +13,10 @@ export type ProjectImage = {
   createdAt: string;
   tag?: ImageTag;
   templateId?: string;
+  inferenceResult?: {
+    label: string;
+    score: number;
+  };
 };
 
 export type Project = {
@@ -51,6 +55,10 @@ function mapDbToProject(dbProj: any): Project {
       dataUrl: ins.image_url || "",
       createdAt: ins.created_at,
       tag: ins.status,
+      inferenceResult: ins.detection_results?.onnx ? {
+        label: ins.detection_results.onnx.label,
+        score: ins.detection_results.onnx.score
+      } : undefined,
     })),
     tags: dbProj.tags || [],
   };
@@ -78,7 +86,6 @@ async function uploadAndRecordImage(projectId: string, image: ProjectImage): Pro
 
     if (uploadError) {
       console.error("Storage upload error:", uploadError);
-      // Fallback: keep dataUrl if upload fails (not ideal for DB size)
     } else {
       const { data: { publicUrl } } = supabase.storage
         .from('inspections')
@@ -88,6 +95,16 @@ async function uploadAndRecordImage(projectId: string, image: ProjectImage): Pro
   }
 
   // Create or update inspection record
+  // We include inferenceResult in detection_results if it exists
+  const detection_results: any = {};
+  if (image.inferenceResult) {
+    detection_results.onnx = {
+      label: image.inferenceResult.label,
+      score: image.inferenceResult.score,
+      timestamp: new Date().toISOString()
+    };
+  }
+
   const { data, error } = await supabase
     .from('inspections')
     .upsert({
@@ -99,7 +116,8 @@ async function uploadAndRecordImage(projectId: string, image: ProjectImage): Pro
       size: image.size,
       type: image.type,
       status: image.tag,
-      created_at: image.createdAt
+      created_at: image.createdAt,
+      detection_results: Object.keys(detection_results).length > 0 ? detection_results : undefined
     })
     .select()
     .single();

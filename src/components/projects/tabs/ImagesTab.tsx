@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Dropzone from "@/components/uploader/Dropzone";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Image as ImageIcon, Upload, X, Sparkles } from "lucide-react";
-import type { ImageTag, Project } from "@/utils/storage";
+import type { ImageTag, Project, ProjectImage } from "@/utils/storage";
 import type { PromptTemplate } from "@/utils/prompts";
 import ImageCard from "@/components/uploader/ImageCard";
 import { showSuccess, showError } from "@/utils/toast";
@@ -15,6 +15,8 @@ import { classifyImageToTag, isModelConfigured } from "@/utils/classifier";
 import { warmupSession } from "@/utils/inference";
 import { toast } from "sonner";
 import { applyCorrectionPreference, recordCorrection } from "@/utils/corrections";
+import { classifyDataUrl } from "@/utils/inference";
+import { updateProject } from "@/utils/storage";
 
 // Helpers de normalisation (évite espaces en trop et casse différente)
 const normalizeTagLabel = (s: string) => s.trim().replace(/\s+/g, " ");
@@ -54,21 +56,20 @@ const ImagesTab = ({
   onApplyTagsPatch,
   onApplyTagsBatch,
 }: Props) => {
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isClassifying, setIsClassifying] = useState(false);
+  
+  // Local state for classification results to provide immediate feedback
+  const [localClassifications, setLocalClassifications] = useState<Record<string, { label: string, score: number }>>({});
+
   const filteredImages = useMemo(() => {
-    return project.images.filter((img) => (tagFilter === "all" ? true : img.tag === tagFilter));
+    if (tagFilter === "all") return project.images;
+    return project.images.filter((img) => img.tag === tagFilter);
   }, [project.images, tagFilter]);
 
   const [newTag, setNewTag] = useState("");
   const [classifying, setClassifying] = useState(false);
-
-  // Mode sélection pour tagging en masse
-  const [selectMode, setSelectMode] = useState(false);
-  const [selected, setSelected] = useState<Record<string, boolean>>({});
-  const selectedIds = useMemo(
-    () => Object.entries(selected).filter(([, v]) => v).map(([k]) => k),
-    [selected],
-  );
-  const selectedCount = selectedIds.length;
 
   // Choix du tag à appliquer en masse
   const [bulkExistingTag, setBulkExistingTag] = useState<"none" | string>("none");
@@ -96,20 +97,20 @@ const ImagesTab = ({
     setNewTag("");
   };
 
-  const toggleSelectAll = () => {
-    if (selectedCount === filteredImages.length) {
-      setSelected({});
+  const toggleSelection = (imgId: string) => {
+    const newSelected = new Set(selectedIds);
+    if (newSelected.has(imgId)) {
+      newSelected.delete(imgId);
     } else {
-      const map: Record<string, boolean> = {};
-      filteredImages.forEach((img) => (map[img.id] = true));
-      setSelected(map);
+      newSelected.add(imgId);
     }
+    setSelectedIds(newSelected);
   };
 
-  const clearSelection = () => setSelected({});
+  const clearSelection = () => setSelectedIds(new Set());
 
   const applyBulkTag = async () => {
-    if (selectedCount === 0) return;
+    if (selectedIds.size === 0) return;
     let toApply: string | undefined = undefined;
 
     const newLabel = normalizeTagLabel(bulkNewTag);
@@ -126,7 +127,7 @@ const ImagesTab = ({
     }
 
     if (typeof onBulkUpdateTags === "function") {
-      await onBulkUpdateTags(selectedIds, toApply);
+      await onBulkUpdateTags(Array.from(selectedIds), toApply);
     } else {
       for (const id of selectedIds) {
         await onUpdateTag(id, toApply);
@@ -144,7 +145,7 @@ const ImagesTab = ({
     }
 
     showSuccess(
-      toApply ? `Tag “${toApply}” appliqué à ${selectedCount} image(s)` : `Tag retiré sur ${selectedCount} image(s)`,
+      toApply ? `Tag “${toApply}” appliqué à ${selectedIds.size} image(s)` : `Tag retiré sur ${selectedIds.size} image(s)`,
     );
 
     // Reset
@@ -154,109 +155,32 @@ const ImagesTab = ({
     setSelectMode(false);
   };
 
-  const handleClassifyAndTag = async () => {
-    if (!isModelConfigured()) {
-      showError("Aucun modèle ONNX configuré. Allez dans Paramètres > Dataset & Calibrage.");
-      return;
-    }
-    if (filteredImages.length === 0) return;
-    setClassifying(true);
+  const handleClassifyAll = async () => {
+    setIsClassifying(true);
+    const patch: Record<string, { label: string, score: number }> = {};
+    const updatedImages = [...project.images];
 
-    const targets = (selectMode && selectedCount > 0)
-      ? filteredImages.filter((img) => selected[img.id])
-      : filteredImages;
-    if (targets.length === 0) {
-      setClassifying(false);
-      return;
-    }
-
-    const toastId = toast.loading(`Préparation du modèle…`, { duration: Infinity });
-
-    await warmupSession();
-    toast.loading(`Classement 0/${targets.length}…`, { id: toastId, duration: Infinity });
-
-    const CONCURRENCY = 1;
-    let done = 0;
-    const resultsArr: { id: string; suggestedTag: string; topScore?: number }[] = [];
-
-    const yieldUI = () => new Promise<void>((resolve) => {
-      requestAnimationFrame(() => resolve());
-    });
-
-    for (let i = 0; i < targets.length; i += CONCURRENCY) {
-      const chunk = targets.slice(i, i + CONCURRENCY);
-      const chunkResults = await Promise.all(
-        chunk.map(async (img) => {
-          const res = await classifyImageToTag(img.dataUrl);
-          const rawSuggested = (res?.suggestedTag ?? "").toString();
-          const adjustedSuggested = applyCorrectionPreference(rawSuggested);
-          return { id: img.id, suggestedTag: adjustedSuggested, topScore: res?.topScore };
-        })
-      );
-      resultsArr.push(...chunkResults);
-      // mettre à jour la carte des scores au fil de l'eau
-      setClassifMap((prev) => {
-        const next = { ...prev };
-        for (const r of chunkResults) {
-          if (typeof r.topScore === "number") {
-            next[r.id] = { score: r.topScore, label: r.suggestedTag || "" };
-          }
-        }
-        return next;
-      });
-      done += chunkResults.length;
-      toast.loading(`Classement ${done}/${targets.length}…`, { id: toastId, duration: Infinity });
-      await yieldUI();
-    }
-
-    const tagToIds = new Map<string, string[]>();
-    const tagsToCreate = new Set<string>();
-    const existingMap = new Map(project.tags.map((t) => [normalizeTagKey(t), t]));
-
-    for (const { id, suggestedTag } of resultsArr) {
-      const raw = normalizeTagLabel(suggestedTag);
-      if (!raw) continue;
-      const key = normalizeTagKey(raw);
-
-      const finalLabel = existingMap.get(key) ?? raw;
-      if (!existingMap.has(key)) {
-        tagsToCreate.add(finalLabel);
-      }
-      const arr = tagToIds.get(finalLabel) || [];
-      arr.push(id);
-      tagToIds.set(finalLabel, arr);
-    }
-
-    // Construire le patch imageId -> tag
-    const patch: Record<string, ImageTag | undefined> = {};
-    for (const [label, ids] of tagToIds.entries()) {
-      for (const imgId of ids) patch[imgId] = label;
-    }
-    const createTags = Array.from(tagsToCreate);
-
-    // Flux atomique si disponible, sinon fallback (ancien flux)
-    if (onApplyTagsBatch) {
-      await onApplyTagsBatch({ createTags, patch });
-    } else {
-      for (const t of createTags) {
-        await onCreateTag(t);
-      }
-      const appliedCount = Object.keys(patch).length;
-      if (appliedCount > 0) {
-        await onApplyTagsPatch(patch);
+    for (let i = 0; i < updatedImages.length; i++) {
+      const img = updatedImages[i];
+      // Skip if already has a persistent result unless we want to force re-classify
+      try {
+        const result = await classifyDataUrl(img.dataUrl);
+        const classification = { label: result.topLabel, score: result.topScore };
+        patch[img.id] = classification;
+        updatedImages[i] = { ...img, inferenceResult: classification };
+      } catch (e) {
+        console.error("Classification error for", img.name, e);
       }
     }
-
-    setClassifying(false);
-    const appliedCount = Object.keys(patch).length;
-    toast.success(
-      appliedCount === 0 ? "Aucun tag appliqué." : `Tags appliqués à ${appliedCount} image(s).`,
-      { id: toastId, duration: 3500 }
-    );
+    
+    setLocalClassifications(patch);
+    // Persist to database
+    await updateProject(project.id, { images: updatedImages });
+    setIsClassifying(false);
   };
 
   return (
-    <div className="mt-4 text-white space-y-4">
+    <div className="mt-4 space-y-4">
       <Card className="rounded-3xl border-white/20 bg-white/10 backdrop-blur-2xl">
         <CardHeader>
           <CardTitle className="text-white">Ajouter des images</CardTitle>
@@ -348,18 +272,18 @@ const ImagesTab = ({
         <div className="text-sm text-white/80">
           {filteredImages.length} image{filteredImages.length > 1 ? "s" : ""} affichée{filteredImages.length > 1 ? "s" : ""}
           {tagFilter !== "all" ? ` (filtre: ${tagFilter})` : ""}
-          {selectMode && selectedCount > 0 ? ` • ${selectedCount} sélectionnée(s)` : ""}
+          {selectMode && selectedIds.size > 0 ? ` • ${selectedIds.size} sélectionnée(s)` : ""}
         </div>
         <div className="flex items-center gap-2">
           <Button
             type="button"
-            onClick={handleClassifyAndTag}
-            disabled={classifying || filteredImages.length === 0}
+            onClick={handleClassifyAll}
+            disabled={isClassifying || filteredImages.length === 0}
             className="backdrop-blur-sm"
             title="Utilise le modèle ONNX pour proposer et appliquer des tags"
           >
             <Sparkles className="mr-2 h-4 w-4" />
-            {classifying ? "Classement..." : "Classer et taguer"}
+            {isClassifying ? "Classement..." : "Classer et taguer"}
           </Button>
           <Button
             type="button"
@@ -367,7 +291,7 @@ const ImagesTab = ({
             onClick={() => {
               setSelectMode((v) => {
                 const next = !v;
-                if (!next) setSelected({});
+                if (!next) setSelectedIds(new Set());
                 return next;
               });
             }}
@@ -399,10 +323,18 @@ const ImagesTab = ({
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
-                onClick={toggleSelectAll}
+                onClick={() => {
+                  const newSelected = new Set(selectedIds);
+                  if (newSelected.size === filteredImages.length) {
+                    newSelected.clear();
+                  } else {
+                    filteredImages.forEach(img => newSelected.add(img.id));
+                  }
+                  setSelectedIds(newSelected);
+                }}
                 className="border-white/30 bg-transparent text-white hover:bg-white/10"
               >
-                {selectedCount === filteredImages.length ? "Tout désélectionner" : "Tout sélectionner"}
+                {selectedIds.size === filteredImages.length ? "Tout désélectionner" : "Tout sélectionner"}
               </Button>
               <Button
                 variant="ghost"
@@ -457,9 +389,9 @@ const ImagesTab = ({
               <div className="mx-2 h-6 w-px bg-white/20" aria-hidden />
               <Button
                 onClick={applyBulkTag}
-                disabled={selectedCount === 0}
+                disabled={selectedIds.size === 0}
                 className="backdrop-blur-sm"
-                title={selectedCount === 0 ? "Sélectionnez des images" : "Appliquer le tag aux images sélectionnées"}
+                title={selectedIds.size === 0 ? "Sélectionnez des images" : "Appliquer le tag aux images sélectionnées"}
               >
                 Appliquer
               </Button>
@@ -477,39 +409,27 @@ const ImagesTab = ({
           <p className="text-white/80">Aucune image pour le moment.</p>
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-          {filteredImages.map((img) => {
-            const idx = project.images.findIndex((i) => i.id === img.id);
-            const canLeft = idx > 0;
-            const canRight = idx < project.images.length - 1;
-            const isSelected = !!selected[img.id];
-            const cls = classifMap[img.id];
-
-            return (
-              <ImageCard
-                key={img.id}
-                img={img}
-                canLeft={canLeft}
-                canRight={canRight}
-                templates={templates}
-                availableTags={project.tags}
-                onMoveImage={onMoveImage}
-                onDeleteImage={onDeleteImage}
-                onUpdateTag={handleUpdateTagWithLearning}
-                onUpdateImageTemplate={onUpdateImageTemplate}
-                onCreateTag={onCreateTag}
-                // Sélection multiple
-                selectMode={selectMode}
-                selected={isSelected}
-                onSelectChange={(id, s) =>
-                  setSelected((prev) => ({ ...prev, [id]: s }))
-                }
-                // Affichage du pourcentage de classification (si disponible)
-                classificationScore={cls?.score}
-                classificationLabel={cls?.label}
-              />
-            );
-          })}
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {filteredImages.map((img, idx) => (
+            <ImageCard
+              key={img.id}
+              img={img}
+              canLeft={idx > 0}
+              canRight={idx < filteredImages.length - 1}
+              templates={templates}
+              availableTags={project.tags || []}
+              onMoveImage={onMoveImage}
+              onDeleteImage={onDeleteImage}
+              onUpdateTag={onUpdateTag}
+              onUpdateImageTemplate={onUpdateImageTemplate}
+              onCreateTag={onCreateTag}
+              selectMode={selectMode}
+              selected={selectedIds.has(img.id)}
+              onSelectChange={toggleSelection}
+              classificationLabel={localClassifications[img.id]?.label || img.inferenceResult?.label}
+              classificationScore={localClassifications[img.id]?.score || img.inferenceResult?.score}
+            />
+          ))}
         </div>
       )}
     </div>
