@@ -3,24 +3,55 @@ import type { Run } from "@/utils/runs";
 import type { ProjectImage } from "@/utils/storage";
 import { getProjectById } from "@/utils/storage";
 
-// Ajout: nettoyage Markdown -> texte simple
+// --- CONFIGURATION CONSTANTES ---
+const MARGIN = 15;
+const PAGE_HEIGHT = 297; // A4
+const CONTENT_WIDTH = 210 - MARGIN * 2;
+const BOTTOM_LIMIT = 275; // On ne dépasse jamais cette ligne Y pour le contenu
+
+// --- UTILITAIRES ---
+
 function stripMarkdown(input: string): string {
-  let text = input || "";
-  // Retirer fences ```... et lignes ```lang
+  if (!input) return "";
+  let text = input.trim();
   text = text.replace(/^```.*$/gm, "");
-  // Retirer les # en début de ligne (titres)
   text = text.replace(/^[#]+\s*/gm, "");
-  // Retirer puces en début de ligne (-, *, +)
   text = text.replace(/^[\-\*\+]\s+/gm, "");
-  // Retirer emphases **bold**, __bold__, *italique*, _italique_
   text = text.replace(/(\*\*|__)(.*?)\1/g, "$2");
   text = text.replace(/(\*|_)(.*?)\1/g, "$2");
-  // Retirer code inline `code`
   text = text.replace(/`([^`]*)`/g, "$1");
-  // Nettoyage espaces multiples et lignes vides répétées
-  text = text.replace(/[ \t]+\n/g, "\n"); // espaces en fin de ligne
-  text = text.replace(/\n{3,}/g, "\n\n");
-  return text.trim();
+  return text;
+}
+
+function addWrappedText(doc: jsPDF, text: string, x: number, y: number, maxWidth: number, lineHeight: number): number {
+  if (!text) return y;
+  const lines = doc.splitTextToSize(text, maxWidth);
+  
+  // Vérification espace pour TOUT le bloc de texte
+  const heightNeeded = lines.length * lineHeight;
+  if (y + heightNeeded > BOTTOM_LIMIT) {
+    doc.addPage();
+    y = 20; // Reprise en haut
+  }
+
+  for (const line of lines) {
+    // Double sécurité saut de page ligne par ligne
+    if (y > BOTTOM_LIMIT) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.text(line, x, y);
+    y += lineHeight;
+  }
+  return y;
+}
+
+function checkPageBreak(doc: jsPDF, currentY: number, heightNeeded: number): number {
+  if (currentY + heightNeeded > BOTTOM_LIMIT) {
+    doc.addPage();
+    return 20;
+  }
+  return currentY;
 }
 
 // Ajout: traductions FR pour mode/statut
@@ -40,42 +71,6 @@ function toFrenchStatus(status: Run["status"]): string {
     default:
       return String(status);
   }
-}
-
-function addWrappedText(doc: jsPDF, text: string, x: number, y: number, maxWidth: number, lineHeight = 6) {
-  const lines = doc.splitTextToSize(text, maxWidth);
-  for (const line of lines) {
-    if (y > 280) {
-      doc.addPage();
-      y = 20;
-    }
-    doc.text(line, x, y);
-    y += lineHeight;
-  }
-  return y;
-}
-
-// Ajout: gestion des sauts de page et en-têtes de sections
-const PAGE_TOP = 20;
-const PAGE_BOTTOM = 280;
-
-function pageBreak(doc: jsPDF) {
-  doc.addPage();
-  return PAGE_TOP;
-}
-
-function ensureSpace(doc: jsPDF, y: number, needed: number) {
-  // Marge de sécurité de 10mm en bas de page
-  if (y + needed > PAGE_BOTTOM - 10) {
-    return pageBreak(doc);
-  }
-  return y;
-}
-
-// Helper pour calculer la hauteur d'un texte sans l'écrire
-function getTextHeight(doc: jsPDF, text: string, maxWidth: number, lineHeight: number): number {
-  const lines = doc.splitTextToSize(text, maxWidth);
-  return lines.length * lineHeight;
 }
 
 function drawSectionHeader(doc: jsPDF, text: string, x: number, y: number, width: number) {
@@ -186,277 +181,293 @@ function drawRotatedRect(doc: jsPDF, x: number, y: number, w: number, h: number,
 }
 
 function drawBoxesOnPlaced(doc: jsPDF, placed: PlacedImage, boxes: any[]) {
+  // Dessin des rectangles (annotations)
   boxes.forEach((b: any) => {
     const px = placed.x + b.x * placed.w;
     const py = placed.y + b.y * placed.h;
     const pw = b.w * placed.w;
     const ph = b.h * placed.h;
 
-    let r = 34, g = 197, bcol = 94;
-    const col = b.color || "#22C55E";
-    try {
-      const rgb = hexToRgb(col);
+    let r = 220, g = 40, bcol = 40; // Rouge par défaut
+    if (b.color) {
+      const rgb = hexToRgb(b.color);
       r = rgb[0]; g = rgb[1]; bcol = rgb[2];
-    } catch {
-      // fallback
     }
 
-    if (typeof b.angle === "number" && Math.abs(b.angle) > 0.01) {
-      drawRotatedRect(doc, px, py, pw, ph, b.angle, [r, g, bcol]);
-    } else {
-      doc.setDrawColor(r, g, bcol);
-      doc.setLineWidth(0.8);
-      doc.rect(px, py, pw, ph);
-    }
+    doc.setDrawColor(r, g, bcol);
+    doc.setLineWidth(0.7);
+    doc.rect(px, py, pw, ph);
 
     if (b.label) {
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(9);
-      doc.text(b.label, px + 1.5, Math.max(py - 1, 10));
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(r, g, bcol);
+      // Label au-dessus du cadre
+      doc.text(b.label, px, py - 1);
     }
   });
 }
 
 export async function exportRunToPdf(run: Run, images: ProjectImage[]) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
-  const margin = 15;
-  const contentWidth = 210 - margin * 2;
   const project = await getProjectById(run.projectId);
 
-  // --- ENTÊTE PROFESSIONNELLE ---
-  // Bandeau supérieur
+  // --- PAGE DE GARDE ---
   doc.setFillColor(30, 41, 59); // Bleu nuit ISOEDRE
-  doc.rect(0, 0, 210, 35, "F");
-  
+  doc.rect(0, 0, 210, 297, "F"); // Fond page entière
+
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.text("ISOEDRE", margin, 20);
-  doc.setFontSize(10);
+  doc.setFontSize(36);
+  doc.text("ISOEDRE", 105, 100, { align: "center" });
+  
+  doc.setFontSize(14);
   doc.setFont("helvetica", "normal");
-  doc.text("VISION IA - AUDIT TECHNIQUE & ÉNERGÉTIQUE", margin, 26);
+  doc.text("AUDIT TECHNIQUE & ÉNERGÉTIQUE", 105, 115, { align: "center" });
 
-  // Infos Projet à droite dans l'entête
-  doc.setFontSize(9);
-  doc.text(`Rapport généré le : ${new Date().toLocaleDateString('fr-FR')}`, 210 - margin, 18, { align: "right" });
-  doc.text(`Projet : ${project?.title || "Sans titre"}`, 210 - margin, 24, { align: "right" });
-  if (project?.location) {
-    doc.text(`Adresse : ${project.location}`, 210 - margin, 30, { align: "right" });
+  doc.setDrawColor(255, 255, 255);
+  doc.line(70, 130, 140, 130);
+
+  doc.setFontSize(18);
+  doc.text(project?.title || "Projet Sans Titre", 105, 150, { align: "center" });
+  
+  doc.setFontSize(12);
+  doc.text(`Date du rapport : ${new Date().toLocaleDateString('fr-FR')}`, 105, 165, { align: "center" });
+  if (project?.address) {
+    doc.text(project.address, 105, 175, { align: "center" });
   }
 
-  let y = 45;
+  // --- DEBUT CONTENU (Page 2) ---
+  doc.addPage();
+  let y = 20;
   doc.setTextColor(0, 0, 0);
 
-  // --- BLOC CONTEXTE (si présent dans le JSON) ---
+  // Parsing JSON
   const output = run.outputText?.trim() || "";
   let jsonData: any = null;
   try {
-    if (output.startsWith("{") || output.includes('"lots"')) {
-      const cleanJson = output.replace(/```json\n?/, "").replace(/```$/, "").replace(/\n/g, " ").trim();
-      jsonData = JSON.parse(cleanJson);
+    if (output.includes("{")) {
+      const cleanJson = output.replace(/```json\n?/, "").replace(/```$/, "").replace(/[\r\n\t]/g, " ").trim();
+      // Tentative extraction { ... }
+      const start = cleanJson.indexOf('{');
+      const end = cleanJson.lastIndexOf('}');
+      if (start >= 0 && end > start) {
+        jsonData = JSON.parse(cleanJson.substring(start, end + 1));
+      }
     }
   } catch (e) {
-    console.error("PDF: Erreur parsing JSON pour contexte", e);
+    console.error("PDF JSON Error", e);
   }
 
+  // 1. CONTEXTE
   if (jsonData?.contexte_projet) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text("1. CONTEXTE DE L'INTERVENTION", MARGIN, y);
+    y += 10;
+
     const ctx = jsonData.contexte_projet;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text("1. CONTEXTE DE L'INTERVENTION", margin, y);
-    y += 6;
-    
+    // Cadre gris clair
     doc.setFillColor(245, 247, 250);
-    doc.roundedRect(margin, y, contentWidth, 22, 2, 2, "F");
+    doc.rect(MARGIN, y, CONTENT_WIDTH, 35, "F");
     
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "bold");
-    doc.text("Type :", margin + 5, y + 8);
-    doc.text("Phase :", margin + 5, y + 14);
-    doc.text("DPE Initial :", margin + 90, y + 8);
-    doc.text("Date Analyse :", margin + 90, y + 14);
-
-    doc.setFont("helvetica", "normal");
-    doc.text(String(ctx.type_intervention || "N/A"), margin + 25, y + 8);
-    doc.text(String(ctx.phase || "N/A"), margin + 25, y + 14);
-    doc.text(String(ctx.dpe_initial || "N/A"), margin + 115, y + 8);
-    doc.text(String(ctx.date_analyse || ctx.date_analysis || "N/A"), margin + 115, y + 14);
+    doc.setFontSize(10);
+    doc.text(`Type : ${ctx.type_intervention || "N/A"}`, MARGIN + 5, y + 8);
+    doc.text(`Phase : ${ctx.phase || "N/A"}`, MARGIN + 5, y + 16);
+    doc.text(`DPE Initial : ${ctx.dpe_initial || "N/A"}`, MARGIN + 100, y + 8);
+    doc.text(`Date Analyse : ${ctx.date_analyse || ctx.date_analysis || "N/A"}`, MARGIN + 100, y + 16);
     
-    y += 26;
-
+    y += 25;
     if (ctx.reserve_generale) {
-      doc.setFont("helvetica", "bold");
-      doc.text("RÉSERVE GÉNÉRALE :", margin, y);
       doc.setFont("helvetica", "italic");
-      doc.setFontSize(8);
-      y = addWrappedText(doc, ctx.reserve_generale, margin + 40, y, contentWidth - 40, 4);
-      y += 6;
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      y = addWrappedText(doc, `Note: ${ctx.reserve_generale}`, MARGIN + 5, y, CONTENT_WIDTH - 10, 4);
+      y += 5; // Padding bas du cadre
+    } else {
+      y += 10;
     }
+    
+    y += 10; // Marge après le bloc contexte
+    doc.setTextColor(0, 0, 0); // Reset noir
   }
 
-  // --- ANALYSE PAR LOTS ---
+  // 2. SYNTHESE LOTS
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text("2. SYNTHÈSE DES PATHOLOGIES PAR LOT", margin, y);
-  y += 8;
+  doc.setFontSize(14);
+  y = checkPageBreak(doc, y, 20);
+  doc.text("2. DÉTAIL DES OBSERVATIONS", MARGIN, y);
+  y += 10;
 
   if (jsonData?.lots) {
     jsonData.lots.forEach((lot: any) => {
-      // Calcul hauteur estimée du titre du lot
-      y = ensureSpace(doc, y, 20);
+      // Titre du Lot (Saut de page si on est trop bas)
+      y = checkPageBreak(doc, y, 30);
       
-      // Entête de Lot
-      doc.setFillColor(51, 65, 85);
-      doc.rect(margin, y - 5, contentWidth, 8, "F");
+      doc.setFillColor(40, 50, 70);
+      doc.rect(MARGIN, y, CONTENT_WIDTH, 8, "F");
       doc.setTextColor(255, 255, 255);
       doc.setFontSize(11);
+      doc.setFont("helvetica", "bold");
       
-      let lotName = lot.lot || "Général";
-      const displayLot = lotName.toUpperCase().startsWith("LOT") ? lotName : `LOT : ${lotName}`;
+      // Nettoyage nom lot
+      let lotName = String(lot.lot || "Lot non défini");
+      if (!lotName.toUpperCase().includes("LOT")) lotName = `LOT : ${lotName}`;
+      doc.text(lotName, MARGIN + 3, y + 5.5);
       
-      doc.text(displayLot, margin + 3, y + 1);
       doc.setTextColor(0, 0, 0);
-      y += 10;
+      y += 14;
 
-      lot.anomalies?.forEach((ano: any, aIdx: number) => {
-        // Pré-calcul de la hauteur totale nécessaire pour cette anomalie
-        // pour éviter qu'elle ne soit coupée en deux
-        const descH = getTextHeight(doc, ano.description || "N/A", contentWidth - 25, 4.5);
-        const anaH = getTextHeight(doc, ano.analyse_technique || "N/A", contentWidth - 25, 4.5);
-        const riskH = getTextHeight(doc, ano.risques_associes || "N/A", contentWidth - 25, 4.5);
-        const cctpH = getTextHeight(doc, ano.prescription_cctp || "N/A", contentWidth - 25, 4.5);
-        const extraH = 15; // Marges et ligne de titre
+      // Anomalies
+      lot.anomalies?.forEach((ano: any, idx: number) => {
+        // Estimer la hauteur de ce bloc pour décider si on saute une page
+        // On prend une marge large (60mm mini par anomalie)
+        y = checkPageBreak(doc, y, 60);
 
-        const totalH = descH + anaH + riskH + cctpH + extraH;
-
-        y = ensureSpace(doc, y, totalH);
-        
-        if (aIdx > 0) {
-          doc.setDrawColor(230);
-          doc.line(margin + 10, y - 4, margin + contentWidth - 10, y - 4);
-          y += 4;
+        if (idx > 0) {
+          doc.setDrawColor(200, 200, 200);
+          doc.line(MARGIN, y, MARGIN + CONTENT_WIDTH, y);
+          y += 5;
         }
 
-        // ID et Localisation
-        doc.setFontSize(8);
+        // Titre / Loc
         doc.setFont("helvetica", "bold");
-        doc.text(`${ano.id || "ANO"} | ${ano.image_ref || ""} | ${ano.localisation || ""}`, margin, y);
+        doc.setFontSize(10);
+        doc.text(`${ano.id || ""} - ${ano.localisation || ""}`, MARGIN, y);
         y += 5;
 
         // Description
-        doc.setFontSize(9);
-        doc.text("Description :", margin, y);
+        doc.setFontSize(10);
+        doc.setFont("helvetica", "bold");
+        doc.text("Description :", MARGIN, y);
         doc.setFont("helvetica", "normal");
-        y = addWrappedText(doc, ano.description || "N/A", margin + 25, y, contentWidth - 25, 4.5);
-        
+        y = addWrappedText(doc, ano.description || "", MARGIN + 25, y, CONTENT_WIDTH - 25, 5);
+        y += 2;
+
         // Analyse
         doc.setFont("helvetica", "bold");
-        doc.text("Analyse :", margin, y);
+        doc.text("Analyse :", MARGIN, y);
         doc.setFont("helvetica", "normal");
-        y = addWrappedText(doc, ano.analyse_technique || "N/A", margin + 25, y, contentWidth - 25, 4.5);
+        y = addWrappedText(doc, ano.analyse_technique || "", MARGIN + 25, y, CONTENT_WIDTH - 25, 5);
+        y += 2;
 
-        // Risques
+        // Risques (Rouge)
         doc.setFont("helvetica", "bold");
         doc.setTextColor(180, 0, 0);
-        doc.text("Risques :", margin, y);
-        doc.setFont("helvetica", "italic");
-        doc.setTextColor(0, 0, 0); // Reset color for text body if wanted, but here risks are red? 
-        // Let's keep risks text red or make it black italic? Previous code had it italic.
-        // Let's make the label red and text black italic as per design
-        doc.setTextColor(0, 0, 0);
-        y = addWrappedText(doc, ano.risques_associes || "N/A", margin + 25, y, contentWidth - 25, 4.5);
-
-        // CCTP
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(0, 80, 160);
-        doc.text("CCTP :", margin, y);
-        doc.setTextColor(0, 0, 0);
-        y = addWrappedText(doc, ano.prescription_cctp || "N/A", margin + 25, y, contentWidth - 25, 4.5);
-
-        // Extras
-        doc.setTextColor(100, 100, 100);
-        doc.setFontSize(8);
+        doc.text("Risques :", MARGIN, y);
         doc.setFont("helvetica", "normal");
-        let extraInfo = "";
-        if (ano.references_normatives?.length) extraInfo += `Normes : ${ano.references_normatives.join(", ")} `;
-        if (ano.impact_energetique) extraInfo += `| Impact : ${ano.impact_energetique} `;
-        if (ano.estimation_budgetaire) extraInfo += `| Budget : ${ano.estimation_budgetaire}`;
-        
-        if (extraInfo) {
-          y = addWrappedText(doc, extraInfo, margin + 25, y, contentWidth - 25, 4);
-        }
-        
-        y += 6;
-        doc.setTextColor(0, 0, 0); // Reset final
+        doc.setTextColor(0, 0, 0);
+        y = addWrappedText(doc, ano.risques_associes || "", MARGIN + 25, y, CONTENT_WIDTH - 25, 5);
+        y += 2;
+
+        // CCTP (Bleu)
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(0, 80, 180);
+        doc.text("CCTP :", MARGIN, y);
+        doc.setFont("helvetica", "bold"); // CCTP en gras
+        doc.setTextColor(0, 0, 0);
+        y = addWrappedText(doc, ano.prescription_cctp || "", MARGIN + 25, y, CONTENT_WIDTH - 25, 5);
+        y += 4;
       });
-      y += 4;
+      
+      y += 8; // Espace entre lots
     });
   } else {
     // Fallback texte brut
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
-    y = addWrappedText(doc, stripMarkdown(output), margin, y, contentWidth, 5);
+    y = addWrappedText(doc, stripMarkdown(output), MARGIN, y, CONTENT_WIDTH, 5);
   }
 
-  // --- SYNTHÈSE FINALE ---
+  // 3. SYNTHESE
   if (jsonData?.synthese_energetique) {
-    y = pageBreak(doc);
-    const syn = jsonData.synthese_energetique;
+    doc.addPage(); // Nouvelle page pour la synthèse
+    y = 20;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text("3. SYNTHÈSE ET PRÉCONISATIONS GLOBALES", margin, y);
-    y += 8;
+    doc.setFontSize(14);
+    doc.text("3. SYNTHÈSE ET RECOMMANDATIONS", MARGIN, y);
+    y += 10;
 
-    doc.setFillColor(232, 245, 233); // Fond vert léger
-    doc.roundedRect(margin, y, contentWidth, 40, 2, 2, "F");
+    const syn = jsonData.synthese_energetique;
     
-    doc.setFontSize(10);
-    doc.setTextColor(27, 94, 32);
-    doc.text("POINTS CRITIQUES :", margin + 5, y + 8);
-    doc.setFont("helvetica", "normal");
+    // Cadre vert léger
+    doc.setFillColor(235, 245, 235);
+    doc.rect(MARGIN, y, CONTENT_WIDTH, 60, "F"); // Hauteur fixe arbitraire, le texte dépassera si trop long (mais addWrappedText gère le Y)
+    
+    // On réinitialise Y pour écrire DANS le cadre (attention si ça dépasse)
+    let insideY = y + 8;
+
+    doc.setFontSize(11);
+    doc.setTextColor(0, 100, 0);
+    doc.text("POINTS CRITIQUES :", MARGIN + 5, insideY);
+    insideY += 6;
     doc.setTextColor(0, 0, 0);
-    let synY = y + 13;
-    (syn.points_critiques || []).forEach((p: string) => {
-      synY = addWrappedText(doc, `• ${p}`, margin + 10, synY, contentWidth - 15, 5);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    (syn.points_critiques || []).forEach((pt: string) => {
+      insideY = addWrappedText(doc, `• ${pt}`, MARGIN + 10, insideY, CONTENT_WIDTH - 20, 5);
     });
 
-    synY += 4;
+    insideY += 6;
     doc.setFont("helvetica", "bold");
-    doc.setTextColor(27, 94, 32);
-    doc.text("IMPACT DPE ESTIMÉ :", margin + 5, synY);
+    doc.setTextColor(0, 100, 0);
+    doc.text("RECOMMANDATIONS :", MARGIN + 5, insideY);
+    insideY += 6;
+    doc.setTextColor(0, 0, 0);
+    doc.setFont("helvetica", "normal");
+    (syn.recommandations_globales || []).forEach((rec: string) => {
+      insideY = addWrappedText(doc, `→ ${rec}`, MARGIN + 10, insideY, CONTENT_WIDTH - 20, 5);
+    });
+
+    // Impact DPE
+    insideY += 8;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
-    doc.text(String(syn.impact_dpe_estime || "Non évaluable"), margin + 50, synY);
+    doc.setTextColor(0, 100, 0);
+    doc.text(`IMPACT DPE ESTIMÉ : ${syn.impact_dpe_estime || "N/A"}`, MARGIN + 5, insideY);
     
-    y = synY + 10;
+    y = insideY + 20; // Sortie du bloc synthèse
+    doc.setTextColor(0, 0, 0);
   }
 
-  // --- DÉTAILS IMAGES ---
-  if (run.items && run.items.length > 0) {
-    y = pageBreak(doc);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    y = drawSectionHeader(doc, "4. ANNEXE PHOTOGRAPHIQUE ET ANNOTATIONS", margin, y, contentWidth);
+  // 4. ANNEXE IMAGES
+  doc.addPage();
+  y = 20;
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.text("4. ANNEXE PHOTOGRAPHIQUE", MARGIN, y);
+  y += 10;
 
+  if (run.items) {
     for (const item of run.items) {
-      y = ensureSpace(doc, y, 100);
-      const img = images.find((i) => i.id === item.imageId);
+      const img = images.find(i => i.id === item.imageId);
+      if (!img || !img.dataUrl) continue;
+
+      // On s'assure d'avoir la place pour une image (hauteur ~90mm)
+      y = checkPageBreak(doc, y, 100);
+
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text(`Réf : ${img?.name || item.imageId}`, margin, y);
-      y += 4;
+      doc.text(`Réf : ${img.name}`, MARGIN, y);
+      y += 5;
 
-      if (img?.dataUrl) {
-        const placedRes = await addImageBlock(doc, img.dataUrl, margin, y, 120, 80);
-        const boxes = item.boxes || [];
-        if (boxes.length > 0) {
-          drawBoxesOnPlaced(doc, placedRes.placed, boxes);
+      // Image
+      try {
+        const placed = await addImageBlock(doc, img.dataUrl, MARGIN, y, 140, 90); // Image plus grande
+        // Annotations
+        if (item.boxes && item.boxes.length > 0) {
+          drawBoxesOnPlaced(doc, placed.placed, item.boxes);
         }
-        y = placedRes.nextY + 10;
+        y = placed.nextY + 15; // Marge après image
+      } catch (e) {
+        console.error("Erreur image PDF", e);
+        doc.text("[Image non disponible]", MARGIN, y + 10);
+        y += 20;
       }
     }
   }
 
-  const filename = `ISOEDRE_VisionIA_Rapport_${project?.title || "Export"}_${new Date().toISOString().split('T')[0]}.pdf`;
+  // Save
+  const filename = `Rapport_ISOEDRE_${project?.title || "Projet"}.pdf`;
   doc.save(filename);
 }
