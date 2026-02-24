@@ -129,13 +129,15 @@ export function getSettings(): Settings {
   }
 }
 
-export function saveSettings(patch: Partial<Settings>) {
+export function saveSettings(patch: Partial<Settings>): Settings {
   const current = getSettings();
   const next = { ...current, ...patch };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
   
   // Sauvegarde asynchrone dans Supabase si l'utilisateur est connecté
   syncSettingsToCloud(next);
+  
+  return next;
 }
 
 async function syncSettingsToCloud(settings: Settings) {
