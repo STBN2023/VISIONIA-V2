@@ -117,6 +117,8 @@ export async function ensureSeedTemplates() {
   if (existing && existing.length > 0) {
     // Already has templates — migrate any localStorage ones
     await migrateLocalToCloud(user.id);
+    // Refresh cache from Supabase so getTemplates() returns fresh data
+    await refreshCache();
     return;
   }
 
@@ -124,6 +126,7 @@ export async function ensureSeedTemplates() {
   const localTemplates = readLocalAll();
   if (localTemplates.length > 0) {
     await migrateLocalToCloud(user.id);
+    await refreshCache();
     return;
   }
 
@@ -160,7 +163,7 @@ export async function ensureSeedTemplates() {
   ];
 
   await supabase.from("prompt_templates").insert(seeds);
-  invalidateCache();
+  await refreshCache();
 }
 
 async function migrateLocalToCloud(userId: string) {
