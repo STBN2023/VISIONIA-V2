@@ -15,7 +15,7 @@ export const GlassShell = ({ children, className }: Props) => {
   );
   const [bgUrl, setBgUrl] = React.useState<string>(
     initial.backgroundImage ||
-      "https://images.unsplash.com/photo-1756806983725-977bb2308d4e?q=80&w=1170&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=2400&auto=format&fit=crop",
   );
   const [bgColor, setBgColor] = React.useState<string>(
     initial.backgroundColor || "#0b1220",
@@ -24,7 +24,7 @@ export const GlassShell = ({ children, className }: Props) => {
     typeof initial.backgroundDim === "number" ? initial.backgroundDim : 20,
   );
   const [theme, setTheme] = React.useState<"violet" | "blue" | "neutral">(
-    (initial.themePreset as any) || "blue",
+    (initial.themePreset as any) || "violet",
   );
   const [brightness, setBrightness] = React.useState<number>(
     typeof initial.brightness === "number" ? initial.brightness : 100,
@@ -34,10 +34,10 @@ export const GlassShell = ({ children, className }: Props) => {
     const onUpdated = () => {
       const s = getSettings();
       setMode((s.backgroundMode as "image" | "color") ?? "image");
-      setBgUrl(s.backgroundImage || "https://images.unsplash.com/photo-1756806983725-977bb2308d4e?q=80&w=1170&auto=format&fit=crop");
+      setBgUrl(s.backgroundImage || "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=2400&auto=format&fit=crop");
       setBgColor(s.backgroundColor || "#0b1220");
       setDim(typeof s.backgroundDim === "number" ? s.backgroundDim : 20);
-      setTheme((s.themePreset as any) || "blue");
+      setTheme((s.themePreset as any) || "violet");
       setBrightness(typeof s.brightness === "number" ? s.brightness : 100);
     };
     window.addEventListener("settings:updated", onUpdated);

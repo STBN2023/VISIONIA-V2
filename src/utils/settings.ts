@@ -70,10 +70,10 @@ export function getDefaultSettings(): Settings {
     maxTokens: 2000,
     backgroundMode: "image",
     backgroundImage:
-      "https://images.unsplash.com/photo-1756806983725-977bb2308d4e?q=80&w=1170&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=2400&auto=format&fit=crop",
     backgroundColor: "#0b1220",
     backgroundDim: 20,
-    themePreset: "blue",
+    themePreset: "violet",
     brightness: 100,
     // Defaults Dataset & IA
     datasetRef: undefined,
