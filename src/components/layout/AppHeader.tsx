@@ -58,18 +58,11 @@ export const AppHeader = ({
             <NavItem to="/settings" label="Paramètres" icon={SettingsIcon} />
           </nav>
           <div className="flex items-center gap-2">
-            {onCreateProjectClick ? (
+            {onCreateProjectClick && (
               <Button size="sm" className="backdrop-blur-sm" onClick={onCreateProjectClick}>
                 <Plus className="mr-2 h-4 w-4" />
                 <span>Nouveau projet</span>
               </Button>
-            ) : (
-              <Link to="/projects">
-                <Button size="sm" className="backdrop-blur-sm">
-                  <FolderClosed className="mr-2 h-4 w-4" />
-                  Voir les projets
-                </Button>
-              </Link>
             )}
             <Button
               variant="ghost"
