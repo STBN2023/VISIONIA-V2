@@ -7,6 +7,7 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { GlassShell } from "@/components/layout/GlassShell";
 import DatasetCalibrateCard from "@/components/settings/DatasetCalibrateCard";
 import DatasetLabelerCard from "@/components/settings/DatasetLabelerCard";
+import DownloadLinksCard from "@/components/settings/DownloadLinksCard";
 import { AccountTab } from "@/components/settings/AccountTab";
 import { ApiTab } from "@/components/settings/ApiTab";
 import { AppearanceTab } from "@/components/settings/AppearanceTab";
@@ -131,6 +132,7 @@ const Settings = () => {
           </TabsContent>
 
           <TabsContent value="dataset" className="space-y-6">
+            <DownloadLinksCard />
             <DatasetCalibrateCard />
             <DatasetLabelerCard />
           </TabsContent>
