@@ -50,13 +50,14 @@ export default function Login() {
                 variables: {
                   default: {
                     colors: {
-                      brand: '#3b82f6',
-                      brandAccent: '#2563eb',
+                      brand: '#1e293b',
+                      brandAccent: '#334155',
+                      brandButtonText: 'white',
                       inputBackground: 'rgba(255, 255, 255, 0.05)',
                       inputText: 'white',
                       inputPlaceholder: 'rgba(255, 255, 255, 0.4)',
                       inputBorder: 'rgba(255, 255, 255, 0.1)',
-                      inputBorderFocus: 'rgba(59, 130, 246, 0.5)',
+                      inputBorderFocus: 'rgba(255, 255, 255, 0.3)',
                       inputBorderHover: 'rgba(255, 255, 255, 0.2)',
                     },
                     radii: {
@@ -66,9 +67,16 @@ export default function Login() {
                   },
                 },
                 style: {
-                  button: { border: 'none', fontWeight: 'bold', height: '44px' },
+                  button: { 
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)', 
+                    fontWeight: 'bold', 
+                    height: '44px',
+                    color: 'white',
+                    backdropFilter: 'blur(10px)'
+                  },
                   label: { color: 'rgba(255,255,255,0.7)', fontSize: '0.85rem', marginLeft: '4px' },
-                  anchor: { color: '#60a5fa', textDecoration: 'none' },
+                  anchor: { color: 'rgba(255,255,255,0.5)', textDecoration: 'none' },
                 }
               }}
               providers={[]}
