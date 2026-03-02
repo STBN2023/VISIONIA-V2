@@ -23,7 +23,7 @@ export const GlassShell = ({ children, className }: Props) => {
     typeof initial.backgroundDim === "number" ? initial.backgroundDim : 20,
   );
   const [theme, setTheme] = React.useState<"violet" | "blue" | "neutral">(
-    (initial.themePreset as any) || "violet",
+    (initial.themePreset as any) || "blue",
   );
   const [brightness, setBrightness] = React.useState<number>(
     typeof initial.brightness === "number" ? initial.brightness : 100,
@@ -36,7 +36,7 @@ export const GlassShell = ({ children, className }: Props) => {
       setBgUrl(s.backgroundImage || "/Fond.png");
       setBgColor(s.backgroundColor || "#0b1220");
       setDim(typeof s.backgroundDim === "number" ? s.backgroundDim : 20);
-      setTheme((s.themePreset as any) || "violet");
+      setTheme((s.themePreset as any) || "blue");
       setBrightness(typeof s.brightness === "number" ? s.brightness : 100);
     };
     window.addEventListener("settings:updated", onUpdated);

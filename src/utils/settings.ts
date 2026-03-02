@@ -72,7 +72,7 @@ export function getDefaultSettings(): Settings {
     backgroundImage: "/Fond.png",
     backgroundColor: "#0b1220",
     backgroundDim: 20,
-    themePreset: "violet",
+    themePreset: "blue",
     brightness: 100,
     // Defaults Dataset & IA
     datasetRef: undefined,
