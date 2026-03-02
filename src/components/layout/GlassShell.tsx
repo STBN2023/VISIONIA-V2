@@ -14,8 +14,7 @@ export const GlassShell = ({ children, className }: Props) => {
     initial.backgroundMode ?? "image",
   );
   const [bgUrl, setBgUrl] = React.useState<string>(
-    initial.backgroundImage ||
-      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=2400&auto=format&fit=crop",
+    initial.backgroundImage || "/Fond.png",
   );
   const [bgColor, setBgColor] = React.useState<string>(
     initial.backgroundColor || "#0b1220",
@@ -34,7 +33,7 @@ export const GlassShell = ({ children, className }: Props) => {
     const onUpdated = () => {
       const s = getSettings();
       setMode((s.backgroundMode as "image" | "color") ?? "image");
-      setBgUrl(s.backgroundImage || "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=2400&auto=format&fit=crop");
+      setBgUrl(s.backgroundImage || "/Fond.png");
       setBgColor(s.backgroundColor || "#0b1220");
       setDim(typeof s.backgroundDim === "number" ? s.backgroundDim : 20);
       setTheme((s.themePreset as any) || "violet");

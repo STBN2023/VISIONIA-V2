@@ -69,8 +69,7 @@ export function getDefaultSettings(): Settings {
     temperature: 0.2,
     maxTokens: 2000,
     backgroundMode: "image",
-    backgroundImage:
-      "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?q=80&w=2400&auto=format&fit=crop",
+    backgroundImage: "/Fond.png",
     backgroundColor: "#0b1220",
     backgroundDim: 20,
     themePreset: "violet",
