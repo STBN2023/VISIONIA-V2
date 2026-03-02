@@ -88,6 +88,8 @@ export default function Login() {
                     button_label: 'Se connecter',
                     loading_button_label: 'Connexion en cours...',
                     link_text: 'Déjà un compte ? Connectez-vous',
+                    email_input_placeholder: 'votre@email.com',
+                    password_input_placeholder: 'votre mot de passe',
                   },
                   sign_up: {
                     email_label: 'Adresse e-mail',
@@ -95,10 +97,20 @@ export default function Login() {
                     button_label: "S'inscrire",
                     loading_button_label: 'Inscription en cours...',
                     link_text: "Pas de compte ? S'inscrire",
+                    email_input_placeholder: 'votre@email.com',
+                    password_input_placeholder: 'votre mot de passe',
                   },
                   forgotten_password: {
                     email_label: 'Adresse e-mail',
+                    password_label: 'Mot de passe',
+                    button_label: 'Réinitialiser le mot de passe',
                     link_text: 'Mot de passe oublié ?',
+                    email_input_placeholder: 'votre@email.com',
+                  },
+                  update_password: {
+                    password_label: 'Nouveau mot de passe',
+                    button_label: 'Mettre à jour le mot de passe',
+                    password_input_placeholder: 'votre nouveau mot de passe',
                   }
                 }
               }}
