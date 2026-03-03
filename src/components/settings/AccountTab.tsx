@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { showSuccess, showError } from "@/utils/toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -17,7 +16,6 @@ type Profile = {
   job_title: string;
   specialty: string;
   avatar_url: string;
-  role: string;
   updated_at: string;
 };
 
@@ -28,7 +26,6 @@ const emptyProfile: Profile = {
   job_title: "",
   specialty: "",
   avatar_url: "",
-  role: "Utilisateur",
   updated_at: "",
 };
 
@@ -55,7 +52,7 @@ export function AccountTab() {
       const { data, error } = await supabase
         .from("profiles")
         .select(
-          "first_name, last_name, site, job_title, specialty, avatar_url, role, updated_at"
+          "first_name, last_name, site, job_title, specialty, avatar_url, updated_at"
         )
         .eq("id", user.id)
         .single();
@@ -68,7 +65,6 @@ export function AccountTab() {
           job_title: data.job_title ?? "",
           specialty: data.specialty ?? "",
           avatar_url: data.avatar_url ?? "",
-          role: data.role ?? "Utilisateur",
           updated_at: data.updated_at ?? "",
         });
       }
@@ -228,15 +224,7 @@ export function AccountTab() {
               <h2 className="text-xl font-bold truncate">
                 {displayName || "Nouveau compte"}
               </h2>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-sm text-white/60 truncate">{email}</span>
-                <Badge
-                  variant="secondary"
-                  className="text-[10px] shrink-0"
-                >
-                  {profile.role || "Utilisateur"}
-                </Badge>
-              </div>
+              <p className="text-sm text-white/60 truncate mt-0.5">{email}</p>
             </div>
 
             {/* Change avatar button (desktop) */}
