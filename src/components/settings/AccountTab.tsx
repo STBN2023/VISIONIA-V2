@@ -300,7 +300,7 @@ export function AccountTab() {
               <Input
                 value={profile.job_title}
                 onChange={(e) => patch("job_title", e.target.value)}
-                placeholder="ex: Chef de projet IA"
+                placeholder="ex: Chargé d'affaire"
                 className="bg-white/5 border-white/15 text-white placeholder:text-white/40"
               />
             </div>
