@@ -311,7 +311,7 @@ export function AccountTab() {
             <Input
               value={profile.specialty}
               onChange={(e) => patch("specialty", e.target.value)}
-              placeholder="ex: Pathologies du bâtiment, IA…"
+              placeholder="ex: Structure, Fluide…"
               className="bg-white/5 border-white/15 text-white placeholder:text-white/40"
             />
           </div>
