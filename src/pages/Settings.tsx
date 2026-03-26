@@ -18,7 +18,6 @@ const Settings = () => {
   const { settings, updateSettings } = useSettings();
 
   const [provider, setProvider] = useState<APIProvider>("openai");
-  const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("gpt-4o"); 
   const [temperature, setTemperature] = useState<number | string>(0.2);
   const [maxTokens, setMaxTokens] = useState<number | string>(2000);
@@ -36,7 +35,6 @@ const Settings = () => {
   // Sync local state with context settings when they change (e.g. after cloud load)
   useEffect(() => {
     setProvider(settings.provider);
-    setApiKey(settings.apiKey ?? "");
     setModel(settings.model ?? "gpt-4o");
     setTemperature(settings.temperature ?? 0.2);
     setMaxTokens(settings.maxTokens ?? 2000);
@@ -69,7 +67,6 @@ const Settings = () => {
 
     updateSettings({
       provider,
-      apiKey: apiKey.trim() || undefined,
       model: model.trim() || undefined,
       temperature: Number(temperature),
       maxTokens: Number(maxTokens),
@@ -109,7 +106,6 @@ const Settings = () => {
           <TabsContent value="api">
             <ApiTab
               provider={provider} setProvider={setProvider}
-              apiKey={apiKey} setApiKey={setApiKey}
               model={model} setModel={setModel}
               temperature={temperature} setTemperature={setTemperature}
               maxTokens={maxTokens} setMaxTokens={setMaxTokens}

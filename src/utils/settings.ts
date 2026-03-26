@@ -29,7 +29,6 @@ export type InferenceSettings = {
 };
 
 export type Settings = {
-  apiKey?: string;
   provider: APIProvider;
   model?: string;
   temperature?: number;

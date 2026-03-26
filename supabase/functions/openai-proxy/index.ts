@@ -39,26 +39,12 @@ serve(async (req) => {
 
     console.log("[openai-proxy] Authenticated user:", user.id)
 
-    // Get the user's API key from their profile settings
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('settings')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError || !profile?.settings) {
-      console.error("[openai-proxy] Profile error:", profileError?.message)
-      return new Response(JSON.stringify({ error: 'No API key configured. Go to Settings to add your OpenAI key.' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const apiKey = (profile.settings as any).apiKey
-    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length < 10) {
-      console.error("[openai-proxy] No valid API key in user settings")
-      return new Response(JSON.stringify({ error: 'No valid API key found in your settings.' }), {
-        status: 400,
+    // Get the shared API key from Edge Function Secrets
+    const apiKey = Deno.env.get('OPENAI_API_KEY')
+    if (!apiKey) {
+      console.error("[openai-proxy] OPENAI_API_KEY secret is not configured")
+      return new Response(JSON.stringify({ error: 'Clé API OpenAI non configurée côté serveur. Contactez l\'administrateur.' }), {
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }

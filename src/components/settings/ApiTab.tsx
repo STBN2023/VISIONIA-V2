@@ -2,14 +2,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { type APIProvider } from "@/utils/settings";
+import { ShieldCheck } from "lucide-react";
 
 interface ApiTabProps {
   provider: APIProvider;
   setProvider: (v: APIProvider) => void;
-  apiKey: string;
-  setApiKey: (v: string) => void;
   model: string;
   setModel: (v: string) => void;
   temperature: number | string;
@@ -25,7 +24,6 @@ interface ApiTabProps {
 
 export function ApiTab({
   provider, setProvider,
-  apiKey, setApiKey,
   model, setModel,
   temperature, setTemperature,
   maxTokens, setMaxTokens,
@@ -37,6 +35,10 @@ export function ApiTab({
     <Card className="rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
       <CardHeader>
         <CardTitle>Configuration API</CardTitle>
+        <CardDescription className="text-white/60 flex items-center gap-2">
+          <ShieldCheck className="h-4 w-4 text-green-400" />
+          La clé API est gérée de manière sécurisée côté serveur. Aucune clé n'est stockée dans votre navigateur.
+        </CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4 md:grid-cols-2">
         {/* Provider */}
@@ -54,21 +56,6 @@ export function ApiTab({
                 <SelectItem value="azure">Azure OpenAI</SelectItem>
               </SelectContent>
             </Select>
-          </div>
-        </div>
-
-        {/* Clé API */}
-        <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-start">
-          <Label>Clé API</Label>
-          <div className="space-y-1">
-            <Input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder="sk-..."
-              className="bg-white/10 text-white placeholder:text-white/60"
-            />
-            <p className="text-xs text-white/70">Note: la clé est stockée dans votre profil et transmise de manière sécurisée via un proxy serveur. Elle n'est jamais exposée côté navigateur.</p>
           </div>
         </div>
 
