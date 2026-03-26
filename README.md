@@ -6,7 +6,7 @@ Application web React + TypeScript + Vite + Tailwind + shadcn/ui, avec fonctions
 - API serverless: Vercel (TypeScript, `api/*.ts`).
 - Mobile: Capacitor (Android/iOS), web app servie en WebView.
 
-- - -
+---
 
 ## Démarrage rapide (local)
 
