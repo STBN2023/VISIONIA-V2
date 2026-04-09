@@ -421,6 +421,27 @@ function buildCombinedInstruction(userPrompt: string): string {
 
 export type ProgressCallback = (current: number, total: number, phase: string) => void;
 
+// Process items in parallel batches
+async function parallelBatch<T, R>(
+  items: T[],
+  fn: (item: T, index: number) => Promise<R>,
+  concurrency: number,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const i = nextIndex++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 export async function analyzeLLM(input: {
   mode: RunMode;
   prompt: string;
@@ -434,75 +455,94 @@ export async function analyzeLLM(input: {
 
   const model = input.model || s.model || "gpt-4o";
   const userTemp = typeof input.temperature === "number" ? input.temperature : s.temperature ?? 0.2;
-  const max_tokens = 4000;
+  const globalMaxTokens = 4000;
+  const perImageMaxTokens = 2000;
+
+  const CONCURRENCY = 3; // max parallel API calls for per-image analysis
 
   try {
     if (input.mode === "aggregate") {
       // Phase 1: Rapport agrégé global (1 appel avec toutes les images)
+      const t0 = performance.now();
       input.onProgress?.(0, input.images.length + 1, "Génération du rapport global...");
       const aggregateText = await callOpenAI({
         model,
         temperature: userTemp,
         prompt: input.prompt,
         images: input.images.map((i) => ({ dataUrl: i.dataUrl })),
-        max_tokens,
+        max_tokens: globalMaxTokens,
       });
+      console.log(`[analyze] Rapport global: ${((performance.now() - t0) / 1000).toFixed(1)}s`);
 
-      // Phase 2: Détection + analyse combinées par image (1 seul appel par image au lieu de 2)
+      // Phase 2: Détection + analyse combinées par image (parallélisé)
       const combinedInstruction = buildCombinedInstruction(input.prompt);
+      let completed = 0;
 
-      const items: { imageId: string; outputText: string; boxes: Box[] }[] = [];
-      for (let i = 0; i < input.images.length; i++) {
-        const img = input.images[i];
-        input.onProgress?.(i + 1, input.images.length + 1, `Analyse image ${i + 1}/${input.images.length}...`);
+      const t1 = performance.now();
+      const items = await parallelBatch(
+        input.images,
+        async (img, i) => {
+          const tImg = performance.now();
+          const raw = await callOpenAI({
+            model,
+            temperature: 0.2,
+            prompt: combinedInstruction,
+            images: [{ dataUrl: img.dataUrl }],
+            max_tokens: perImageMaxTokens,
+          });
+          console.log(`[analyze] Image ${i + 1}: ${((performance.now() - tImg) / 1000).toFixed(1)}s`);
 
-        const raw = await callOpenAI({
-          model,
-          temperature: 0.2,
-          prompt: combinedInstruction,
-          images: [{ dataUrl: img.dataUrl }],
-          max_tokens,
-        });
+          completed++;
+          input.onProgress?.(completed, input.images.length + 1, `Analyse image ${completed}/${input.images.length}...`);
 
-        const parsed = extractFirstJsonObject(raw);
-        if (parsed) {
-          const { boxes } = toBoxes(parsed);
-          const analysisText = typeof parsed.analysis === "string" ? parsed.analysis : "";
-          const finalText = isLikelyRefusal(analysisText) ? "" : analysisText;
-          items.push({ imageId: img.id, outputText: finalText, boxes });
-        } else {
-          items.push({ imageId: img.id, outputText: isLikelyRefusal(raw) ? "" : raw, boxes: [] });
-        }
-      }
+          const parsed = extractFirstJsonObject(raw);
+          if (parsed) {
+            const { boxes } = toBoxes(parsed);
+            const analysisText = typeof parsed.analysis === "string" ? parsed.analysis : "";
+            const finalText = isLikelyRefusal(analysisText) ? "" : analysisText;
+            return { imageId: img.id, outputText: finalText, boxes };
+          }
+          return { imageId: img.id, outputText: isLikelyRefusal(raw) ? "" : raw, boxes: [] as Box[] };
+        },
+        CONCURRENCY,
+      );
+      console.log(`[analyze] Toutes images (×${input.images.length}): ${((performance.now() - t1) / 1000).toFixed(1)}s (parallélisme: ${CONCURRENCY})`);
 
       return { ok: true, mode: "aggregate", outputText: aggregateText, items };
     } else {
-      // Mode per_image: 1 appel combiné par image
+      // Mode per_image: 1 appel combiné par image (parallélisé)
       const combinedInstruction = buildCombinedInstruction(input.prompt);
+      let completed = 0;
 
-      const items: { imageId: string; outputText: string; boxes: Box[] }[] = [];
-      for (let i = 0; i < input.images.length; i++) {
-        const img = input.images[i];
-        input.onProgress?.(i + 1, input.images.length, `Analyse image ${i + 1}/${input.images.length}...`);
+      const t0 = performance.now();
+      const items = await parallelBatch(
+        input.images,
+        async (img, i) => {
+          const tImg = performance.now();
+          const raw = await callOpenAI({
+            model,
+            temperature: 0.2,
+            prompt: combinedInstruction,
+            images: [{ dataUrl: img.dataUrl }],
+            max_tokens: perImageMaxTokens,
+          });
+          console.log(`[analyze] Image ${i + 1}: ${((performance.now() - tImg) / 1000).toFixed(1)}s`);
 
-        const raw = await callOpenAI({
-          model,
-          temperature: 0.2,
-          prompt: combinedInstruction,
-          images: [{ dataUrl: img.dataUrl }],
-          max_tokens,
-        });
+          completed++;
+          input.onProgress?.(completed, input.images.length, `Analyse image ${completed}/${input.images.length}...`);
 
-        const parsed = extractFirstJsonObject(raw);
-        if (parsed) {
-          const { boxes, summary } = toBoxes(parsed);
-          const analysisText = typeof parsed.analysis === "string" ? parsed.analysis : "";
-          const finalText = analysisText || (summary && String(summary)) || (isLikelyRefusal(raw) ? "" : raw);
-          items.push({ imageId: img.id, outputText: finalText, boxes });
-        } else {
-          items.push({ imageId: img.id, outputText: isLikelyRefusal(raw) ? "" : raw, boxes: [] });
-        }
-      }
+          const parsed = extractFirstJsonObject(raw);
+          if (parsed) {
+            const { boxes, summary } = toBoxes(parsed);
+            const analysisText = typeof parsed.analysis === "string" ? parsed.analysis : "";
+            const finalText = analysisText || (summary && String(summary)) || (isLikelyRefusal(raw) ? "" : raw);
+            return { imageId: img.id, outputText: finalText, boxes };
+          }
+          return { imageId: img.id, outputText: isLikelyRefusal(raw) ? "" : raw, boxes: [] as Box[] };
+        },
+        CONCURRENCY,
+      );
+      console.log(`[analyze] Toutes images (×${input.images.length}): ${((performance.now() - t0) / 1000).toFixed(1)}s (parallélisme: ${CONCURRENCY})`);
 
       return { ok: true, mode: "per_image", items };
     }
