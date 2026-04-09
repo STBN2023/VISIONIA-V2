@@ -107,23 +107,25 @@ export function saveSettings(patch: Partial<Settings>): Settings {
 }
 
 async function syncSettingsToCloud(settings: Settings) {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  // Use getSession (cached) instead of getUser (network call) for background sync
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return;
 
   await supabase
     .from('profiles')
     .update({ settings })
-    .eq('id', user.id);
+    .eq('id', session.user.id);
 }
 
 export async function loadSettingsFromCloud(): Promise<Settings> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return getSettings();
+  // Use getSession (cached) instead of getUser (network call)
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return getSettings();
 
   const { data, error } = await supabase
     .from('profiles')
     .select('settings')
-    .eq('id', user.id)
+    .eq('id', session.user.id)
     .single();
 
   if (!error && data?.settings) {

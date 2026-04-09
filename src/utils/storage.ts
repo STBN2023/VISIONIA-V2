@@ -69,10 +69,52 @@ function mapDbToProject(dbProj: any): Project {
   };
 }
 
+// Helper: get current user from cached session (no network call)
+async function requireUser() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error("User not authenticated");
+  return session.user;
+}
+
+// Lightweight version for the projects list page — no inspections data loaded
+export async function getProjectsList(): Promise<(Omit<Project, 'images'> & { imageCount: number })[]> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return [];
+
+  const { data, error } = await supabase
+    .from('projects')
+    .select(`
+      *,
+      inspections ( id )
+    `)
+    .order('updated_at', { ascending: false });
+
+  if (error) {
+    console.error("Error fetching projects list:", error);
+    return [];
+  }
+
+  return data.map((dbProj: any) => ({
+    id: dbProj.id,
+    title: dbProj.name,
+    address: dbProj.location || "",
+    type: dbProj.description || "",
+    status: (dbProj.status as ProjectStatus) || "Brouillon",
+    createdAt: dbProj.created_at,
+    updatedAt: dbProj.updated_at,
+    prompt: dbProj.prompt || "",
+    templateId: dbProj.template_id,
+    notes: dbProj.notes || "",
+    tags: Array.isArray(dbProj.tags) ? dbProj.tags : [],
+    latitude: dbProj.latitude ?? null,
+    longitude: dbProj.longitude ?? null,
+    imageCount: (dbProj.inspections || []).length,
+  }));
+}
+
 // Helper to upload image to Supabase Storage and create inspection record
 async function uploadAndRecordImage(projectId: string, image: ProjectImage): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("User not authenticated");
+  const user = await requireUser();
 
   let imageUrl = image.dataUrl;
 
@@ -129,8 +171,8 @@ async function uploadAndRecordImage(projectId: string, image: ProjectImage): Pro
 }
 
 export async function getProjects(): Promise<Project[]> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return [];
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) return [];
 
   const { data, error } = await supabase
     .from('projects')
@@ -171,8 +213,7 @@ export async function createProject(input: {
   address?: string;
   type?: string;
 }): Promise<Project> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("User not authenticated");
+  const user = await requireUser();
 
   const { data, error } = await supabase
     .from('projects')
@@ -195,8 +236,7 @@ export async function updateProject(
   id: string,
   patch: Partial<Omit<Project, "id" | "createdAt">>,
 ): Promise<Project | undefined> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("User not authenticated");
+  const user = await requireUser();
 
   const updateData: any = {};
   if (patch.title) updateData.name = patch.title;

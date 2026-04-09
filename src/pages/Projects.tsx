@@ -2,25 +2,31 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import ProjectFormDialog from "@/components/projects/ProjectFormDialog";
 import { AppHeader } from "@/components/layout/AppHeader";
-import { getProjects, createProject, deleteProject, type Project } from "@/utils/storage";
+import { getProjectsList, createProject, deleteProject, type Project } from "@/utils/storage";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { FolderClosed, Trash2 } from "lucide-react";
+import { FolderClosed, Trash2, Image, Loader2 } from "lucide-react";
 import { showSuccess, showError } from "@/utils/toast";
 import { GlassShell } from "@/components/layout/GlassShell";
 
+type ProjectListItem = Omit<Project, 'images'> & { imageCount: number };
+
 const Projects = () => {
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<ProjectListItem[]>([]);
+  const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const navigate = useNavigate();
 
+  const loadProjects = async () => {
+    const list = await getProjectsList();
+    setProjects(list);
+    setLoading(false);
+  };
+
   useEffect(() => {
-    (async () => {
-      const list = await getProjects();
-      setProjects(list);
-    })();
+    loadProjects();
   }, []);
 
   const totalCount = projects.length;
@@ -32,10 +38,8 @@ const Projects = () => {
   const handleCreate = async (data: { title: string; address?: string; type?: string }) => {
     try {
       const p = await createProject(data);
-      const list = await getProjects();
-      setProjects(list);
-      showSuccess("Projet créé");
       setCreateOpen(false);
+      showSuccess("Projet créé");
       navigate(`/projects/${p.id}`);
     } catch (e: any) {
       const msg = e?.message || "Erreur lors de la création du projet";
@@ -47,8 +51,7 @@ const Projects = () => {
   const handleDelete = async (id: string) => {
     if (!confirm("Supprimer ce projet ?")) return;
     await deleteProject(id);
-    const list = await getProjects();
-    setProjects(list);
+    await loadProjects();
     showSuccess("Projet supprimé");
   };
 
@@ -61,15 +64,19 @@ const Projects = () => {
             <h1 className="text-2xl font-semibold">Projets</h1>
             <p className="text-sm text-white/70">{subtitle}</p>
           </div>
-          {/* Dialog contrôlé par le bouton du header, sans bouton interne ici */}
           <ProjectFormDialog open={createOpen} onOpenChange={setCreateOpen} onCreate={handleCreate} hideTrigger />
         </div>
         <Separator className="mb-6 border-white/20" />
-        {projects.length === 0 ? (
+
+        {loading ? (
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-white/10 bg-white/5 py-20 text-center backdrop-blur-xl">
+            <Loader2 className="mb-3 h-8 w-8 text-white/60 animate-spin" />
+            <p className="text-white/60">Chargement des projets…</p>
+          </div>
+        ) : projects.length === 0 ? (
           <div className="flex flex-col items-center justify-center rounded-3xl border border-dashed border-white/20 bg-white/5 py-16 text-center backdrop-blur-xl">
             <FolderClosed className="mb-3 h-8 w-8 text-white/70" />
-            <p className="text-white/80">Créez votre premier projet pour démarrer l’analyse.</p>
-            {/* Ce bouton reste affiché dans l'état vide */}
+            <p className="text-white/80">Créez votre premier projet pour démarrer l'analyse.</p>
             <ProjectFormDialog onCreate={handleCreate} triggerLabel="Créer un projet" />
           </div>
         ) : (
@@ -91,6 +98,10 @@ const Projects = () => {
                         {p.type}
                       </Badge>
                     ) : null}
+                    <span className="inline-flex items-center gap-1 text-xs text-white/50">
+                      <Image className="h-3 w-3" />
+                      {p.imageCount}
+                    </span>
                   </div>
                 </CardContent>
                 <CardFooter className="flex items-center justify-between">

@@ -6,20 +6,19 @@ import { Link, useNavigate } from "react-router-dom";
 import GlassPanel from "@/components/ui/GlassPanel";
 import { GlassShell } from "@/components/layout/GlassShell";
 import { supabase } from "@/integrations/supabase/client";
-import { loadSettingsFromCloud } from "@/utils/settings";
+import { Loader2 } from "lucide-react";
 
 const Index = () => {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    // Use getSession (reads from cache/memory) instead of getUser (network call)
+    supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) {
         navigate('/login');
-      } else {
-        // Charger les réglages depuis le cloud dès que la session est OK
-        await loadSettingsFromCloud();
       }
+      // Settings are already loaded by SettingsContext — no need to duplicate here
       setLoading(false);
     });
 
@@ -33,7 +32,11 @@ const Index = () => {
   }, [navigate]);
 
   if (loading) {
-    return <div className="flex h-screen items-center justify-center">Chargement...</div>;
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-950">
+        <Loader2 className="h-8 w-8 text-white/60 animate-spin" />
+      </div>
+    );
   }
 
   return (
