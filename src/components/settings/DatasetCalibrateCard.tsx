@@ -43,14 +43,14 @@ type StatusLevel = "ok" | "warn" | "error";
 
 const StatusDot = ({ level, label }: { level: StatusLevel; label: string }) => {
   const icon =
-    level === "ok" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> :
-    level === "warn" ? <AlertCircle className="h-4 w-4 text-amber-500" /> :
-    <XCircle className="h-4 w-4 text-red-500" />;
+    level === "ok" ? <CheckCircle2 className="h-4 w-4 text-green-400" /> :
+    level === "warn" ? <AlertCircle className="h-4 w-4 text-amber-400" /> :
+    <XCircle className="h-4 w-4 text-red-400" />;
 
   const bg =
-    level === "ok" ? "bg-green-50 border-green-200 text-green-700" :
-    level === "warn" ? "bg-amber-50 border-amber-200 text-amber-700" :
-    "bg-red-50 border-red-200 text-red-700";
+    level === "ok" ? "bg-green-500/15 border-green-400/30 text-green-300" :
+    level === "warn" ? "bg-amber-500/15 border-amber-400/30 text-amber-300" :
+    "bg-red-500/15 border-red-400/30 text-red-300";
 
   return (
     <div className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${bg}`}>
@@ -174,7 +174,6 @@ const DatasetCalibrateCard = () => {
         warmup: false,
       },
     });
-    // Auto-generate default mapping if none exists
     const currentMapping = getSettings().classMapping || {};
     if (Object.keys(currentMapping).length === 0) {
       const autoMap: ClassMapping = {};
@@ -284,10 +283,10 @@ const DatasetCalibrateCard = () => {
   };
 
   return (
-    <Card className="mt-6 rounded-3xl border-gray-200 bg-white shadow-sm">
+    <Card className="mt-6 rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
       <CardHeader className="pb-4">
-        <CardTitle className="text-gray-800">Modèle ONNX & Classification</CardTitle>
-        <p className="text-sm text-gray-500 mt-1">
+        <CardTitle>Modèle ONNX & Classification</CardTitle>
+        <p className="text-sm text-white/60 mt-1">
           Configurez votre modèle de classification pour le pré-filtrage automatique des images.
         </p>
 
@@ -300,14 +299,14 @@ const DatasetCalibrateCard = () => {
         </div>
 
         {overallReady && (
-          <div className="mt-3 rounded-lg bg-green-50 border border-green-200 px-4 py-2 text-sm text-green-700 font-medium flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4" />
+          <div className="mt-3 rounded-xl bg-green-500/15 border border-green-400/30 px-4 py-2.5 text-sm text-green-300 font-medium flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
             Prêt pour l'inférence — le pré-filtrage ONNX est opérationnel.
           </div>
         )}
         {!overallReady && (
-          <div className="mt-3 rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700 font-medium flex items-center gap-2">
-            <XCircle className="h-4 w-4" />
+          <div className="mt-3 rounded-xl bg-red-500/15 border border-red-400/30 px-4 py-2.5 text-sm text-red-300 font-medium flex items-center gap-2">
+            <XCircle className="h-4 w-4 shrink-0" />
             Configuration incomplète — chargez un modèle et définissez les classes pour activer le pré-filtrage.
           </div>
         )}
@@ -319,25 +318,25 @@ const DatasetCalibrateCard = () => {
         {/* SECTION 1 : MODÈLE ONNX (essentiel)         */}
         {/* ============================================ */}
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${hasModel ? "bg-green-500" : "bg-red-400"}`} />
+          <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${hasModel ? "bg-green-400" : "bg-red-400"}`} />
             1. Charger le modèle ONNX
           </h3>
 
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
+          <div className="rounded-2xl border border-white/15 bg-white/5 p-4 space-y-4">
             {/* Fichier local */}
             <div className="space-y-2">
-              <Label className="text-gray-600 text-xs font-medium">Fichier local (.onnx)</Label>
+              <Label className="text-white/60 text-xs font-medium">Fichier local (.onnx)</Label>
               <Input
                 type="file"
                 accept={onnxAccept}
                 onChange={handleOnnxPick}
-                className="bg-white border-gray-300 text-gray-700 file:mr-2 file:rounded file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-blue-700 file:font-medium"
+                className="bg-white/10 text-white file:mr-2 file:rounded file:border-0 file:bg-white/20 file:px-3 file:py-1.5 file:text-white file:font-medium"
               />
               {modelFileName && (
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200">{modelFileName}</Badge>
-                  <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 h-7 px-2" onClick={removeModel}>
+                  <Badge variant="secondary" className="bg-green-500/20 text-green-300 border-green-400/30">{modelFileName}</Badge>
+                  <Button variant="ghost" size="sm" className="text-red-300 hover:bg-red-500/10 h-7 px-2" onClick={removeModel}>
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
@@ -346,19 +345,19 @@ const DatasetCalibrateCard = () => {
 
             {/* Ou URL */}
             <div className="space-y-2">
-              <Label className="text-gray-600 text-xs font-medium">Ou URL distante</Label>
+              <Label className="text-white/60 text-xs font-medium">Ou URL distante</Label>
               <div className="flex gap-2">
                 <Input
                   value={onnxUrl}
                   onChange={(e) => setOnnxUrl(e.target.value)}
                   placeholder="https://…/model.onnx"
-                  className="bg-white border-gray-300 text-gray-700 placeholder:text-gray-400 flex-1"
+                  className="bg-white/10 text-white placeholder:text-white/40 flex-1"
                 />
-                <Button variant="outline" onClick={setModelFromUrl} className="border-gray-300 text-gray-700 hover:bg-gray-100 shrink-0">
+                <Button variant="outline" onClick={setModelFromUrl} className="border-white/30 bg-transparent text-white hover:bg-white/10 shrink-0">
                   Appliquer
                 </Button>
                 {onnxUrl && (
-                  <Button variant="ghost" onClick={clearModelSelection} className="text-gray-500 hover:bg-gray-100 shrink-0">
+                  <Button variant="ghost" onClick={clearModelSelection} className="text-white/70 hover:bg-white/10 shrink-0">
                     Effacer
                   </Button>
                 )}
@@ -371,36 +370,36 @@ const DatasetCalibrateCard = () => {
         {/* SECTION 2 : MÉTADONNÉES DU MODÈLE            */}
         {/* ============================================ */}
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
-            <span className={`w-2 h-2 rounded-full ${hasClasses ? "bg-green-500" : "bg-red-400"}`} />
+          <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${hasClasses ? "bg-green-400" : "bg-red-400"}`} />
             2. Métadonnées du modèle
           </h3>
 
-          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
+          <div className="rounded-2xl border border-white/15 bg-white/5 p-4 space-y-4">
             <div className="grid gap-4 md:grid-cols-[140px,1fr]">
               <div className="space-y-1">
-                <Label className="text-gray-600 text-xs font-medium">Input size</Label>
+                <Label className="text-white/60 text-xs font-medium">Input size</Label>
                 <Input
                   type="number"
                   min={64}
                   step={1}
                   value={inputSize}
                   onChange={(e) => setInputSize(Number(e.target.value || 224))}
-                  className="bg-white border-gray-300 text-gray-700"
+                  className="bg-white/10 text-white"
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-gray-600 text-xs font-medium">Ordre des classes (1 par ligne)</Label>
+                <Label className="text-white/60 text-xs font-medium">Ordre des classes (1 par ligne)</Label>
                 <textarea
                   value={classesOrderText}
                   onChange={(e) => setClassesOrderText(e.target.value)}
                   placeholder={"algae\nmajor_crack\nminor_crack\npeeling\nplain\nspalling\nstain"}
-                  className="min-h-[140px] w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                  className="min-h-[140px] w-full rounded-md border border-white/20 bg-white/10 p-2 text-sm text-white placeholder:text-white/40 focus:outline-none focus:ring-2 focus:ring-white/20"
                 />
               </div>
             </div>
             <div className="flex justify-end">
-              <Button onClick={saveModelMeta} className="bg-blue-600 hover:bg-blue-700 text-white">
+              <Button onClick={saveModelMeta} className="backdrop-blur-sm">
                 Enregistrer les métadonnées
               </Button>
             </div>
@@ -412,27 +411,27 @@ const DatasetCalibrateCard = () => {
         {/* ============================================ */}
         {hasClasses && (
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full ${hasMapping ? "bg-green-500" : "bg-amber-400"}`} />
+            <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${hasMapping ? "bg-green-400" : "bg-amber-400"}`} />
               3. Mapping classes → tags
             </h3>
 
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
                 {(settings.modelMeta?.classesOrder || []).map((cls) => (
                   <div key={cls} className="space-y-1">
-                    <Label className="text-xs text-gray-500 font-medium">{cls}</Label>
+                    <Label className="text-xs text-white/50 font-medium">{cls}</Label>
                     <Input
                       value={mapping[cls] ?? ""}
                       onChange={(e) => setMapping((m) => ({ ...m, [cls]: e.target.value }))}
                       placeholder={defaultTagForClass(cls) || "tag (vide = aucun)"}
-                      className="bg-white border-gray-300 text-gray-700 placeholder:text-gray-400"
+                      className="bg-white/10 text-white placeholder:text-white/40"
                     />
                   </div>
                 ))}
               </div>
               <div className="flex justify-end mt-3">
-                <Button onClick={saveMapping} className="bg-blue-600 hover:bg-blue-700 text-white">
+                <Button onClick={saveMapping} className="backdrop-blur-sm">
                   Enregistrer le mapping
                 </Button>
               </div>
@@ -445,12 +444,12 @@ const DatasetCalibrateCard = () => {
         {/* ============================================ */}
         {hasModel && hasClasses && (
           <div className="space-y-4">
-            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-white/80 uppercase tracking-wider flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-blue-400" />
               4. Test rapide
             </h3>
 
-            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+            <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <Dropzone
                   accept="image/*"
@@ -461,19 +460,19 @@ const DatasetCalibrateCard = () => {
                   className="h-28"
                 />
                 {testImage && (
-                  <div className="flex gap-4 rounded-xl border border-gray-200 bg-white p-3">
+                  <div className="flex gap-4 rounded-xl border border-white/15 bg-white/5 p-3">
                     <img src={testImage} alt="Test" className="h-20 w-20 rounded-lg object-cover" />
                     <div className="space-y-1">
-                      <p className="text-sm font-bold text-gray-700">Résultat :</p>
+                      <p className="text-sm font-bold text-white">Résultat :</p>
                       {testResult ? (
                         <>
                           <Badge variant={testResult.label === "plain" ? "secondary" : "destructive"}>
                             {testResult.label}
                           </Badge>
-                          <p className="text-xs text-gray-500">Confiance: {(testResult.score * 100).toFixed(1)}%</p>
+                          <p className="text-xs text-white/60">Confiance: {(testResult.score * 100).toFixed(1)}%</p>
                         </>
                       ) : (
-                        <p className="text-xs text-gray-400 animate-pulse">Analyse...</p>
+                        <p className="text-xs text-white/50 animate-pulse">Analyse...</p>
                       )}
                     </div>
                   </div>
@@ -488,63 +487,61 @@ const DatasetCalibrateCard = () => {
         {/* ============================================ */}
         <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
           <CollapsibleTrigger asChild>
-            <button className="flex items-center gap-2 text-sm font-semibold text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors w-full py-2 border-t border-gray-200 mt-2">
+            <button className="flex items-center gap-2 text-sm font-semibold text-white/60 uppercase tracking-wider hover:text-white/90 transition-colors w-full py-2 border-t border-white/10 mt-2">
               {advancedOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              <span className={`w-2 h-2 rounded-full ${hasCalibration ? "bg-green-500" : "bg-amber-400"}`} />
+              <span className={`w-2 h-2 rounded-full ${hasCalibration ? "bg-green-400" : "bg-amber-400"}`} />
               Avancé — Dataset & Calibration
-              {!hasCalibration && <span className="text-xs font-normal text-amber-500 ml-2">(optionnel)</span>}
+              {!hasCalibration && <span className="text-xs font-normal text-amber-400/70 ml-2">(optionnel)</span>}
             </button>
           </CollapsibleTrigger>
 
           <CollapsibleContent className="space-y-5 pt-4">
             {/* Dataset import */}
             <div className="space-y-3">
-              <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Dataset de calibration</h4>
-              <p className="text-xs text-gray-400">
+              <h4 className="text-xs font-semibold text-white/70 uppercase tracking-wider">Dataset de calibration</h4>
+              <p className="text-xs text-white/40">
                 Le dataset sert uniquement à calibrer le seuil de confiance. Une fois calibré, il n'est plus nécessaire.
               </p>
 
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+              <div className="rounded-2xl border border-white/15 bg-white/5 p-4 space-y-3">
                 <div className="flex gap-3 items-end">
                   <div className="flex-1 space-y-1">
-                    <Label className="text-gray-600 text-xs font-medium">Nom du dataset</Label>
+                    <Label className="text-white/60 text-xs font-medium">Nom du dataset</Label>
                     <Input
                       value={datasetName}
                       onChange={(e) => setDatasetName(e.target.value)}
                       placeholder="ex: Inspection v1"
-                      className="bg-white border-gray-300 text-gray-700 placeholder:text-gray-400"
+                      className="bg-white/10 text-white placeholder:text-white/40"
                     />
                   </div>
                   <Input
                     type="file"
                     accept={zipAccept}
                     onChange={(e) => handleZipFiles(e.target.files)}
-                    className="bg-white border-gray-300 text-gray-700 file:mr-2 file:rounded file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-blue-700 file:font-medium flex-1"
+                    className="bg-white/10 text-white file:mr-2 file:rounded file:border-0 file:bg-white/20 file:px-3 file:py-1.5 file:text-white file:font-medium flex-1"
                   />
                 </div>
 
                 {manifest ? (
-                  <div className="rounded-lg border border-gray-200 bg-white p-3">
+                  <div className="rounded-xl border border-white/15 bg-white/5 p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <StatusDot level="ok" label={`${manifest.name} — ${manifest.classes.length} classes, ${totalImages} images`} />
-                      </div>
-                      <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 h-7" onClick={removeDataset}>
+                      <StatusDot level="ok" label={`${manifest.name} — ${manifest.classes.length} classes, ${totalImages} images`} />
+                      <Button variant="ghost" size="sm" className="text-red-300 hover:bg-red-500/10 h-7" onClick={removeDataset}>
                         <Trash2 className="h-3.5 w-3.5 mr-1" /> Supprimer
                       </Button>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {manifest.classes.map((c) => (
-                        <Badge key={c} variant="secondary" className="bg-gray-100 text-gray-600 border-gray-200 text-xs">{c}</Badge>
+                        <Badge key={c} variant="secondary" className="bg-white/10 text-white/70 border-white/20 text-xs">{c}</Badge>
                       ))}
                     </div>
                     <div className="mt-3 grid gap-2 sm:grid-cols-3 text-xs">
                       {(["train", "val", "test"] as const).map((split) => (
-                        <div key={split} className="rounded-lg border border-gray-100 bg-gray-50 p-2">
-                          <p className="text-gray-400 font-semibold uppercase text-[10px] mb-1">{split}</p>
+                        <div key={split} className="rounded-lg border border-white/10 bg-white/5 p-2">
+                          <p className="text-white/40 font-semibold uppercase text-[10px] mb-1">{split}</p>
                           {Object.entries(manifest.stats[split]).map(([c, n]) => (
-                            <div key={`${split}-${c}`} className="flex justify-between text-gray-600">
-                              <span>{c}</span><span className="font-medium">{n}</span>
+                            <div key={`${split}-${c}`} className="flex justify-between text-white/70">
+                              <span>{c}</span><span className="font-medium text-white/90">{n}</span>
                             </div>
                           ))}
                         </div>
@@ -552,7 +549,7 @@ const DatasetCalibrateCard = () => {
                     </div>
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-400 italic">Aucun dataset chargé.</p>
+                  <p className="text-xs text-white/40 italic">Aucun dataset chargé.</p>
                 )}
               </div>
             </div>
@@ -560,7 +557,7 @@ const DatasetCalibrateCard = () => {
             {/* Vérification cohérence */}
             {manifest && hasClasses && (
               <div className="flex justify-start">
-                <Button variant="outline" onClick={verifyCoherence} className="border-gray-300 text-gray-700 hover:bg-gray-100">
+                <Button variant="outline" onClick={verifyCoherence} className="border-white/30 bg-transparent text-white hover:bg-white/10">
                   Vérifier cohérence dataset ↔ modèle
                 </Button>
               </div>
@@ -568,39 +565,39 @@ const DatasetCalibrateCard = () => {
 
             {/* Calibration */}
             <div className="space-y-3">
-              <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Calibration automatique du seuil</h4>
-              <p className="text-xs text-gray-400">
-                Utilise le split <strong>val</strong> du dataset pour trouver le seuil optimal (F1 binaire : défaut vs plain).
+              <h4 className="text-xs font-semibold text-white/70 uppercase tracking-wider">Calibration automatique du seuil</h4>
+              <p className="text-xs text-white/40">
+                Utilise le split <strong className="text-white/60">val</strong> du dataset pour trouver le seuil optimal (F1 binaire : défaut vs plain).
               </p>
 
-              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <div className="rounded-2xl border border-white/15 bg-white/5 p-4">
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="space-y-1">
-                    <Label className="text-gray-600 text-xs font-medium">Échantillons / classe</Label>
+                    <Label className="text-white/60 text-xs font-medium">Échantillons / classe</Label>
                     <Input
                       type="number"
                       min={1}
                       max={100}
                       value={perClass}
                       onChange={(e) => setPerClass(Number(e.target.value || 10))}
-                      className="bg-white border-gray-300 text-gray-700 w-28"
+                      className="bg-white/10 text-white w-28"
                     />
                   </div>
                   <Button
                     onClick={handleCalibrate}
                     disabled={isCalibrating || !hasModel || !hasDataset}
-                    className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                    className="backdrop-blur-sm disabled:opacity-50"
                   >
                     {isCalibrating ? "Calibration..." : "Calibrer automatiquement"}
                   </Button>
                 </div>
                 {!hasModel && <p className="text-xs text-red-400 mt-2">⚠ Chargez un modèle ONNX d'abord.</p>}
-                {hasModel && !hasDataset && <p className="text-xs text-amber-500 mt-2">⚠ Chargez un dataset pour calibrer. Sinon le seuil par défaut (0.6) est utilisé.</p>}
+                {hasModel && !hasDataset && <p className="text-xs text-amber-400/80 mt-2">⚠ Chargez un dataset pour calibrer. Sinon le seuil par défaut (0.6) est utilisé.</p>}
                 {calibSummary && (
-                  <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-white border border-gray-200 p-3 text-xs text-gray-600">{calibSummary}</pre>
+                  <pre className="mt-3 whitespace-pre-wrap rounded-xl bg-black/20 p-3 text-xs text-white/80">{calibSummary}</pre>
                 )}
                 {!calibSummary && hasCalibration && (
-                  <div className="mt-3 rounded-lg bg-green-50 border border-green-200 p-3 text-xs text-green-700">
+                  <div className="mt-3 rounded-xl bg-green-500/10 border border-green-400/20 p-3 text-xs text-green-300">
                     Dernière calibration : {settings.calibrationReport!.date ? new Date(settings.calibrationReport!.date).toLocaleString() : "—"} — {settings.calibrationReport!.metricsSummary || ""}
                   </div>
                 )}
