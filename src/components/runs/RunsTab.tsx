@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { ProjectImage } from "@/utils/storage";
-import type { Run } from "@/utils/runs";
+import type { Run, RunItem } from "@/utils/runs";
 import { cancelRun, retryFailedItems, deleteRun, updateRunItemBoxes } from "@/utils/runs";
 import { showSuccess } from "@/utils/toast";
 import { FileText, Trash2, Pencil, FileDown } from "lucide-react";
@@ -14,10 +14,69 @@ import RunLogDialog from "./RunLogDialog";
 import AnnotateDialog from "./AnnotateDialog";
 import AnomalyPreview from "./AnomalyPreview";
 
-// Ajout d'un composant pour afficher le JSON structuré par lots
-const StructuredAnalysisView = ({ text }: { text: string }) => {
-  const [parseError, setParseError] = useState<string | null>(null);
+// --- Types for inline image lookup ---
+type ImageLookup = {
+  /** Map image name (or partial) -> ProjectImage + RunItem (for boxes) */
+  byName: Map<string, { img: ProjectImage; item?: RunItem }>;
+  /** All run items with their images */
+  items: { img: ProjectImage; item: RunItem }[];
+};
 
+function buildImageLookup(images: ProjectImage[], runItems?: RunItem[]): ImageLookup {
+  const byName = new Map<string, { img: ProjectImage; item?: RunItem }>();
+  const items: { img: ProjectImage; item: RunItem }[] = [];
+
+  for (const img of images) {
+    byName.set(img.name.toLowerCase(), { img });
+    // Also index by id
+    byName.set(img.id.toLowerCase(), { img });
+  }
+
+  if (runItems) {
+    for (const item of runItems) {
+      const img = images.find(i => i.id === item.imageId);
+      if (img) {
+        items.push({ img, item });
+        // Override with item info for boxes
+        byName.set(img.name.toLowerCase(), { img, item });
+        byName.set(img.id.toLowerCase(), { img, item });
+      }
+    }
+  }
+
+  return { byName, items };
+}
+
+/** Try to find matching image for an anomaly's image_ref field */
+function findImageForRef(ref: string | string[] | undefined, lookup: ImageLookup): { img: ProjectImage; item?: RunItem } | null {
+  if (!ref) return null;
+  const refs = Array.isArray(ref) ? ref : [ref];
+
+  for (const r of refs) {
+    const key = r.toLowerCase().trim();
+    // Direct match
+    const direct = lookup.byName.get(key);
+    if (direct) return direct;
+
+    // Try matching by index (IMG-001 -> index 0)
+    const indexMatch = key.match(/img[_-]?(\d+)/i);
+    if (indexMatch) {
+      const idx = parseInt(indexMatch[1], 10) - 1;
+      if (idx >= 0 && idx < lookup.items.length) {
+        return lookup.items[idx];
+      }
+    }
+
+    // Fuzzy: find any image whose name contains the ref
+    for (const [name, entry] of lookup.byName) {
+      if (name.includes(key) || key.includes(name)) return entry;
+    }
+  }
+  return null;
+}
+
+// Ajout d'un composant pour afficher le JSON structuré par lots
+const StructuredAnalysisView = ({ text, imageLookup }: { text: string; imageLookup?: ImageLookup }) => {
   const parsedData = useMemo(() => {
     if (!text) return null;
     try {
@@ -117,73 +176,96 @@ const StructuredAnalysisView = ({ text }: { text: string }) => {
               </Badge>
             </div>
             <div className="divide-y divide-gray-100">
-              {lot.anomalies?.map((ano: any, aIdx: number) => (
-                <div key={aIdx} className="p-5 space-y-5 hover:bg-gray-50 transition-colors">
-                  <div className="flex justify-between items-start gap-4">
-                    <div className="space-y-1.5 flex-1">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <span className="text-[10px] font-mono bg-blue-100 px-2 py-0.5 rounded border border-blue-200 text-blue-700 font-bold">{ano.id}</span>
-                        <span className="text-[11px] text-gray-500 font-medium">IMAGE: {ano.image_ref}</span>
-                        <span className="text-[11px] text-gray-400">•</span>
-                        <span className="text-[11px] text-gray-500 font-medium">LOCALISATION: {ano.localisation}</span>
+              {lot.anomalies?.map((ano: any, aIdx: number) => {
+                // Find matching image for this anomaly
+                const matchedImage = imageLookup ? findImageForRef(ano.image_ref, imageLookup) : null;
+
+                return (
+                  <div key={aIdx} className="p-5 space-y-5 hover:bg-gray-50 transition-colors">
+                    <div className="flex justify-between items-start gap-4">
+                      <div className="space-y-1.5 flex-1">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="text-[10px] font-mono bg-blue-100 px-2 py-0.5 rounded border border-blue-200 text-blue-700 font-bold">{ano.id}</span>
+                          <span className="text-[11px] text-gray-500 font-medium">IMAGE: {Array.isArray(ano.image_ref) ? ano.image_ref.join(", ") : ano.image_ref}</span>
+                          <span className="text-[11px] text-gray-400">•</span>
+                          <span className="text-[11px] text-gray-500 font-medium">LOCALISATION: {ano.localisation}</span>
+                        </div>
+                        <p className="text-base text-gray-900 font-bold leading-snug">{ano.description}</p>
                       </div>
-                      <p className="text-base text-gray-900 font-bold leading-snug">{ano.description}</p>
+                      <div className="flex flex-col gap-2 items-end shrink-0">
+                        {ano.impact_energetique && (
+                          <span className={`text-[10px] px-3 py-1 rounded-md border-2 uppercase font-black ${
+                            ano.impact_energetique === 'fort' || ano.impact_energetique === 'critique' 
+                            ? 'bg-red-100 text-red-700 border-red-300' 
+                            : 'bg-orange-100 text-orange-700 border-orange-300'
+                          }`}>
+                            {ano.impact_energetique}
+                          </span>
+                        )}
+                        {ano.priorite_intervention && (
+                          <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded border border-gray-200 uppercase tracking-tighter">
+                            {ano.priorite_intervention}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="flex flex-col gap-2 items-end shrink-0">
-                      {ano.impact_energetique && (
-                        <span className={`text-[10px] px-3 py-1 rounded-md border-2 uppercase font-black ${
-                          ano.impact_energetique === 'fort' || ano.impact_energetique === 'critique' 
-                          ? 'bg-red-100 text-red-700 border-red-300' 
-                          : 'bg-orange-100 text-orange-700 border-orange-300'
-                        }`}>
-                          {ano.impact_energetique}
-                        </span>
-                      )}
-                      {ano.priorite_intervention && (
-                        <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded border border-gray-200 uppercase tracking-tighter">
-                          {ano.priorite_intervention}
-                        </span>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="grid gap-6 md:grid-cols-2">
-                    <div className="space-y-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
-                      <div className="text-[10px] uppercase font-black text-gray-400 tracking-wider">Analyse Technique</div>
-                      <p className="text-sm text-gray-700 leading-relaxed">{ano.analyse_technique}</p>
-                    </div>
-                    <div className="space-y-2 bg-red-50 p-3 rounded-xl border border-red-200">
-                      <div className="text-[10px] uppercase font-black text-red-400 tracking-wider">Risques & Durabilité</div>
-                      <p className="text-sm text-red-700 italic leading-relaxed">{ano.risques_associes}</p>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-blue-50 p-4 rounded-xl border-2 border-blue-200">
-                    <div className="text-[10px] uppercase font-black text-blue-600 tracking-widest mb-2 flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
-                      Prescription CCTP (Action MOE)
-                    </div>
-                    <p className="text-sm text-blue-900 font-bold leading-relaxed">
-                      {ano.prescription_cctp}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
-                    <div className="flex flex-wrap gap-2">
-                      {ano.references_normatives?.map((ref: string, rIdx: number) => (
-                        <span key={rIdx} className="text-[10px] bg-gray-100 px-3 py-1 rounded border border-gray-300 text-gray-700 font-bold">
-                          {ref}
-                        </span>
-                      ))}
-                    </div>
-                    {ano.estimation_budgetaire && (
-                      <div className="text-[11px] font-black text-green-700 bg-green-50 px-3 py-1.5 rounded-lg border-2 border-green-300">
-                        BUDGET EST. : {ano.estimation_budgetaire}
+                    {/* IMAGE INLINE — associated to this anomaly */}
+                    {matchedImage && (
+                      <div className="rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
+                        <AnomalyPreview
+                          src={matchedImage.img.dataUrl}
+                          alt={matchedImage.img.name}
+                          boxes={matchedImage.item?.boxes || []}
+                          height={220}
+                        />
+                        <div className="px-3 py-1.5 text-[10px] text-gray-400 flex items-center justify-between">
+                          <span>{matchedImage.img.name}</span>
+                          {matchedImage.item?.boxes?.length ? (
+                            <Badge variant="secondary" className="text-[9px] h-4">{matchedImage.item.boxes.length} annotation{matchedImage.item.boxes.length > 1 ? "s" : ""}</Badge>
+                          ) : null}
+                        </div>
                       </div>
                     )}
+
+                    <div className="grid gap-6 md:grid-cols-2">
+                      <div className="space-y-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                        <div className="text-[10px] uppercase font-black text-gray-400 tracking-wider">Analyse Technique</div>
+                        <p className="text-sm text-gray-700 leading-relaxed">{ano.analyse_technique}</p>
+                      </div>
+                      <div className="space-y-2 bg-red-50 p-3 rounded-xl border border-red-200">
+                        <div className="text-[10px] uppercase font-black text-red-400 tracking-wider">Risques & Durabilité</div>
+                        <p className="text-sm text-red-700 italic leading-relaxed">{ano.risques_associes}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="bg-blue-50 p-4 rounded-xl border-2 border-blue-200">
+                      <div className="text-[10px] uppercase font-black text-blue-600 tracking-widest mb-2 flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 bg-blue-500 rounded-full"></span>
+                        Prescription CCTP (Action MOE)
+                      </div>
+                      <p className="text-sm text-blue-900 font-bold leading-relaxed">
+                        {ano.prescription_cctp}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+                      <div className="flex flex-wrap gap-2">
+                        {ano.references_normatives?.map((ref: string, rIdx: number) => (
+                          <span key={rIdx} className="text-[10px] bg-gray-100 px-3 py-1 rounded border border-gray-300 text-gray-700 font-bold">
+                            {ref}
+                          </span>
+                        ))}
+                      </div>
+                      {ano.estimation_budgetaire && (
+                        <div className="text-[11px] font-black text-green-700 bg-green-50 px-3 py-1.5 rounded-lg border-2 border-green-300">
+                          BUDGET EST. : {ano.estimation_budgetaire}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         );
@@ -301,162 +383,62 @@ const RunsTab = ({ runs, images }: Props) => {
               {photoRuns.length === 0 ? (
                 <p className="text-sm text-gray-500">Aucun run "par image" pour le moment.</p>
               ) : (
-                photoRuns.map((run) => (
-                  <div key={run.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-3">
-                      <div className="flex items-center gap-2">
-                        {run.status === "failed" ? (
-                          <button
-                            type="button"
-                            onClick={() => setLogRunId(run.id)}
-                            className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
-                            title="Voir le log d'erreur"
-                          >
-                            <Badge variant={statusVariant(run.status)}>failed</Badge>
-                          </button>
-                        ) : (
-                          <Badge variant={statusVariant(run.status)}>{run.status}</Badge>
-                        )}
-                        <span className="text-sm text-gray-700">Mode: Par image</span>
+                photoRuns.map((run) => {
+                  const lookup = buildImageLookup(images, run.items);
+                  return (
+                    <div key={run.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-3">
+                        <div className="flex items-center gap-2">
+                          {run.status === "failed" ? (
+                            <button type="button" onClick={() => setLogRunId(run.id)} className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400" title="Voir le log d'erreur">
+                              <Badge variant={statusVariant(run.status)}>failed</Badge>
+                            </button>
+                          ) : (
+                            <Badge variant={statusVariant(run.status)}>{run.status}</Badge>
+                          )}
+                          <span className="text-sm text-gray-700">Mode: Par image</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" disabled={run.status !== "succeeded"} onClick={async () => { await exportRunToPdf(run, images); }} className="border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"><FileText className="mr-2 h-4 w-4" />PDF</Button>
+                          <Button size="sm" variant="outline" disabled={run.status !== "succeeded"} onClick={async () => { await exportRunToDocx(run, images); }} className="border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"><FileDown className="mr-2 h-4 w-4" />DOCX</Button>
+                          <Button size="icon" variant="ghost" onClick={async () => { if (confirm("Supprimer ce run ?")) { await deleteRun(run.id); showSuccess("Run supprimé"); } }} className="hover:bg-gray-100 text-gray-600"><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                        <div className="text-xs text-gray-400">{new Date(run.createdAt).toLocaleString()}</div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={run.status !== "succeeded"}
-                          onClick={async () => {
-                            await exportRunToPdf(run, images);
-                          }}
-                          className="border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                          title={run.status === "succeeded" ? "Exporter en PDF" : "Disponible lorsque le run est terminé"}
-                        >
-                          <FileText className="mr-2 h-4 w-4" />
-                          PDF
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={run.status !== "succeeded"}
-                          onClick={async () => {
-                            await exportRunToDocx(run, images);
-                          }}
-                          className="border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                          title={run.status === "succeeded" ? "Exporter en DOCX" : "Disponible lorsque le run est terminé"}
-                        >
-                          <FileDown className="mr-2 h-4 w-4" />
-                          DOCX
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={async () => {
-                            if (confirm("Supprimer ce run ?")) {
-                              await deleteRun(run.id);
-                              showSuccess("Run supprimé");
-                            }
-                          }}
-                          className="hover:bg-gray-100 text-gray-600"
-                          title="Supprimer le run"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="text-xs text-gray-400">{new Date(run.createdAt).toLocaleString()}</div>
-                    </div>
 
-                    <div className="p-3 space-y-3">
-                      <div className="grid gap-3">
-                        {run.items.map((it) => {
-                          const img = images.find((i) => i.id === it.imageId);
-                          const boxCount = (it.boxes || []).length;
-                          return (
-                            <div key={it.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                              <div className="mb-2 flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                  <Badge variant={statusVariant(it.status)}>{it.status}</Badge>
-                                  <span className="max-w-[240px] truncate text-sm font-medium text-gray-800">
-                                    {img?.name || it.imageId}
-                                  </span>
-                                  {boxCount > 0 ? (
-                                    <Badge variant="secondary" className="ml-1">{boxCount} annotation{boxCount > 1 ? "s" : ""}</Badge>
-                                  ) : null}
+                      <div className="p-3 space-y-3">
+                        <div className="grid gap-3">
+                          {run.items.map((it) => {
+                            const img = images.find((i) => i.id === it.imageId);
+                            const boxCount = (it.boxes || []).length;
+                            return (
+                              <div key={it.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
+                                <div className="mb-2 flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant={statusVariant(it.status)}>{it.status}</Badge>
+                                    <span className="max-w-[240px] truncate text-sm font-medium text-gray-800">{img?.name || it.imageId}</span>
+                                    {boxCount > 0 ? (<Badge variant="secondary" className="ml-1">{boxCount} annotation{boxCount > 1 ? "s" : ""}</Badge>) : null}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-xs text-gray-400">{img?.tag || "non taguée"}</span>
+                                    <Button size="sm" variant="outline" className="border-gray-300 text-gray-700 hover:bg-gray-100" onClick={() => { setAnnotateRunId(run.id); setAnnotateItemId(it.id); setAnnotateOpen(true); }}><Pencil className="mr-2 h-4 w-4" />Annoter</Button>
+                                  </div>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  <span className="text-xs text-gray-400">{img?.tag || "non taguée"}</span>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="border-gray-300 text-gray-700 hover:bg-gray-100"
-                                    onClick={() => { setAnnotateRunId(run.id); setAnnotateItemId(it.id); setAnnotateOpen(true); }}
-                                    title="Annoter l'image"
-                                  >
-                                    <Pencil className="mr-2 h-4 w-4" />
-                                    Annoter
-                                  </Button>
-                                </div>
+                                {img ? (<AnomalyPreview src={img.dataUrl} alt={img.name} boxes={it.boxes || []} className="mb-2" height={200} />) : null}
+                                {it.outputText ? (<StructuredAnalysisView text={it.outputText} imageLookup={lookup} />) : it.error ? (<p className="text-sm text-red-600">{it.error}</p>) : (<p className="text-sm text-gray-400">Traitement en cours…</p>)}
                               </div>
-
-                              {img ? (
-                                <AnomalyPreview
-                                  src={img.dataUrl}
-                                  alt={img.name}
-                                  boxes={it.boxes || []}
-                                  className="mb-2"
-                                  height={200}
-                                />
-                              ) : null}
-
-                              {it.outputText ? (
-                                <StructuredAnalysisView text={it.outputText} />
-                              ) : it.error ? (
-                                <p className="text-sm text-red-600">{it.error}</p>
-                              ) : (
-                                <p className="text-sm text-gray-400">Traitement en cours…</p>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      <div className="flex flex-wrap justify-end gap-2">
-                        {(run.status === "running" || run.status === "queued") && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={async () => { await cancelRun(run.id); }}
-                            className="border border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200"
-                            title="Annuler ce run"
-                          >
-                            Annuler
-                          </Button>
-                        )}
-                        {run.status === "failed" ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setLogRunId(run.id)}
-                            className="border-gray-300 text-gray-700 hover:bg-gray-50"
-                            title="Voir le log d'erreur"
-                          >
-                            Voir le log
-                          </Button>
-                        ) : null}
-                        {run.status === "failed" ? (
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={async () => {
-                              await retryFailedItems(run.id, images);
-                              showSuccess("Relance des items en échec");
-                            }}
-                          >
-                            Relancer les échecs
-                          </Button>
-                        ) : null}
+                            );
+                          })}
+                        </div>
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {(run.status === "running" || run.status === "queued") && (<Button size="sm" variant="secondary" onClick={async () => { await cancelRun(run.id); }} className="border border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200">Annuler</Button>)}
+                          {run.status === "failed" ? (<Button size="sm" variant="outline" onClick={() => setLogRunId(run.id)} className="border-gray-300 text-gray-700 hover:bg-gray-50">Voir le log</Button>) : null}
+                          {run.status === "failed" ? (<Button variant="secondary" size="sm" onClick={async () => { await retryFailedItems(run.id, images); showSuccess("Relance des items en échec"); }}>Relancer les échecs</Button>) : null}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </TabsContent>
 
@@ -465,165 +447,49 @@ const RunsTab = ({ runs, images }: Props) => {
               {promptRuns.length === 0 ? (
                 <p className="text-sm text-gray-500">Aucun run "agrégé" pour le moment.</p>
               ) : (
-                promptRuns.map((run) => (
-                  <div key={run.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-3">
-                      <div className="flex items-center gap-2">
-                        {run.status === "failed" ? (
-                          <button
-                            type="button"
-                            onClick={() => setLogRunId(run.id)}
-                            className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400"
-                            title="Voir le log d'erreur"
-                          >
-                            <Badge variant={statusVariant(run.status)}>failed</Badge>
-                          </button>
-                        ) : (
-                          <Badge variant={statusVariant(run.status)}>{run.status}</Badge>
-                        )}
-                        <span className="text-sm text-gray-700">Mode: Agrégé</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={run.status !== "succeeded"}
-                          onClick={async () => {
-                            await exportRunToPdf(run, images);
-                          }}
-                          className="border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                          title={run.status === "succeeded" ? "Exporter en PDF" : "Disponible lorsque le run est terminé"}
-                        >
-                          <FileText className="mr-2 h-4 w-4" />
-                          PDF
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={run.status !== "succeeded"}
-                          onClick={async () => {
-                            await exportRunToDocx(run, images);
-                          }}
-                          className="border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                          title={run.status === "succeeded" ? "Exporter en DOCX" : "Disponible lorsque le run est terminé"}
-                        >
-                          <FileDown className="mr-2 h-4 w-4" />
-                          DOCX
-                        </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={async () => {
-                            if (confirm("Supprimer ce run ?")) {
-                              await deleteRun(run.id);
-                              showSuccess("Run supprimé");
-                            }
-                          }}
-                          className="hover:bg-gray-100 text-gray-600"
-                          title="Supprimer le run"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                      <div className="text-xs text-gray-400">{new Date(run.createdAt).toLocaleString()}</div>
-                    </div>
-
-                    <div className="p-3 space-y-4">
-                      {run.outputText ? (
-                        <StructuredAnalysisView text={run.outputText} />
-                      ) : run.error ? (
-                        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                          Erreur: {run.error}
+                promptRuns.map((run) => {
+                  const lookup = buildImageLookup(images, run.items);
+                  return (
+                    <div key={run.id} className="rounded-2xl border border-gray-200 bg-white shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 p-3">
+                        <div className="flex items-center gap-2">
+                          {run.status === "failed" ? (
+                            <button type="button" onClick={() => setLogRunId(run.id)} className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-gray-400" title="Voir le log d'erreur">
+                              <Badge variant={statusVariant(run.status)}>failed</Badge>
+                            </button>
+                          ) : (
+                            <Badge variant={statusVariant(run.status)}>{run.status}</Badge>
+                          )}
+                          <span className="text-sm text-gray-700">Mode: Agrégé</span>
                         </div>
-                      ) : (
-                        <p className="text-sm text-gray-400 italic p-4 text-center">Analyse en cours...</p>
-                      )}
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" disabled={run.status !== "succeeded"} onClick={async () => { await exportRunToPdf(run, images); }} className="border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"><FileText className="mr-2 h-4 w-4" />PDF</Button>
+                          <Button size="sm" variant="outline" disabled={run.status !== "succeeded"} onClick={async () => { await exportRunToDocx(run, images); }} className="border-gray-300 text-gray-700 hover:bg-gray-50 disabled:opacity-50"><FileDown className="mr-2 h-4 w-4" />DOCX</Button>
+                          <Button size="icon" variant="ghost" onClick={async () => { if (confirm("Supprimer ce run ?")) { await deleteRun(run.id); showSuccess("Run supprimé"); } }} className="hover:bg-gray-100 text-gray-600"><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                        <div className="text-xs text-gray-400">{new Date(run.createdAt).toLocaleString()}</div>
+                      </div>
 
-                      {run.items && run.items.length > 0 ? (
-                        <div className="space-y-2">
-                          <div className="text-sm text-gray-600 font-medium">Détails par image</div>
-                          <div className="grid gap-3">
-                            {run.items.map((it) => {
-                              const img = images.find((i) => i.id === it.imageId);
-                              const boxCount = (it.boxes || []).length;
-                              return (
-                                <div key={it.id} className="rounded-xl border border-gray-200 bg-gray-50 p-3">
-                                  <div className="mb-2 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                      <Badge variant="secondary">ok</Badge>
-                                      <span className="max-w-[240px] truncate text-sm font-medium text-gray-800">
-                                        {img?.name || it.imageId}
-                                      </span>
-                                      {boxCount > 0 ? (
-                                        <Badge variant="secondary" className="ml-1">{boxCount} annotation{boxCount > 1 ? "s" : ""}</Badge>
-                                      ) : null}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-xs text-gray-400">{img?.tag || "non taguée"}</span>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="border-gray-300 text-gray-700 hover:bg-gray-100"
-                                        onClick={() => { setAnnotateRunId(run.id); setAnnotateItemId(it.id); setAnnotateOpen(true); }}
-                                        title="Annoter l'image"
-                                      >
-                                        <Pencil className="mr-2 h-4 w-4" />
-                                        Annoter
-                                      </Button>
-                                    </div>
-                                  </div>
-
-                                  {img ? (
-                                    <AnomalyPreview
-                                      src={img.dataUrl}
-                                      alt={img.name}
-                                      boxes={it.boxes || []}
-                                      className="mb-2"
-                                      height={200}
-                                    />
-                                  ) : null}
-
-                                  {it.outputText ? (
-                                    <StructuredAnalysisView text={it.outputText} />
-                                  ) : it.error ? (
-                                    <p className="text-sm text-red-600">{it.error}</p>
-                                  ) : (
-                                    <p className="text-sm text-gray-400">En cours…</p>
-                                  )}
-                                </div>
-                              );
-                            })}
+                      <div className="p-3 space-y-4">
+                        {/* Rapport structuré avec images intégrées inline */}
+                        {run.outputText ? (
+                          <StructuredAnalysisView text={run.outputText} imageLookup={lookup} />
+                        ) : run.error ? (
+                          <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                            Erreur: {run.error}
                           </div>
-                        </div>
-                      ) : null}
-
-                      <div className="flex flex-wrap justify-end gap-2">
-                        {(run.status === "running" || run.status === "queued") && (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={async () => { await cancelRun(run.id); }}
-                            className="border border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200"
-                            title="Annuler ce run"
-                          >
-                            Annuler
-                          </Button>
+                        ) : (
+                          <p className="text-sm text-gray-400 italic p-4 text-center">Analyse en cours...</p>
                         )}
-                        {run.status === "failed" ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setLogRunId(run.id)}
-                            className="border-gray-300 text-gray-700 hover:bg-gray-50"
-                            title="Voir le log d'erreur"
-                          >
-                            Voir le log
-                          </Button>
-                        ) : null}
+
+                        <div className="flex flex-wrap justify-end gap-2">
+                          {(run.status === "running" || run.status === "queued") && (<Button size="sm" variant="secondary" onClick={async () => { await cancelRun(run.id); }} className="border border-gray-300 bg-gray-100 text-gray-700 hover:bg-gray-200">Annuler</Button>)}
+                          {run.status === "failed" ? (<Button size="sm" variant="outline" onClick={() => setLogRunId(run.id)} className="border-gray-300 text-gray-700 hover:bg-gray-50">Voir le log</Button>) : null}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </TabsContent>
           </Tabs>
