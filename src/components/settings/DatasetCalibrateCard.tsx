@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import Dropzone from "@/components/uploader/Dropzone";
 import { showError, showSuccess } from "@/utils/toast";
 import { getSettings, saveSettings, type Settings } from "@/utils/settings";
 import { deleteDataset, deleteOnnxModel, getDatasetManifest, importDatasetFromZip, storeOnnxModelToIdb, type DatasetManifest } from "@/utils/dataset";
 import { calibrateOnVal, classifyDataUrl } from "@/utils/inference";
 import { blobToDataUrl, compressImageToBlob } from "@/utils/image-compress";
+import { CheckCircle2, AlertCircle, XCircle, ChevronDown, ChevronRight, Trash2 } from "lucide-react";
 
 const zipAccept = "application/zip,application/x-zip-compressed,.zip";
 const onnxAccept = ".onnx,application/octet-stream";
@@ -36,31 +38,51 @@ function parseClassesOrder(text: string): string[] {
     .filter(Boolean);
 }
 
+// --- Pastille de statut ---
+type StatusLevel = "ok" | "warn" | "error";
+
+const StatusDot = ({ level, label }: { level: StatusLevel; label: string }) => {
+  const icon =
+    level === "ok" ? <CheckCircle2 className="h-4 w-4 text-green-500" /> :
+    level === "warn" ? <AlertCircle className="h-4 w-4 text-amber-500" /> :
+    <XCircle className="h-4 w-4 text-red-500" />;
+
+  const bg =
+    level === "ok" ? "bg-green-50 border-green-200 text-green-700" :
+    level === "warn" ? "bg-amber-50 border-amber-200 text-amber-700" :
+    "bg-red-50 border-red-200 text-red-700";
+
+  return (
+    <div className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium ${bg}`}>
+      {icon}
+      {label}
+    </div>
+  );
+};
+
 const DatasetCalibrateCard = () => {
   const [manifest, setManifest] = useState<DatasetManifest | null>(null);
   const [isImporting, setIsImporting] = useState(false);
-  const [mapping, setMapping] = useState<ClassMapping>({}); 
+  const [mapping, setMapping] = useState<ClassMapping>({});
   const [datasetName, setDatasetName] = useState("");
-  const [modelFileName, setModelFileName] = useState<string>(""); 
+  const [modelFileName, setModelFileName] = useState<string>("");
   const [inputSize, setInputSize] = useState<number>(224);
-  const [classesOrderText, setClassesOrderText] = useState<string>(""); 
+  const [classesOrderText, setClassesOrderText] = useState<string>("");
   const [onnxUrl, setOnnxUrl] = useState<string>("");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const settings = useMemo(() => getSettings(), []);
 
   useEffect(() => {
-    // Charger le dataset courant s'il existe
     const ref = settings.datasetRef;
     if (ref?.datasetId) {
       getDatasetManifest(ref.datasetId).then((m) => {
         if (m) {
           setManifest(m);
           setDatasetName(ref.datasetName || m.name);
-          // préparer mapping par défaut
           const map: ClassMapping = {};
           m.classes.forEach((c) => (map[c] = defaultTagForClass(c)));
           const saved = settings.classMapping || {};
-          // priorité aux valeurs sauvegardées
           const merged: ClassMapping = { ...map, ...saved };
           setMapping(merged);
           setClassesOrderText((settings.modelMeta?.classesOrder || m.classes).join("\n"));
@@ -68,23 +90,39 @@ const DatasetCalibrateCard = () => {
         }
       });
     }
-    // Pré-remplir l'URL si un modèle via URL est déjà enregistré
     if (settings.modelRef?.source === "url") {
       setOnnxUrl(settings.modelRef.value);
     }
-    // Afficher l'état si un modèle local (IDB) est déjà configuré
     if (settings.modelRef?.source === "idb" && settings.modelRef.value) {
       const id = settings.modelRef.value;
-      setModelFileName(`Modèle local (id: ${id.slice(0, 8)}…)`); 
+      setModelFileName(`Modèle local (id: ${id.slice(0, 8)}…)`);
+    }
+    if (!settings.datasetRef?.datasetId && settings.modelMeta?.classesOrder) {
+      setClassesOrderText(settings.modelMeta.classesOrder.join("\n"));
+      setInputSize(settings.modelMeta.inputSize || 224);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // --- Statuts calculés ---
+  const hasModel = !!(modelFileName || onnxUrl.trim() || settings.modelRef);
+  const hasClasses = !!(settings.modelMeta?.classesOrder?.length);
+  const hasMapping = !!(settings.classMapping && Object.keys(settings.classMapping).length > 0);
+  const hasCalibration = !!(settings.calibrationReport?.thresholdRecommended);
+  const hasDataset = !!manifest;
+
+  const modelStatus: StatusLevel = hasModel ? "ok" : "error";
+  const classesStatus: StatusLevel = hasClasses ? "ok" : "error";
+  const mappingStatus: StatusLevel = hasMapping ? "ok" : hasClasses ? "warn" : "error";
+  const calibrationStatus: StatusLevel = hasCalibration ? "ok" : "warn";
+  const overallReady = hasModel && hasClasses;
 
   const totalImages =
     (manifest?.splits.train.length || 0) +
     (manifest?.splits.val.length || 0) +
     (manifest?.splits.test.length || 0);
 
+  // --- Handlers ---
   const handleZipFiles = async (files: FileList | File[] | null) => {
     const file = files && (files[0] as File);
     if (!file) return;
@@ -97,7 +135,6 @@ const DatasetCalibrateCard = () => {
       const m = await importDatasetFromZip(file, datasetName || undefined);
       setManifest(m);
       setDatasetName(m.name);
-      // init mapping par défaut
       const map: ClassMapping = {};
       m.classes.forEach((c) => (map[c] = defaultTagForClass(c)));
       setMapping(map);
@@ -111,11 +148,8 @@ const DatasetCalibrateCard = () => {
   };
 
   const saveMapping = () => {
-    if (!manifest) return;
-    const next: Partial<Settings> = {
-      classMapping: mapping,
-    };
-    saveSettings(next);
+    if (!hasClasses) return;
+    saveSettings({ classMapping: mapping });
     showSuccess("Mapping classes → tags enregistré.");
   };
 
@@ -129,11 +163,7 @@ const DatasetCalibrateCard = () => {
       modelMeta: {
         inputSize,
         channelsOrder: "RGB",
-        normalization: {
-          scale: 1,
-          mean: [0.485, 0.456, 0.406],
-          std: [0.229, 0.224, 0.225],
-        },
+        normalization: { scale: 1, mean: [0.485, 0.456, 0.406], std: [0.229, 0.224, 0.225] },
         classesOrder,
         version: `yolov5-cls-s-${inputSize} v1`,
       },
@@ -144,41 +174,22 @@ const DatasetCalibrateCard = () => {
         warmup: false,
       },
     });
+    // Auto-generate default mapping if none exists
+    const currentMapping = getSettings().classMapping || {};
+    if (Object.keys(currentMapping).length === 0) {
+      const autoMap: ClassMapping = {};
+      classesOrder.forEach((c) => (autoMap[c] = defaultTagForClass(c)));
+      saveSettings({ classMapping: autoMap });
+      setMapping(autoMap);
+    }
     showSuccess("Métadonnées du modèle enregistrées.");
-  };
-
-  const verifyCoherence = () => {
-    if (!manifest) {
-      showError("Importez un dataset d'abord.");
-      return;
-    }
-    const modelClasses = parseClassesOrder(classesOrderText);
-    if (modelClasses.length === 0) {
-      showError("Renseignez l'ordre des classes du modèle.");
-      return;
-    }
-    const missingInModel = manifest.classes.filter((c) => !modelClasses.includes(c));
-    const extraInModel = modelClasses.filter((c) => !manifest.classes.includes(c));
-    if (missingInModel.length === 0 && extraInModel.length === 0) {
-      showSuccess("Cohérence OK: classes dataset et modèle concordent.");
-      return;
-    }
-    const msg = [
-      missingInModel.length ? `Manque dans modèle: ${missingInModel.join(", ")}` : "",
-      extraInModel.length ? `En trop dans modèle: ${extraInModel.join(", ")}` : "",
-    ].filter(Boolean).join(" • ");
-    showError(msg || "Incohérence de classes.");
   };
 
   const setModelFromUrl = () => {
     const url = onnxUrl.trim();
-    if (!url) {
-      showError("Renseignez une URL de modèle ONNX.");
-      return;
-    }
+    if (!url) { showError("Renseignez une URL de modèle ONNX."); return; }
     if (!/^https?:\/\//i.test(url) && !url.startsWith("data:")) {
-      showError("URL invalide (http(s) ou data:).");
-      return;
+      showError("URL invalide (http(s) ou data:)."); return;
     }
     saveSettings({ modelRef: { source: "url", value: url } });
     setModelFileName("");
@@ -192,30 +203,13 @@ const DatasetCalibrateCard = () => {
     showSuccess("Modèle désélectionné.");
   };
 
-  const handleCalibrate = async () => {
-    setIsCalibrating(true);
-    setCalibSummary("");
-    try {
-      const res = await calibrateOnVal(perClass);
-      setCalibSummary(res.report);
-      showSuccess(`Seuil calibré: ${res.threshold.toFixed(2)}`);
-    } catch (e: any) {
-      showError(e?.message || "Échec de la calibration.");
-    } finally {
-      setIsCalibrating(false);
-    }
-  };
-
   const handleOnnxPick = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
-    if (!f.name.toLowerCase().endsWith(".onnx")) {
-      showError("Sélectionnez un fichier .onnx.");
-      return;
-    }
+    if (!f.name.toLowerCase().endsWith(".onnx")) { showError("Sélectionnez un fichier .onnx."); return; }
     try {
       const { modelId } = await storeOnnxModelToIdb(f);
-      setModelFileName(`${f.name} (id: ${modelId.slice(0, 8)}…)`); 
+      setModelFileName(`${f.name} (id: ${modelId.slice(0, 8)}…)`);
       showSuccess("Modèle ONNX importé en local.");
     } catch (e: any) {
       showError(e?.message || "Échec de l'import du modèle ONNX.");
@@ -233,9 +227,7 @@ const DatasetCalibrateCard = () => {
 
   const removeModel = async () => {
     const mr = getSettings().modelRef;
-    if (mr?.source === "idb" && mr.value) {
-      await deleteOnnxModel(mr.value);
-    }
+    if (mr?.source === "idb" && mr.value) { await deleteOnnxModel(mr.value); }
     clearModelSelection();
   };
 
@@ -243,7 +235,20 @@ const DatasetCalibrateCard = () => {
   const [perClass, setPerClass] = useState<number>(10);
   const [calibSummary, setCalibSummary] = useState<string>("");
 
-  // Test unitaire manuel
+  const handleCalibrate = async () => {
+    setIsCalibrating(true);
+    setCalibSummary("");
+    try {
+      const res = await calibrateOnVal(perClass);
+      setCalibSummary(res.report);
+      showSuccess(`Seuil calibré: ${res.threshold.toFixed(2)}`);
+    } catch (e: any) {
+      showError(e?.message || "Échec de la calibration.");
+    } finally {
+      setIsCalibrating(false);
+    }
+  };
+
   const [testImage, setTestImage] = useState<string>("");
   const [testResult, setTestResult] = useState<{ label: string; score: number; probs: number[] } | null>(null);
 
@@ -255,282 +260,355 @@ const DatasetCalibrateCard = () => {
       const url = await blobToDataUrl(blob);
       setTestImage(url);
       setTestResult(null);
-
       const res = await classifyDataUrl(url);
-      setTestResult({
-        label: res.topLabel,
-        score: res.topScore,
-        probs: res.probs
-      });
+      setTestResult({ label: res.topLabel, score: res.topScore, probs: res.probs });
     } catch (e: any) {
       showError(e?.message || "Erreur de classification test");
     }
   };
 
+  const verifyCoherence = () => {
+    if (!manifest) { showError("Importez un dataset d'abord."); return; }
+    const modelClasses = parseClassesOrder(classesOrderText);
+    if (modelClasses.length === 0) { showError("Renseignez l'ordre des classes du modèle."); return; }
+    const missingInModel = manifest.classes.filter((c) => !modelClasses.includes(c));
+    const extraInModel = modelClasses.filter((c) => !manifest.classes.includes(c));
+    if (missingInModel.length === 0 && extraInModel.length === 0) {
+      showSuccess("Cohérence OK: classes dataset et modèle concordent."); return;
+    }
+    const msg = [
+      missingInModel.length ? `Manque dans modèle: ${missingInModel.join(", ")}` : "",
+      extraInModel.length ? `En trop dans modèle: ${extraInModel.join(", ")}` : "",
+    ].filter(Boolean).join(" • ");
+    showError(msg || "Incohérence de classes.");
+  };
+
   return (
-    <Card className="mt-6 rounded-3xl border-white/20 bg-white/10 text-white backdrop-blur-2xl">
-      <CardHeader>
-        <CardTitle>Dataset & Calibrage (YOLOv5‑cls)</CardTitle>
-        <CardDescription className="text-white/70">
-          Importez un dataset .zip structuré en train/val/test par classe, configurez le mapping de classes vers vos tags, et chargez un modèle ONNX pour une future calibration.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        {/* Import dataset */}
-        <div className="space-y-3">
-          <Label>Nom du dataset</Label>
-          <Input
-            value={datasetName}
-            onChange={(e) => setDatasetName(e.target.value)}
-            placeholder="ex: Inspection v1"
-            className="bg-white/10 text-white placeholder:text-white/60"
-          />
-          <div className="grid gap-3 md:grid-cols-[1fr,220px]">
-            <Dropzone
-              accept={zipAccept}
-              multiple={false}
-              onFiles={handleZipFiles}
-              label="Glissez-déposez votre dataset (.zip) ici"
-              hint="structure: train/<classe>/..., val/<classe>/..., test/<classe>/..."
-              className="w-full"
-            />
-            <div className="flex items-center">
-              <Input
-                type="file"
-                accept={zipAccept}
-                onChange={(e) => handleZipFiles(e.target.files)}
-                className="bg-white/10 text-white file:mr-2 file:rounded file:border-0 file:bg-white/20 file:px-3 file:py-2 file:text-white"
-              />
-            </div>
-          </div>
-          {manifest ? (
-            <div className="rounded-2xl border border-white/20 bg-white/5 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm text-white/80">
-                  {manifest.name} • {manifest.classes.length} classes • {totalImages} images
-                </div>
-                <Button variant="ghost" className="text-red-200 hover:bg-red-500/10" onClick={removeDataset}>
-                  Supprimer le dataset
-                </Button>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {manifest.classes.map((c) => (
-                  <Badge key={c} variant="secondary">{c}</Badge>
-                ))}
-              </div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border border-white/10 p-3">
-                  <p className="text-xs text-white/70">train</p>
-                  <ul className="mt-1 space-y-1 text-sm">
-                    {Object.entries(manifest.stats.train).map(([c, n]) => (
-                      <li key={"tr-" + c} className="flex justify-between"><span>{c}</span><span className="text-white/80">{n}</span></li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="rounded-xl border border-white/10 p-3">
-                  <p className="text-xs text-white/70">val</p>
-                  <ul className="mt-1 space-y-1 text-sm">
-                    {Object.entries(manifest.stats.val).map(([c, n]) => (
-                      <li key={"va-" + c} className="flex justify-between"><span>{c}</span><span className="text-white/80">{n}</span></li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="rounded-xl border border-white/10 p-3">
-                  <p className="text-xs text-white/70">test</p>
-                  <ul className="mt-1 space-y-1 text-sm">
-                    {Object.entries(manifest.stats.test).map(([c, n]) => (
-                      <li key={"te-" + c} className="flex justify-between"><span>{c}</span><span className="text-white/80">{n}</span></li>
-                    ))}
-                  </ul>
-                </div>
-              </div>
-            </div>
-          ) : (
-            <p className="text-xs text-white/70">
-              Conseil: sur iOS Safari, préférez l'import .zip (sélecteur de dossier limité).
-            </p>
-          )}
+    <Card className="mt-6 rounded-3xl border-gray-200 bg-white shadow-sm">
+      <CardHeader className="pb-4">
+        <CardTitle className="text-gray-800">Modèle ONNX & Classification</CardTitle>
+        <p className="text-sm text-gray-500 mt-1">
+          Configurez votre modèle de classification pour le pré-filtrage automatique des images.
+        </p>
+
+        {/* === BANDEAU DE STATUT GLOBAL === */}
+        <div className="mt-4 flex flex-wrap gap-2">
+          <StatusDot level={modelStatus} label={hasModel ? "Modèle chargé" : "Modèle manquant"} />
+          <StatusDot level={classesStatus} label={hasClasses ? `${settings.modelMeta!.classesOrder!.length} classes` : "Classes non définies"} />
+          <StatusDot level={mappingStatus} label={hasMapping ? "Mapping OK" : hasClasses ? "Mapping par défaut" : "Mapping absent"} />
+          <StatusDot level={calibrationStatus} label={hasCalibration ? `Seuil: ${settings.calibrationReport!.thresholdRecommended!.toFixed(2)}` : "Seuil par défaut (0.6)"} />
         </div>
 
-        {/* Mapping classes -> tags */}
-        {manifest ? (
-          <div className="space-y-2">
-            <Label>Mapping classes → tags</Label>
-            <div className="rounded-2xl border border-white/20 bg-white/5">
-              <div className="grid grid-cols-1 gap-2 p-3 sm:grid-cols-2 md:grid-cols-3">
-                {manifest.classes.map((cls) => (
-                  <div key={cls} className="space-y-1">
-                    <Label className="text-xs text-white/70">{cls}</Label>
-                    <Input
-                      value={mapping[cls] ?? ""}
-                      onChange={(e) => setMapping((m) => ({ ...m, [cls]: e.target.value }))} 
-                      placeholder={defaultTagForClass(cls) || "tag (vide = aucun)"} 
-                      className="bg-white/10 text-white placeholder:text-white/50"
-                    />
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="flex justify-end">
-              <Button onClick={saveMapping} className="backdrop-blur-sm">Enregistrer le mapping</Button>
-            </div>
+        {overallReady && (
+          <div className="mt-3 rounded-lg bg-green-50 border border-green-200 px-4 py-2 text-sm text-green-700 font-medium flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4" />
+            Prêt pour l'inférence — le pré-filtrage ONNX est opérationnel.
           </div>
-        ) : null}
+        )}
+        {!overallReady && (
+          <div className="mt-3 rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700 font-medium flex items-center gap-2">
+            <XCircle className="h-4 w-4" />
+            Configuration incomplète — chargez un modèle et définissez les classes pour activer le pré-filtrage.
+          </div>
+        )}
+      </CardHeader>
 
-        {/* Modèle ONNX */}
-        <div className="space-y-2">
-          <Label>Modèle YOLOv5‑cls (ONNX)</Label>
-          <div className="grid gap-4 md:grid-cols-3 items-start">
-            <div className="space-y-1">
-              <Label className="text-xs text-white/70">inputSize</Label>
-              <Input
-                type="number"
-                min={64}
-                step={1}
-                value={inputSize}
-                onChange={(e) => setInputSize(Number(e.target.value || 224))}
-                className="bg-white/10 text-white"
-              />
-            </div>
+      <CardContent className="space-y-6">
 
-            <div className="space-y-1">
-              <Label className="text-xs text-white/70">Ordre des classes (1 par ligne)</Label>
-              <textarea
-                value={classesOrderText}
-                onChange={(e) => setClassesOrderText(e.target.value)}
-                placeholder={manifest ? manifest.classes.join("\n") : "algae\nmajor_crack\n..."}
-                className="min-h-[180px] w-full rounded-md border border-white/20 bg-white/10 p-2 text-sm text-white placeholder:text-white/50"
-              />
-            </div>
+        {/* ============================================ */}
+        {/* SECTION 1 : MODÈLE ONNX (essentiel)         */}
+        {/* ============================================ */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${hasModel ? "bg-green-500" : "bg-red-400"}`} />
+            1. Charger le modèle ONNX
+          </h3>
 
-            <div className="space-y-3">
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
+            {/* Fichier local */}
+            <div className="space-y-2">
+              <Label className="text-gray-600 text-xs font-medium">Fichier local (.onnx)</Label>
               <Input
                 type="file"
                 accept={onnxAccept}
                 onChange={handleOnnxPick}
-                className="bg-white/10 text-white file:mr-2 file:rounded file:border-0 file:bg-white/20 file:px-3 file:py-2 file:text-white"
+                className="bg-white border-gray-300 text-gray-700 file:mr-2 file:rounded file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-blue-700 file:font-medium"
               />
-              {modelFileName ? (
+              {modelFileName && (
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-white/80">{modelFileName}</span>
-                  <Button variant="ghost" className="text-red-200 hover:bg-red-500/10" onClick={removeModel}>
-                    Supprimer
+                  <Badge variant="secondary" className="bg-green-100 text-green-700 border-green-200">{modelFileName}</Badge>
+                  <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 h-7 px-2" onClick={removeModel}>
+                    <Trash2 className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-              ) : (
-                <p className="text-xs text-white/70">Chargez un .onnx (≤ ~20 Mo recommandé).</p>
               )}
-              <div className="w-full space-y-2">
-                <Label className="text-xs text-white/70">Ou URL du modèle</Label>
+            </div>
+
+            {/* Ou URL */}
+            <div className="space-y-2">
+              <Label className="text-gray-600 text-xs font-medium">Ou URL distante</Label>
+              <div className="flex gap-2">
                 <Input
                   value={onnxUrl}
                   onChange={(e) => setOnnxUrl(e.target.value)}
-                  placeholder="https://…/model.onnx ou data:application/octet-stream;base64,..."
-                  className="bg-white/10 text-white placeholder:text-white/60"
+                  placeholder="https://…/model.onnx"
+                  className="bg-white border-gray-300 text-gray-700 placeholder:text-gray-400 flex-1"
                 />
-                <div className="flex gap-2">
-                  <Button variant="outline" onClick={setModelFromUrl} className="border-white/30 bg-transparent text-white hover:bg-white/10">
-                    Utiliser l'URL
+                <Button variant="outline" onClick={setModelFromUrl} className="border-gray-300 text-gray-700 hover:bg-gray-100 shrink-0">
+                  Appliquer
+                </Button>
+                {onnxUrl && (
+                  <Button variant="ghost" onClick={clearModelSelection} className="text-gray-500 hover:bg-gray-100 shrink-0">
+                    Effacer
                   </Button>
-                  {onnxUrl ? (
-                    <Button variant="ghost" onClick={clearModelSelection} className="text-white/90 hover:bg-white/10">
-                      Effacer l'URL
-                    </Button>
-                  ) : null}
-                </div>
+                )}
               </div>
             </div>
+          </div>
+        </div>
 
-            <div className="md:col-span-2 flex flex-wrap gap-2">
-              <Button onClick={saveModelMeta} variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10">
+        {/* ============================================ */}
+        {/* SECTION 2 : MÉTADONNÉES DU MODÈLE            */}
+        {/* ============================================ */}
+        <div className="space-y-4">
+          <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${hasClasses ? "bg-green-500" : "bg-red-400"}`} />
+            2. Métadonnées du modèle
+          </h3>
+
+          <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
+            <div className="grid gap-4 md:grid-cols-[140px,1fr]">
+              <div className="space-y-1">
+                <Label className="text-gray-600 text-xs font-medium">Input size</Label>
+                <Input
+                  type="number"
+                  min={64}
+                  step={1}
+                  value={inputSize}
+                  onChange={(e) => setInputSize(Number(e.target.value || 224))}
+                  className="bg-white border-gray-300 text-gray-700"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-gray-600 text-xs font-medium">Ordre des classes (1 par ligne)</Label>
+                <textarea
+                  value={classesOrderText}
+                  onChange={(e) => setClassesOrderText(e.target.value)}
+                  placeholder={"algae\nmajor_crack\nminor_crack\npeeling\nplain\nspalling\nstain"}
+                  className="min-h-[140px] w-full rounded-md border border-gray-300 bg-white p-2 text-sm text-gray-700 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-200 focus:border-blue-400"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button onClick={saveModelMeta} className="bg-blue-600 hover:bg-blue-700 text-white">
                 Enregistrer les métadonnées
-              </Button>
-              <Button onClick={verifyCoherence} variant="outline" className="border-white/30 bg-transparent text-white hover:bg-white/10">
-                Vérifier cohérence
               </Button>
             </div>
           </div>
         </div>
 
-        {/* Calibration */}
-        <div className="space-y-2">
-          <Label>Calibration automatique (val)</Label>
-          <div className="rounded-2xl border border-white/20 bg-white/5 p-3">
-            <div className="grid gap-3 sm:grid-cols-[220px,1fr] sm:items-end">
-              <div className="space-y-1">
-                <Label className="text-xs text-white/70">Échantillons par classe (val)</Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={perClass}
-                  onChange={(e) => setPerClass(Number(e.target.value || 10))}
-                  className="bg-white/10 text-white"
-                />
+        {/* ============================================ */}
+        {/* SECTION 3 : MAPPING CLASSES → TAGS            */}
+        {/* ============================================ */}
+        {hasClasses && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+              <span className={`w-2 h-2 rounded-full ${hasMapping ? "bg-green-500" : "bg-amber-400"}`} />
+              3. Mapping classes → tags
+            </h3>
+
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                {(settings.modelMeta?.classesOrder || []).map((cls) => (
+                  <div key={cls} className="space-y-1">
+                    <Label className="text-xs text-gray-500 font-medium">{cls}</Label>
+                    <Input
+                      value={mapping[cls] ?? ""}
+                      onChange={(e) => setMapping((m) => ({ ...m, [cls]: e.target.value }))}
+                      placeholder={defaultTagForClass(cls) || "tag (vide = aucun)"}
+                      className="bg-white border-gray-300 text-gray-700 placeholder:text-gray-400"
+                    />
+                  </div>
+                ))}
               </div>
-              <div className="flex flex-wrap items-end gap-2">
-                <Button 
-                  onClick={handleCalibrate} 
-                  disabled={isCalibrating || (!modelFileName && !onnxUrl.trim())}
-                  className="backdrop-blur-sm"
-                  title={!modelFileName && !onnxUrl.trim() ? "Définissez un modèle (fichier ou URL) pour activer la calibration" : undefined}
-                >
-                  {isCalibrating ? "Calibration..." : "Calibrer automatiquement"}
+              <div className="flex justify-end mt-3">
+                <Button onClick={saveMapping} className="bg-blue-600 hover:bg-blue-700 text-white">
+                  Enregistrer le mapping
                 </Button>
               </div>
             </div>
-            {calibSummary ? (
-              <pre className="mt-3 whitespace-pre-wrap rounded-xl bg-black/20 p-3 text-xs text-white/80">{calibSummary}</pre>
-            ) : null}
           </div>
-        </div>
+        )}
 
-        {/* Test Manuel Rapide */}
-        {(modelFileName || onnxUrl) && (
-          <div className="space-y-2 pt-4 border-t border-white/10">
-            <Label>Test de classification rapide</Label>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div>
+        {/* ============================================ */}
+        {/* SECTION 4 : TEST RAPIDE                       */}
+        {/* ============================================ */}
+        {hasModel && hasClasses && (
+          <div className="space-y-4">
+            <h3 className="text-sm font-semibold text-gray-700 uppercase tracking-wider flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-blue-400" />
+              4. Test rapide
+            </h3>
+
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <div className="grid gap-4 md:grid-cols-2">
                 <Dropzone
                   accept="image/*"
                   multiple={false}
                   onFiles={handleTestFile}
                   label="Tester une image"
                   hint="Glissez ou cliquez"
-                  className="h-32"
+                  className="h-28"
                 />
-              </div>
-              {testImage && (
-                <div className="flex gap-4 rounded-xl border border-white/10 bg-white/5 p-3">
-                  <img src={testImage} alt="Test" className="h-24 w-24 rounded-lg object-cover" />
-                  <div className="space-y-1">
-                    <p className="text-sm font-bold">Résultat :</p>
-                    {testResult ? (
-                      <>
-                        <Badge variant={testResult.label === "plain" ? "secondary" : "destructive"}>
-                          {testResult.label}
-                        </Badge>
-                        <p className="text-xs text-white/70">Confiance: {(testResult.score * 100).toFixed(1)}%</p>
-                      </>
-                    ) : (
-                      <p className="text-xs text-white/50 animate-pulse">Analyse...</p>
-                    )}
+                {testImage && (
+                  <div className="flex gap-4 rounded-xl border border-gray-200 bg-white p-3">
+                    <img src={testImage} alt="Test" className="h-20 w-20 rounded-lg object-cover" />
+                    <div className="space-y-1">
+                      <p className="text-sm font-bold text-gray-700">Résultat :</p>
+                      {testResult ? (
+                        <>
+                          <Badge variant={testResult.label === "plain" ? "secondary" : "destructive"}>
+                            {testResult.label}
+                          </Badge>
+                          <p className="text-xs text-gray-500">Confiance: {(testResult.score * 100).toFixed(1)}%</p>
+                        </>
+                      ) : (
+                        <p className="text-xs text-gray-400 animate-pulse">Analyse...</p>
+                      )}
+                    </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           </div>
         )}
+
+        {/* ============================================ */}
+        {/* SECTION AVANCÉE : DATASET & CALIBRATION       */}
+        {/* ============================================ */}
+        <Collapsible open={advancedOpen} onOpenChange={setAdvancedOpen}>
+          <CollapsibleTrigger asChild>
+            <button className="flex items-center gap-2 text-sm font-semibold text-gray-500 uppercase tracking-wider hover:text-gray-700 transition-colors w-full py-2 border-t border-gray-200 mt-2">
+              {advancedOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+              <span className={`w-2 h-2 rounded-full ${hasCalibration ? "bg-green-500" : "bg-amber-400"}`} />
+              Avancé — Dataset & Calibration
+              {!hasCalibration && <span className="text-xs font-normal text-amber-500 ml-2">(optionnel)</span>}
+            </button>
+          </CollapsibleTrigger>
+
+          <CollapsibleContent className="space-y-5 pt-4">
+            {/* Dataset import */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Dataset de calibration</h4>
+              <p className="text-xs text-gray-400">
+                Le dataset sert uniquement à calibrer le seuil de confiance. Une fois calibré, il n'est plus nécessaire.
+              </p>
+
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+                <div className="flex gap-3 items-end">
+                  <div className="flex-1 space-y-1">
+                    <Label className="text-gray-600 text-xs font-medium">Nom du dataset</Label>
+                    <Input
+                      value={datasetName}
+                      onChange={(e) => setDatasetName(e.target.value)}
+                      placeholder="ex: Inspection v1"
+                      className="bg-white border-gray-300 text-gray-700 placeholder:text-gray-400"
+                    />
+                  </div>
+                  <Input
+                    type="file"
+                    accept={zipAccept}
+                    onChange={(e) => handleZipFiles(e.target.files)}
+                    className="bg-white border-gray-300 text-gray-700 file:mr-2 file:rounded file:border-0 file:bg-blue-50 file:px-3 file:py-1.5 file:text-blue-700 file:font-medium flex-1"
+                  />
+                </div>
+
+                {manifest ? (
+                  <div className="rounded-lg border border-gray-200 bg-white p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <StatusDot level="ok" label={`${manifest.name} — ${manifest.classes.length} classes, ${totalImages} images`} />
+                      </div>
+                      <Button variant="ghost" size="sm" className="text-red-500 hover:bg-red-50 h-7" onClick={removeDataset}>
+                        <Trash2 className="h-3.5 w-3.5 mr-1" /> Supprimer
+                      </Button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {manifest.classes.map((c) => (
+                        <Badge key={c} variant="secondary" className="bg-gray-100 text-gray-600 border-gray-200 text-xs">{c}</Badge>
+                      ))}
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-3 text-xs">
+                      {(["train", "val", "test"] as const).map((split) => (
+                        <div key={split} className="rounded-lg border border-gray-100 bg-gray-50 p-2">
+                          <p className="text-gray-400 font-semibold uppercase text-[10px] mb-1">{split}</p>
+                          {Object.entries(manifest.stats[split]).map(([c, n]) => (
+                            <div key={`${split}-${c}`} className="flex justify-between text-gray-600">
+                              <span>{c}</span><span className="font-medium">{n}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic">Aucun dataset chargé.</p>
+                )}
+              </div>
+            </div>
+
+            {/* Vérification cohérence */}
+            {manifest && hasClasses && (
+              <div className="flex justify-start">
+                <Button variant="outline" onClick={verifyCoherence} className="border-gray-300 text-gray-700 hover:bg-gray-100">
+                  Vérifier cohérence dataset ↔ modèle
+                </Button>
+              </div>
+            )}
+
+            {/* Calibration */}
+            <div className="space-y-3">
+              <h4 className="text-xs font-semibold text-gray-600 uppercase tracking-wider">Calibration automatique du seuil</h4>
+              <p className="text-xs text-gray-400">
+                Utilise le split <strong>val</strong> du dataset pour trouver le seuil optimal (F1 binaire : défaut vs plain).
+              </p>
+
+              <div className="rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="flex flex-wrap items-end gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-gray-600 text-xs font-medium">Échantillons / classe</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={perClass}
+                      onChange={(e) => setPerClass(Number(e.target.value || 10))}
+                      className="bg-white border-gray-300 text-gray-700 w-28"
+                    />
+                  </div>
+                  <Button
+                    onClick={handleCalibrate}
+                    disabled={isCalibrating || !hasModel || !hasDataset}
+                    className="bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+                  >
+                    {isCalibrating ? "Calibration..." : "Calibrer automatiquement"}
+                  </Button>
+                </div>
+                {!hasModel && <p className="text-xs text-red-400 mt-2">⚠ Chargez un modèle ONNX d'abord.</p>}
+                {hasModel && !hasDataset && <p className="text-xs text-amber-500 mt-2">⚠ Chargez un dataset pour calibrer. Sinon le seuil par défaut (0.6) est utilisé.</p>}
+                {calibSummary && (
+                  <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-white border border-gray-200 p-3 text-xs text-gray-600">{calibSummary}</pre>
+                )}
+                {!calibSummary && hasCalibration && (
+                  <div className="mt-3 rounded-lg bg-green-50 border border-green-200 p-3 text-xs text-green-700">
+                    Dernière calibration : {settings.calibrationReport!.date ? new Date(settings.calibrationReport!.date).toLocaleString() : "—"} — {settings.calibrationReport!.metricsSummary || ""}
+                  </div>
+                )}
+              </div>
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
-      <CardFooter className="justify-end">
-        {isImporting ? (
-          <Badge variant="secondary">Import en cours…</Badge>
-        ) : manifest ? (
-          <Badge variant="secondary">Prêt</Badge>
-        ) : (
-          <Badge variant="outline">En attente de dataset</Badge>
-        )}
-      </CardFooter>
     </Card>
   );
 };
