@@ -102,15 +102,23 @@ export function getRunsByProjectId(projectId: string): Run[] {
 
 // In-memory cache for runs (refreshed by polling)
 let _runsCache: Map<string, { runs: Run[]; ts: number }> = new Map();
-const CACHE_TTL = 800; // ms
+const CACHE_TTL = 2000; // ms
+
+// Guard against concurrent refreshes per project
+let _refreshInFlight: Map<string, Promise<void>> = new Map();
 
 function getCachedRuns(projectId: string): Run[] {
   const cached = _runsCache.get(projectId);
   if (cached && Date.now() - cached.ts < CACHE_TTL) {
     return cached.runs;
   }
-  // Trigger async refresh (non-blocking)
-  refreshRunsCache(projectId);
+  // Trigger async refresh (non-blocking) — only if not already in flight
+  if (!_refreshInFlight.has(projectId)) {
+    const p = refreshRunsCache(projectId).finally(() => {
+      _refreshInFlight.delete(projectId);
+    });
+    _refreshInFlight.set(projectId, p);
+  }
   return cached?.runs || [];
 }
 
@@ -130,11 +138,22 @@ async function refreshRunsCache(projectId: string) {
     const runs = (data || []).map(mapDbRun);
 
     // Also check localStorage for legacy runs not yet migrated
+    const supabaseIds = new Set(runs.map((r) => r.id));
     const localRuns = readLocalRuns().filter(
-      (r) => r.projectId === projectId && !runs.some((sr) => sr.id === r.id)
+      (r) => r.projectId === projectId && !supabaseIds.has(r.id)
     );
 
-    const merged = [...runs, ...localRuns].sort(
+    // Deduplicate by ID (safety net)
+    const seen = new Set<string>();
+    const merged: Run[] = [];
+    for (const r of [...runs, ...localRuns]) {
+      if (!seen.has(r.id)) {
+        seen.add(r.id);
+        merged.push(r);
+      }
+    }
+
+    merged.sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
 
@@ -250,12 +269,8 @@ export async function createPendingRun(input: CreateRunInput): Promise<Run> {
     items,
   };
 
-  // Update cache immediately
-  const cached = _runsCache.get(input.projectId);
-  if (cached) {
-    cached.runs.unshift(run);
-    cached.ts = Date.now();
-  }
+  // Invalidate cache so next poll picks up the new run from Supabase
+  _runsCache.delete(input.projectId);
 
   return run;
 }
