@@ -145,7 +145,7 @@ export async function exportRunToDocx(run: Run, images: ProjectImage[]) {
       spacing: { after: 200 },
       children: [
         new TextRun({
-          text: "ISOEDRE",
+          text: "PIA VISION",
           bold: true,
           size: 72,
           color: BLUE_DARK,
@@ -637,6 +637,6 @@ export async function exportRunToDocx(run: Run, images: ProjectImage[]) {
   });
 
   const blob = await Packer.toBlob(doc);
-  const filename = `Rapport_ISOEDRE_${project?.title || "Projet"}.docx`;
+  const filename = `Rapport_PIA-VISION_${project?.title || "Projet"}.docx`;
   saveAs(blob, filename);
 }
