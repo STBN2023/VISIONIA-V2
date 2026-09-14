@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Component, useMemo, useState, type ReactNode } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -75,6 +75,69 @@ function findImageForRef(ref: string | string[] | undefined, lookup: ImageLookup
   return null;
 }
 
+/**
+ * Rend affichable n'importe quelle valeur venue du LLM.
+ *
+ * Le rapport est du JSON produit par le modèle : rien ne garantit qu'un champ
+ * attendu comme texte en soit un. Un `impact_energetique` renvoyé sous la forme
+ * { niveau, justification } faisait lever à React l'erreur #31 et laissait la
+ * page entièrement blanche — pas seulement la section fautive.
+ */
+function asText(v: unknown): string {
+  if (v === null || v === undefined) return "";
+  if (typeof v === "string") return v;
+  if (typeof v === "number" || typeof v === "boolean") return String(v);
+  if (Array.isArray(v)) return v.map(asText).filter(Boolean).join(" · ");
+  if (typeof v === "object") {
+    // On aplatit plutôt que de perdre l'information : « élevé — façade exposée ».
+    return Object.values(v as Record<string, unknown>).map(asText).filter(Boolean).join(" — ");
+  }
+  return String(v);
+}
+
+/** Idem pour les listes : le modèle renvoie parfois un objet ou une chaîne seule. */
+function asArray(v: unknown): unknown[] {
+  if (Array.isArray(v)) return v;
+  if (v === null || v === undefined || v === "") return [];
+  return [v];
+}
+
+/**
+ * Dernier filet : une structure inattendue dégrade en texte brut au lieu de
+ * vider la page. asText() couvre les cas connus, ceci couvre les autres.
+ */
+class ReportErrorBoundary extends Component<
+  { fallbackText: string; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error("[RunsTab] Mise en forme du rapport impossible", error);
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <div className="space-y-2">
+          <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            Ce rapport n'a pas pu être mis en forme : le modèle a renvoyé une structure
+            inattendue. Le texte brut est affiché ci-dessous.
+          </p>
+          <pre className="whitespace-pre-wrap rounded-xl border border-gray-200 bg-gray-50 p-3 font-mono text-sm text-gray-700">
+            {this.props.fallbackText}
+          </pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // Ajout d'un composant pour afficher le JSON structuré par lots
 const StructuredAnalysisView = ({ text, imageLookup }: { text: string; imageLookup?: ImageLookup }) => {
   const parsedData = useMemo(() => {
@@ -123,7 +186,7 @@ const StructuredAnalysisView = ({ text, imageLookup }: { text: string; imageLook
 
   const data = parsedData;
   const hasContext = !!data.contexte_projet;
-  const lots = data.lots || [];
+  const lots = asArray(data.lots);
 
   return (
     <div className="space-y-6 mt-2">
@@ -137,25 +200,25 @@ const StructuredAnalysisView = ({ text, imageLookup }: { text: string; imageLook
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-[12px]">
             <div className="bg-white p-2 rounded-lg border border-blue-100">
               <span className="text-gray-500 block mb-0.5 text-[10px] uppercase font-semibold">Intervention</span>
-              <span className="text-gray-800 font-bold">{data.contexte_projet.type_intervention}</span>
+              <span className="text-gray-800 font-bold">{asText(data.contexte_projet.type_intervention)}</span>
             </div>
             <div className="bg-white p-2 rounded-lg border border-blue-100">
               <span className="text-gray-500 block mb-0.5 text-[10px] uppercase font-semibold">Phase</span>
-              <span className="text-gray-800 font-bold">{data.contexte_projet.phase}</span>
+              <span className="text-gray-800 font-bold">{asText(data.contexte_projet.phase)}</span>
             </div>
             <div className="bg-white p-2 rounded-lg border border-blue-100">
               <span className="text-gray-500 block mb-0.5 text-[10px] uppercase font-semibold">Date</span>
-              <span className="text-gray-800 font-bold">{data.contexte_projet.date_analysis || data.contexte_projet.date_analyse}</span>
+              <span className="text-gray-800 font-bold">{asText(data.contexte_projet.date_analysis || data.contexte_projet.date_analyse)}</span>
             </div>
             <div className="bg-white p-2 rounded-lg border border-blue-100">
               <span className="text-gray-500 block mb-0.5 text-[10px] uppercase font-semibold">DPE Initial</span>
-              <span className="text-gray-800 font-bold">{data.contexte_projet.dpe_initial || "N/A"}</span>
+              <span className="text-gray-800 font-bold">{asText(data.contexte_projet.dpe_initial) || "N/A"}</span>
             </div>
           </div>
           {data.contexte_projet.reserve_generale && (
             <div className="mt-4 pt-3 border-t border-blue-200">
               <p className="text-[11px] text-gray-600 italic leading-relaxed">
-                <span className="font-bold text-blue-700 not-italic mr-1">RÉSERVE GÉNÉRALE :</span> {data.contexte_projet.reserve_generale}
+                <span className="font-bold text-blue-700 not-italic mr-1">RÉSERVE GÉNÉRALE :</span> {asText(data.contexte_projet.reserve_generale)}
               </p>
             </div>
           )}
@@ -164,7 +227,7 @@ const StructuredAnalysisView = ({ text, imageLookup }: { text: string; imageLook
 
       {/* LISTE DES LOTS ET ANOMALIES */}
       {lots.map((lot: any, idx: number) => {
-        let lotName = lot.lot || "Général";
+        let lotName = asText(lot.lot) || "Général";
         const displayLot = lotName.toUpperCase().startsWith("LOT") ? lotName : `LOT : ${lotName}`;
         
         return (
@@ -172,11 +235,11 @@ const StructuredAnalysisView = ({ text, imageLookup }: { text: string; imageLook
             <div className="bg-gray-100 px-5 py-3 border-b border-gray-200 flex items-center justify-between">
               <h3 className="font-black text-gray-800 uppercase tracking-widest text-sm">{displayLot}</h3>
               <Badge variant="secondary" className="bg-gray-200 text-gray-700 border-gray-300 font-bold px-3 py-1">
-                {lot.anomalies?.length || 0} POINT(S) D'ATTENTION
+                {asArray(lot.anomalies).length} POINT(S) D'ATTENTION
               </Badge>
             </div>
             <div className="divide-y divide-gray-100">
-              {lot.anomalies?.map((ano: any, aIdx: number) => {
+              {asArray(lot.anomalies).map((ano: any, aIdx: number) => {
                 // Find matching image for this anomaly
                 const matchedImage = imageLookup ? findImageForRef(ano.image_ref, imageLookup) : null;
 
@@ -185,12 +248,12 @@ const StructuredAnalysisView = ({ text, imageLookup }: { text: string; imageLook
                     <div className="flex justify-between items-start gap-4">
                       <div className="space-y-1.5 flex-1">
                         <div className="flex flex-wrap items-center gap-3">
-                          <span className="text-[10px] font-mono bg-blue-100 px-2 py-0.5 rounded border border-blue-200 text-blue-700 font-bold">{ano.id}</span>
+                          <span className="text-[10px] font-mono bg-blue-100 px-2 py-0.5 rounded border border-blue-200 text-blue-700 font-bold">{asText(ano.id)}</span>
                           <span className="text-[11px] text-gray-500 font-medium">IMAGE: {Array.isArray(ano.image_ref) ? ano.image_ref.join(", ") : ano.image_ref}</span>
                           <span className="text-[11px] text-gray-400">•</span>
-                          <span className="text-[11px] text-gray-500 font-medium">LOCALISATION: {ano.localisation}</span>
+                          <span className="text-[11px] text-gray-500 font-medium">LOCALISATION: {asText(ano.localisation)}</span>
                         </div>
-                        <p className="text-base text-gray-900 font-bold leading-snug">{ano.description}</p>
+                        <p className="text-base text-gray-900 font-bold leading-snug">{asText(ano.description)}</p>
                       </div>
                       <div className="flex flex-col gap-2 items-end shrink-0">
                         {ano.impact_energetique && (
@@ -199,12 +262,12 @@ const StructuredAnalysisView = ({ text, imageLookup }: { text: string; imageLook
                             ? 'bg-red-100 text-red-700 border-red-300' 
                             : 'bg-orange-100 text-orange-700 border-orange-300'
                           }`}>
-                            {ano.impact_energetique}
+                            {asText(ano.impact_energetique)}
                           </span>
                         )}
                         {ano.priorite_intervention && (
                           <span className="text-[10px] font-bold text-gray-500 bg-gray-100 px-2 py-0.5 rounded border border-gray-200 uppercase tracking-tighter">
-                            {ano.priorite_intervention}
+                            {asText(ano.priorite_intervention)}
                           </span>
                         )}
                       </div>
@@ -231,11 +294,11 @@ const StructuredAnalysisView = ({ text, imageLookup }: { text: string; imageLook
                     <div className="grid gap-6 md:grid-cols-2">
                       <div className="space-y-2 bg-gray-50 p-3 rounded-xl border border-gray-200">
                         <div className="text-[10px] uppercase font-black text-gray-400 tracking-wider">Analyse Technique</div>
-                        <p className="text-sm text-gray-700 leading-relaxed">{ano.analyse_technique}</p>
+                        <p className="text-sm text-gray-700 leading-relaxed">{asText(ano.analyse_technique)}</p>
                       </div>
                       <div className="space-y-2 bg-red-50 p-3 rounded-xl border border-red-200">
                         <div className="text-[10px] uppercase font-black text-red-400 tracking-wider">Risques & Durabilité</div>
-                        <p className="text-sm text-red-700 italic leading-relaxed">{ano.risques_associes}</p>
+                        <p className="text-sm text-red-700 italic leading-relaxed">{asText(ano.risques_associes)}</p>
                       </div>
                     </div>
                     
@@ -245,21 +308,21 @@ const StructuredAnalysisView = ({ text, imageLookup }: { text: string; imageLook
                         Prescription CCTP (Action MOE)
                       </div>
                       <p className="text-sm text-blue-900 font-bold leading-relaxed">
-                        {ano.prescription_cctp}
+                        {asText(ano.prescription_cctp)}
                       </p>
                     </div>
 
                     <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
                       <div className="flex flex-wrap gap-2">
-                        {ano.references_normatives?.map((ref: string, rIdx: number) => (
+                        {asArray(ano.references_normatives).map((ref: unknown, rIdx: number) => (
                           <span key={rIdx} className="text-[10px] bg-gray-100 px-3 py-1 rounded border border-gray-300 text-gray-700 font-bold">
-                            {ref}
+                            {asText(ref)}
                           </span>
                         ))}
                       </div>
                       {ano.estimation_budgetaire && (
                         <div className="text-[11px] font-black text-green-700 bg-green-50 px-3 py-1.5 rounded-lg border-2 border-green-300">
-                          BUDGET EST. : {ano.estimation_budgetaire}
+                          BUDGET EST. : {asText(ano.estimation_budgetaire)}
                         </div>
                       )}
                     </div>
@@ -282,10 +345,10 @@ const StructuredAnalysisView = ({ text, imageLookup }: { text: string; imageLook
             <div className="space-y-3 bg-white p-4 rounded-2xl border border-gray-200">
               <div className="text-[11px] uppercase font-black text-gray-400 tracking-widest border-b border-gray-200 pb-2">Points Critiques</div>
               <ul className="space-y-2">
-                {data.synthese_energetique.points_critiques?.map((p: string, i: number) => (
+                {asArray(data.synthese_energetique.points_critiques).map((p: unknown, i: number) => (
                   <li key={i} className="text-xs text-gray-700 flex gap-2">
                     <span className="text-red-500 font-bold">•</span>
-                    {p}
+                    {asText(p)}
                   </li>
                 ))}
               </ul>
@@ -293,10 +356,10 @@ const StructuredAnalysisView = ({ text, imageLookup }: { text: string; imageLook
             <div className="space-y-3 bg-white p-4 rounded-2xl border border-gray-200">
               <div className="text-[11px] uppercase font-black text-gray-400 tracking-widest border-b border-gray-200 pb-2">Recommandations</div>
               <ul className="space-y-2">
-                {data.synthese_energetique.recommandations_globales?.map((r: string, i: number) => (
+                {asArray(data.synthese_energetique.recommandations_globales).map((r: unknown, i: number) => (
                   <li key={i} className="text-xs text-gray-700 flex gap-2">
                     <span className="text-green-600 font-bold">→</span>
-                    {r}
+                    {asText(r)}
                   </li>
                 ))}
               </ul>
@@ -306,7 +369,7 @@ const StructuredAnalysisView = ({ text, imageLookup }: { text: string; imageLook
             <div className="pt-4 mt-2 border-t-2 border-green-200 flex justify-between items-center px-2">
               <span className="text-sm text-gray-600 font-bold">IMPACT DPE ESTIMÉ :</span>
               <span className="text-xl font-black text-green-700 bg-white px-4 py-1 rounded-full border border-green-300">
-                {data.synthese_energetique.impact_dpe_estime}
+                {asText(data.synthese_energetique.impact_dpe_estime)}
               </span>
             </div>
           )}
@@ -425,7 +488,7 @@ const RunsTab = ({ runs, images }: Props) => {
                                   </div>
                                 </div>
                                 {img ? (<AnomalyPreview src={img.dataUrl} alt={img.name} boxes={it.boxes || []} className="mb-2" height={200} />) : null}
-                                {it.outputText ? (<StructuredAnalysisView text={it.outputText} imageLookup={lookup} />) : it.error ? (<p className="text-sm text-red-600">{it.error}</p>) : (<p className="text-sm text-gray-400">Traitement en cours…</p>)}
+                                {it.outputText ? (<ReportErrorBoundary fallbackText={it.outputText}><StructuredAnalysisView text={it.outputText} imageLookup={lookup} /></ReportErrorBoundary>) : it.error ? (<p className="text-sm text-red-600">{it.error}</p>) : (<p className="text-sm text-gray-400">Traitement en cours…</p>)}
                               </div>
                             );
                           })}
@@ -473,7 +536,7 @@ const RunsTab = ({ runs, images }: Props) => {
                       <div className="p-3 space-y-4">
                         {/* Rapport structuré avec images intégrées inline */}
                         {run.outputText ? (
-                          <StructuredAnalysisView text={run.outputText} imageLookup={lookup} />
+                          <ReportErrorBoundary fallbackText={run.outputText}><StructuredAnalysisView text={run.outputText} imageLookup={lookup} /></ReportErrorBoundary>
                         ) : run.error ? (
                           <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
                             Erreur: {run.error}
