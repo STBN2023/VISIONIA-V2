@@ -43,9 +43,6 @@ export default function Login() {
             </CardDescription>
           </CardHeader>
           <CardContent className="pt-4 px-8 pb-8">
-            <p className="mb-3 text-[10px] text-white/30 text-center tracking-wide">
-              Accès réservé @groupe-isoedre.fr
-            </p>
             <Auth
               supabaseClient={supabase}
               appearance={{

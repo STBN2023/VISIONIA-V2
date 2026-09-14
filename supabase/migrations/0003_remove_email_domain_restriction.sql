@@ -1,0 +1,43 @@
+-- Retrait de la restriction de domaine à l'inscription.
+--
+-- Contexte
+-- --------
+-- Un déclencheur `enforce_email_domain` sur `auth.users` appelait
+-- `public.check_email_domain()`, qui levait une exception (SQLSTATE P0001)
+-- pour toute adresse ne se terminant pas par @groupe-isoedre.fr :
+--
+--     Seules les adresses @groupe-isoedre.fr sont autorisées.
+--
+-- Supabase enveloppait cette exception dans un message générique
+-- « Database error creating new user », qui ne disait rien de la cause réelle.
+--
+-- Le projet n'étant plus rattaché au GROUPE ISOEDRE, la restriction n'a plus
+-- lieu d'être. La mention « Accès réservé @groupe-isoedre.fr » a été retirée
+-- de la page de connexion dans le même mouvement.
+--
+-- Ce garde-fou n'avait jamais été versionné : il n'existait que dans la base.
+-- On enregistre donc ici à la fois sa suppression et ce qu'il faisait, pour
+-- que l'historique reste lisible.
+--
+-- Portée
+-- ------
+-- Seul le déclencheur est supprimé. La fonction `check_email_domain()` est
+-- laissée en place, inutilisée : la suppression reste ainsi réversible en une
+-- instruction (voir plus bas), sans avoir à réécrire la fonction.
+--
+-- Le déclencheur `on_auth_user_created` (fonction `handle_new_user()`), qui
+-- crée la ligne dans `public.profiles`, n'est pas touché. Il est indispensable :
+-- l'application ne crée jamais de profil elle-même, elle ne fait que des
+-- UPDATE. Le supprimer priverait tout nouveau compte de son profil.
+--
+-- Conséquence
+-- -----------
+-- L'inscription devient ouverte à toute adresse. Pour la restreindre à nouveau,
+-- soit désactiver l'inscription publique (Authentication > Providers > Email),
+-- soit recréer le déclencheur :
+--
+--     create trigger enforce_email_domain
+--       before insert on auth.users
+--       for each row execute function public.check_email_domain();
+
+drop trigger if exists enforce_email_domain on auth.users;
