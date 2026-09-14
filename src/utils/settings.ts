@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { showError } from "@/utils/toast";
 
 export type APIProvider = "openai" | "anthropic" | "google" | "azure";
 export type BackgroundMode = "image" | "color";
@@ -95,26 +96,84 @@ export function getSettings(): Settings {
   }
 }
 
+/**
+ * Horodatage réellement persisté, lu sur le JSON brut.
+ *
+ * getSettings() complète les champs manquants avec getDefaultSettings(), dont
+ * l'updatedAt vaut "maintenant" — s'en servir pour arbitrer local/cloud ferait
+ * systématiquement gagner le local. On lit donc la valeur stockée, ou rien.
+ */
+function getStoredUpdatedAt(): string | undefined {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return undefined;
+    const parsed = JSON.parse(raw);
+    return typeof parsed?.updatedAt === "string" ? parsed.updatedAt : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** true si `a` est strictement postérieur à `b`. Un local sans horodatage ne gagne jamais. */
+function isNewer(a?: string, b?: string): boolean {
+  const ta = a ? Date.parse(a) : NaN;
+  const tb = b ? Date.parse(b) : NaN;
+  if (Number.isNaN(ta)) return false;
+  if (Number.isNaN(tb)) return true;
+  return ta > tb;
+}
+
 export function saveSettings(patch: Partial<Settings>): Settings {
   const current = getSettings();
-  const next = { ...current, ...patch };
+  // Horodater chaque écriture : c'est ce qui permet à loadSettingsFromCloud()
+  // de savoir laquelle des deux copies fait foi.
+  const next = { ...current, ...patch, updatedAt: new Date().toISOString() };
   localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  
+
   // Sauvegarde asynchrone dans Supabase si l'utilisateur est connecté
-  syncSettingsToCloud(next);
-  
+  void syncSettingsToCloud(next);
+
   return next;
 }
 
-async function syncSettingsToCloud(settings: Settings) {
+// Évite d'empiler les toasts quand plusieurs réglages échouent d'affilée.
+let syncErrorNotifiedAt = 0;
+const SYNC_ERROR_QUIET_MS = 30_000;
+
+/**
+ * Pousse les réglages vers Supabase, et le dit quand ça rate.
+ *
+ * Un échec avalé en silence ne se voyait qu'à retardement : la copie cloud
+ * restait en arrière, puis le prochain loadSettingsFromCloud() écrasait le
+ * réglage local. C'est ainsi qu'un modelMeta pouvait disparaître sans un mot.
+ *
+ * @returns true si l'écriture a abouti.
+ */
+async function syncSettingsToCloud(settings: Settings): Promise<boolean> {
   // Use getSession (cached) instead of getUser (network call) for background sync
   const { data: { session } } = await supabase.auth.getSession();
-  if (!session?.user) return;
+  if (!session?.user) return false; // non connecté : rien à synchroniser, rien à signaler
 
-  await supabase
+  const { error } = await supabase
     .from('profiles')
     .update({ settings })
     .eq('id', session.user.id);
+
+  if (error) {
+    console.error("Échec de la sauvegarde des réglages sur Supabase", error);
+    const now = Date.now();
+    if (now - syncErrorNotifiedAt > SYNC_ERROR_QUIET_MS) {
+      syncErrorNotifiedAt = now;
+      showError(
+        `Réglages non sauvegardés en ligne (${error.message}). ` +
+        `Ils restent actifs sur cet appareil, mais ne suivront pas votre compte.`,
+      );
+    }
+    return false;
+  }
+
+  syncErrorNotifiedAt = 0;
+  return true;
 }
 
 export async function loadSettingsFromCloud(): Promise<Settings> {
@@ -128,10 +187,28 @@ export async function loadSettingsFromCloud(): Promise<Settings> {
     .eq('id', session.user.id)
     .single();
 
-  if (!error && data?.settings) {
-    const cloudSettings = data.settings as Settings;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(cloudSettings));
-    return cloudSettings;
+  if (error || !data?.settings) {
+    if (error) console.error("Lecture des réglages depuis Supabase impossible", error);
+    return getSettings();
   }
-  return getSettings();
+
+  const cloudSettings = data.settings as Settings;
+
+  // Le local est plus récent que le cloud : une écriture n'est pas passée.
+  // Écraser ici ferait disparaître un réglage que l'utilisateur vient de faire,
+  // sans aucun signe. On garde le local et on retente de le pousser.
+  const localUpdatedAt = getStoredUpdatedAt();
+  if (isNewer(localUpdatedAt, cloudSettings.updatedAt)) {
+    console.warn(
+      "Réglages locaux plus récents que le cloud — conservation du local, nouvelle tentative de synchronisation.",
+      { localUpdatedAt, cloudUpdatedAt: cloudSettings.updatedAt },
+    );
+    const local = getSettings();
+    void syncSettingsToCloud(local);
+    return local;
+  }
+
+  const merged = { ...getDefaultSettings(), ...cloudSettings };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(merged));
+  return merged;
 }
