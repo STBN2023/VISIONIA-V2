@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { showSuccess, showError } from "@/utils/toast";
-import { type APIProvider, type BackgroundMode, type ThemePreset } from "@/utils/settings";
+import { type APIProvider, type BackgroundMode, type BackgroundFit, type ThemePreset } from "@/utils/settings";
 import { useSettings } from "@/contexts/SettingsContext";
 import { GlassShell } from "@/components/layout/GlassShell";
 import DatasetCalibrateCard from "@/components/settings/DatasetCalibrateCard";
@@ -29,6 +29,8 @@ const Settings = () => {
   const [backgroundImage, setBackgroundImage] = useState("");
   const [backgroundColor, setBackgroundColor] = useState("#0b1220");
   const [backgroundDim, setBackgroundDim] = useState<number>(20);
+  const [backgroundFit, setBackgroundFit] = useState<BackgroundFit>("cover");
+  const [backgroundScale, setBackgroundScale] = useState<number>(100);
   const [themePreset, setThemePreset] = useState<ThemePreset>("violet");
   const [brightness, setBrightness] = useState<number>(100);
 
@@ -44,6 +46,8 @@ const Settings = () => {
     setBackgroundImage(settings.backgroundImage ?? "");
     setBackgroundColor(settings.backgroundColor ?? "#0b1220");
     setBackgroundDim(typeof settings.backgroundDim === "number" ? settings.backgroundDim : 20);
+    setBackgroundFit((settings.backgroundFit as BackgroundFit) ?? "cover");
+    setBackgroundScale(typeof settings.backgroundScale === "number" ? settings.backgroundScale : 100);
     setThemePreset((settings.themePreset as ThemePreset) ?? "violet");
     setBrightness(typeof settings.brightness === "number" ? settings.brightness : 100);
   }, [settings]);
@@ -76,6 +80,8 @@ const Settings = () => {
       backgroundImage: backgroundMode === "image" ? (backgroundImage.trim() || undefined) : undefined,
       backgroundColor: backgroundMode === "color" ? (backgroundColor || "#0b1220") : undefined,
       backgroundDim: Math.max(0, Math.min(100, Number(backgroundDim))),
+      backgroundFit,
+      backgroundScale: Math.max(20, Math.min(400, Number(backgroundScale))),
       themePreset,
       brightness: Math.max(50, Math.min(150, Number(brightness))),
     });
@@ -121,6 +127,8 @@ const Settings = () => {
               backgroundImage={backgroundImage} setBackgroundImage={setBackgroundImage}
               backgroundColor={backgroundColor} setBackgroundColor={setBackgroundColor}
               backgroundDim={backgroundDim} setBackgroundDim={setBackgroundDim}
+              backgroundFit={backgroundFit} setBackgroundFit={setBackgroundFit}
+              backgroundScale={backgroundScale} setBackgroundScale={setBackgroundScale}
               themePreset={themePreset} setThemePreset={setThemePreset}
               brightness={brightness} setBrightness={setBrightness}
               onSave={handleSave}

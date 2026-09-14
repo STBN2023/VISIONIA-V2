@@ -1,6 +1,6 @@
 import React from "react";
 import { cn } from "@/lib/utils";
-import { getSettings } from "@/utils/settings";
+import { getSettings, type BackgroundFit } from "@/utils/settings";
 
 type Props = {
   children: React.ReactNode;
@@ -28,6 +28,12 @@ export const GlassShell = ({ children, className }: Props) => {
   const [brightness, setBrightness] = React.useState<number>(
     typeof initial.brightness === "number" ? initial.brightness : 100,
   );
+  const [fit, setFit] = React.useState<BackgroundFit>(
+    initial.backgroundFit ?? "cover",
+  );
+  const [scale, setScale] = React.useState<number>(
+    typeof initial.backgroundScale === "number" ? initial.backgroundScale : 100,
+  );
 
   React.useEffect(() => {
     const onUpdated = () => {
@@ -38,6 +44,8 @@ export const GlassShell = ({ children, className }: Props) => {
       setDim(typeof s.backgroundDim === "number" ? s.backgroundDim : 20);
       setTheme((s.themePreset as any) || "blue");
       setBrightness(typeof s.brightness === "number" ? s.brightness : 100);
+      setFit(s.backgroundFit ?? "cover");
+      setScale(typeof s.backgroundScale === "number" ? s.backgroundScale : 100);
     };
     window.addEventListener("settings:updated", onUpdated);
     return () => window.removeEventListener("settings:updated", onUpdated);
@@ -47,6 +55,11 @@ export const GlassShell = ({ children, className }: Props) => {
   const alpha = (dimClamped / 100) * 0.7; // voile sombre max ~70%
 
   const brightClamped = Math.max(50, Math.min(150, Number.isFinite(brightness) ? brightness : 100));
+
+  const scaleClamped = Math.max(20, Math.min(400, Number.isFinite(scale) ? scale : 100));
+  // "cover" et "contain" sont des mots-clés CSS valides tels quels ; "custom"
+  // se traduit en pourcentage.
+  const bgSize = fit === "custom" ? `${scaleClamped}%` : fit;
 
   const themeConf = {
     violet: {
@@ -79,13 +92,23 @@ export const GlassShell = ({ children, className }: Props) => {
         style={{ filter: `brightness(${brightClamped}%)` }}
       >
         {mode === "image" ? (
-          <div
-            className="absolute inset-0 bg-cover bg-center"
-            style={{
-              backgroundImage: bgUrl ? `url('${bgUrl}')` : undefined,
-              opacity: 0.2,
-            }}
-          />
+          <>
+            {/* Fond opaque sous l'image : « contenir » ou une échelle inférieure à
+                100 % ne couvrent pas tout l'écran, et laisseraient apparaître la
+                page nue sur les bords. */}
+            <div
+              className="absolute inset-0"
+              style={{ backgroundColor: bgColor || "#0b1220" }}
+            />
+            <div
+              className="absolute inset-0 bg-center bg-no-repeat"
+              style={{
+                backgroundImage: bgUrl ? `url('${bgUrl}')` : undefined,
+                backgroundSize: bgSize,
+                opacity: 0.2,
+              }}
+            />
+          </>
         ) : (
           <div
             className="absolute inset-0"

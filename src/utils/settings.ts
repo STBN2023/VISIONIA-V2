@@ -3,6 +3,8 @@ import { showError } from "@/utils/toast";
 
 export type APIProvider = "openai" | "anthropic" | "google" | "azure";
 export type BackgroundMode = "image" | "color";
+/** Comment l'image de fond occupe l'écran. "custom" utilise backgroundScale. */
+export type BackgroundFit = "cover" | "contain" | "custom";
 export type ThemePreset = "violet" | "blue" | "neutral";
 
 export type DatasetRef = { datasetId: string; datasetName: string };
@@ -41,6 +43,9 @@ export type Settings = {
   backgroundImage?: string;
   backgroundColor?: string;
   backgroundDim?: number;
+  backgroundFit?: BackgroundFit;
+  /** Taille de l'image en %, appliquée uniquement quand backgroundFit vaut "custom". */
+  backgroundScale?: number;
   themePreset?: ThemePreset;
   brightness?: number;
   // Dataset & IA
@@ -72,6 +77,8 @@ export function getDefaultSettings(): Settings {
     backgroundImage: "/Fond.png",
     backgroundColor: "#0b1220",
     backgroundDim: 20,
+    backgroundFit: "cover",
+    backgroundScale: 100,
     themePreset: "blue",
     brightness: 100,
     // Defaults Dataset & IA

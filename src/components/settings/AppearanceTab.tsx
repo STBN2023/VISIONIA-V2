@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Slider } from "@/components/ui/slider";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { type BackgroundMode, type ThemePreset } from "@/utils/settings";
+import { type BackgroundMode, type BackgroundFit, type ThemePreset } from "@/utils/settings";
 import { compressImageToBlob, blobToDataUrl } from "@/utils/image-compress";
 import { uploadUserAsset } from "@/utils/upload";
 import { showSuccess, showError } from "@/utils/toast";
@@ -20,6 +20,10 @@ interface AppearanceTabProps {
   setBackgroundColor: (v: string) => void;
   backgroundDim: number;
   setBackgroundDim: (v: number) => void;
+  backgroundFit: BackgroundFit;
+  setBackgroundFit: (v: BackgroundFit) => void;
+  backgroundScale: number;
+  setBackgroundScale: (v: number) => void;
   themePreset: ThemePreset;
   setThemePreset: (v: ThemePreset) => void;
   brightness: number;
@@ -32,6 +36,8 @@ export function AppearanceTab({
   backgroundImage, setBackgroundImage,
   backgroundColor, setBackgroundColor,
   backgroundDim, setBackgroundDim,
+  backgroundFit, setBackgroundFit,
+  backgroundScale, setBackgroundScale,
   themePreset, setThemePreset,
   brightness, setBrightness,
   onSave
@@ -157,6 +163,47 @@ export function AppearanceTab({
                 ) : null}
               </div>
             </div>
+
+            {/* Taille de l'image */}
+            <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
+              <Label>Taille de l'image</Label>
+              <div>
+                <Select
+                  value={backgroundFit}
+                  onValueChange={(v) => setBackgroundFit(v as BackgroundFit)}
+                >
+                  <SelectTrigger className="bg-white/10 text-white">
+                    <SelectValue placeholder="Choisir une taille" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cover">Couvrir l'écran (par défaut)</SelectItem>
+                    <SelectItem value="contain">Contenir — image entière visible</SelectItem>
+                    <SelectItem value="custom">Personnalisée</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {backgroundFit === "custom" ? (
+              <div className="grid gap-2 md:grid-cols-[220px,1fr] md:items-center">
+                <Label>Échelle de l'image: {Math.round(backgroundScale)}%</Label>
+                <div>
+                  <div className="px-2">
+                    <Slider
+                      value={[backgroundScale]}
+                      min={20}
+                      max={400}
+                      step={5}
+                      onValueChange={(v) => setBackgroundScale(v[0] ?? 100)}
+                    />
+                  </div>
+                  <p className="mt-1 text-xs text-white/60">
+                    Sous 100 %, l'image ne remplit plus l'écran : la couleur
+                    d'arrière‑plan apparaît autour.
+                  </p>
+                </div>
+              </div>
+            ) : null}
           </>
         ) : (
           // Couleur
