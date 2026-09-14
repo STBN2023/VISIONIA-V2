@@ -1,144 +1,225 @@
-# ISOEDRE Vision IA
+# ISOEDRE Vision IA (VISIONIA V2)
 
-Application web React + TypeScript + Vite + Tailwind + shadcn/ui, avec fonctions serverless (Vercel) et packaging mobile via Capacitor.
+À partir de photos de bâtiment, produire un compte rendu technique structuré
+pour la rénovation énergétique. Un classifieur local trie les photos, un LLM
+rédige le rapport.
 
-- Frontend: React 18, Vite, Tailwind, shadcn/ui, React Router.
-- API serverless: Vercel (TypeScript, `api/*.ts`).
-- Mobile: Capacitor (Android/iOS), web app servie en WebView.
-
----
-
-## Démarrage rapide (local)
-
-Prérequis:
-- Node.js 18+ (recommandé), npm (ou pnpm/yarn).
-- Navigateur récent.
-
-Étapes:
-1) Installer les dépendances: `npm install`
-2) Lancer en développement: `npm run dev`
-3) Ouvrir: `http://localhost:5173`
-
-Dans l’interface Dyad:
-- Rebuild: réinstalle les dépendances et relance (si besoin).
-- Restart: redémarre le serveur de dev.
-- Refresh: rafraîchit l’aperçu.
+Application web React + TypeScript + Vite, adossée à Supabase, déployée sur
+Vercel, empaquetable en mobile via Capacitor.
 
 ---
 
-## Fonctionnalités principales
+## Démarrage rapide
 
-- Projets: création, liste, suppression, détails.
-- Images: import drag & drop, compression automatique (client), tags.
-- Prompts: templates locaux (création, duplication, édition, suppression, “défaut”).
-- Analyse LLM: envoi des images + prompt à un modèle (serverless), suivi des runs (succès/erreurs).
-- Fallback local: si la base n’est pas configurée, le stockage se fait en `localStorage`.
-- Amélioration continue:
-  - Calibration du seuil de classification (paramètres).
-  - Mémoire locale des corrections de tags: l’app apprend de vos corrections pour améliorer les prochaines suggestions.
+Le projet utilise **pnpm**. Il n'y a plus de `package-lock.json` : `npm install`
+échoue sur un conflit de peer dependencies (react-leaflet 5 réclame React 19,
+le projet est en React 18).
 
----
+```bash
+pnpm install
+```
 
-## Variables d’environnement
+```bash
+pnpm dev
+```
 
-- `OPENAI_API_KEY`: obligatoire pour l’analyse LLM (`POST /api/analyze`). Sans cette clé, le run échouera (le reste de l’app reste fonctionnel).
-- Vercel Postgres:
-  - `POSTGRES_URL` (et variantes) injectées automatiquement par Vercel si vous liez une base Postgres.
+L'application démarre sur http://localhost:5173.
+Autres scripts : `pnpm build`, `pnpm preview`, `pnpm lint`.
 
-Sans ces variables:
-- Projets/Images: fallback `localStorage`.
-- Analyse: `POST /api/analyze` renvoie 500 (échec).
-
----
-
-## API serverless (Vercel)
-
-- Projets:
-  - `GET /api/projects` — liste des projets
-  - `POST /api/projects` — création
-  - `GET /api/projects/:id` — détail (avec images)
-  - `PATCH /api/projects/:id` — mise à jour
-  - `DELETE /api/projects/:id` — suppression
-  - Implémentation: `api/projects/index.ts` et `api/projects/[id].ts` (utilise `@vercel/postgres`).
-- Analyse LLM:
-  - `POST /api/analyze` (Edge) — appelle OpenAI Chat Completions (par défaut `gpt-4o-mini`).
-  - Champs attendus: `mode`, `prompt`, `images[] (dataUrl)`, `model?`, `temperature?`, `max_tokens?`.
+Aucune variable d'environnement n'est requise en local : l'URL et la clé
+publique Supabase sont en dur dans `src/integrations/supabase/client.ts`.
+C'est volontaire — cette clé est conçue pour être publique, la protection
+repose sur les policies RLS de la base.
 
 ---
 
-## Structure du projet
+## Architecture
 
-- `src/pages/` — pages (routes configurées dans `src/App.tsx`)
-- `src/components/` — composants UI (shadcn/ui inclus), layout, logique métier
-- `src/utils/` — utilitaires (stockage, compression, prompts, runs, analyse, etc.)
-- `api/` — endpoints serverless Vercel
-- `public/` — assets statiques
-- `android/`, `ios/` — Capacitor (mobile)
+- **Navigateur** : SPA React.
+- **Supabase** : authentification, Postgres, Storage, Edge Functions.
+- **ONNX Runtime Web** : classification des images en local (WebGPU, repli WebGL puis WASM).
+- **Vercel** : hébergement du build statique et de `/api/health`.
 
-Page d’accueil par défaut: `src/pages/Index.tsx`.
+Tout l'état applicatif vit dans Supabase. Il n'y a plus de repli localStorage
+pour les projets, ni de base Vercel Postgres : les deux ont existé, elles ont
+été retirées.
 
----
+### Tables
 
-## Flux utilisateur
+| Table | Rôle |
+|---|---|
+| `profiles` | profil utilisateur, et `settings` (JSON) synchronisé entre appareils |
+| `projects` | projets (titre, adresse, statut, prompt, tags, coordonnées) |
+| `inspections` | images d'un projet + `detection_results.onnx` (label, score, probs) |
+| `runs` / `run_items` | analyses LLM et leurs résultats par image |
+| `prompt_templates` | bibliothèque de prompts |
+| `system_pings` | table témoin, utilisée uniquement par `/api/health` |
 
-1) Créer un projet (ouvert via le bouton dans le header).
-2) Importer des images (drag & drop), compression et tags.
-3) Choisir/éditer un template de prompt et appliquer au projet.
-4) Lancer une analyse (“Générer le compte rendu”) et suivre le run.
-5) Consulter les résultats (global ou par image), relancer si nécessaire.
+### Buckets Storage
 
----
+| Bucket | Contenu |
+|---|---|
+| `inspections` | photos des projets |
+| `assets` | ressources utilisateur (fonds, avatars) |
+| `models` | le modèle ONNX, servi en public — voir « Classification » |
 
-## Classification, calibration et corrections
+### Fonctions serveur
 
-- Le classifieur local (ONNX) propose un tag avec un score.
-- La calibration (Paramètres) ajuste le seuil pour réduire faux positifs/négatifs.
-- Mémoire locale des corrections: si vous corrigez souvent un tag vers un autre, l’app privilégie votre préférence à l’avenir.
-  - Stockage: `localStorage` clé `corrections_stats`.
-  - Pour “réinitialiser” cette préférence, supprimer cette clé dans le stockage du navigateur.
+| Fonction | Où | Rôle |
+|---|---|---|
+| `openai-proxy` | Supabase Edge | appelle OpenAI côté serveur ; la clé n'est jamais exposée au navigateur |
+| `geocode` | Supabase Edge | géocodage des adresses de projet |
+| `/api/health` | Vercel | contrôle de vie ; répond `{"ok":true,"db":"ok"}` |
 
----
-
-## Déploiement (Vercel)
-
-1) Lier le repo à Vercel.
-2) Configurer les variables d’environnement:
-   - `OPENAI_API_KEY` (obligatoire pour l’analyse)
-   - Attacher Vercel Postgres si vous voulez une persistance serveur (facultatif).
-3) Déployer. Les fonctions `api/*` sont automatiquement exposées.
-
-Remarques:
-- Sans Postgres: l’app fonctionne avec fallback local (console peut afficher des 500 pour `/api/projects`, c’est attendu).
-- Sans `OPENAI_API_KEY`: l’analyse renverra 500.
+`api/health.ts` est le seul reliquat du dossier `api/`. Les anciens endpoints
+`/api/projects` et `/api/analyze` ont été supprimés : Supabase les remplace.
 
 ---
 
-## Mobile (Capacitor)
+## Routes
 
-- Le bundle web est construit dans `dist` et servi en WebView.
-- iOS/Android: projets déjà initialisés (`ios/`, `android/`).
-- Pour tester sur device/émulateur, installez les SDK natifs (Xcode / Android Studio) et suivez la doc Capacitor.
+`/` · `/login` · `/projects` · `/projects/:id` · `/prompts` · `/settings`
+
+La page projet regroupe les onglets Infos, Localisation, Images, Analyse, Runs.
+
+---
+
+## Classification des images
+
+Un modèle ONNX (YOLOv5-cls) classe chaque photo parmi 7 catégories :
+`algae`, `major_crack`, `minor_crack`, `peeling`, `plain`, `spalling`, `stain`.
+
+### Où vit le modèle — le point important
+
+Le modèle peut être référencé de deux façons, via *Paramètres > Dataset* :
+
+- **`source: "idb"`** — le fichier est dans IndexedDB, donc **cloisonné par
+  navigateur et par origine**. Un modèle importé sur `localhost` n'existe pas
+  sur le domaine déployé. Les réglages, eux, sont synchronisés via
+  `profiles.settings` : l'application se croit alors configurée alors que les
+  poids sont introuvables.
+- **`source: "url"`** — le fichier est téléchargé depuis une URL. C'est le mode
+  à privilégier : le réglage suit le compte et fonctionne partout.
+
+Le modèle est hébergé dans le bucket public `models`. Pour le rebrancher,
+coller cette URL dans *Paramètres > Dataset > Ou URL distante*, puis
+**Appliquer** :
+
+```
+https://kmgbbcwsupzcoevaolva.supabase.co/storage/v1/object/public/models/model_v2.onnx
+```
+
+Attention : dans ce même écran, les boutons **Effacer** et la corbeille
+effacent aussi `modelMeta`, donc l'ordre des classes, qu'il faut alors
+ressaisir.
+
+### Mono-étiquette, et ce que cela implique
+
+La sortie du modèle passe par un softmax : les 7 classes se partagent 100 %.
+Le modèle **ne peut pas** signaler deux défauts sur une même photo, et le
+dataset d'entraînement (un dossier par classe) ne contient aucune vérité
+terrain multi-défauts.
+
+Conséquence pratique : une photo cumulant deux désordres répartit sa masse de
+probabilité (par exemple 45 % / 40 %) et n'a pas de top-1 franc. Le filtre
+d'entrée de l'analyse LLM juge donc sur **P(défaut) = 1 − P(plain)** plutôt
+que sur le score de la classe majoritaire, sans quoi il écarterait précisément
+les photos les plus chargées. Voir `defectScoreFrom()` dans
+`src/utils/classifier.ts`.
+
+Les badges secondaires affichés sur les vignettes sont des **suggestions**, pas
+des détections : un softmax ne distingue pas « deux défauts présents » de
+« hésitation entre deux étiquettes pour un seul défaut ».
+
+---
+
+## Analyse LLM
+
+1. Onglet Images : import (glisser-déposer, compression client, 25 Mo/image max).
+2. Onglet Prompt : choix d'un template, édition du prompt.
+3. Lancement d'un run, en mode agrégé (un rapport global) ou par image.
+4. Option « Analyser uniquement les images suspectes » : pré-filtrage ONNX sur
+   P(défaut) ≥ seuil calibré, pour n'envoyer au LLM que ce qui le mérite.
+5. Onglet Runs : suivi, puis export PDF (`src/utils/pdf.ts`) ou DOCX
+   (`src/utils/docx.ts`).
+
+L'appel au LLM passe par l'Edge Function `openai-proxy`, qui détient la clé.
+
+---
+
+## Structure
+
+```
+src/
+  pages/                  routes (App.tsx)
+  components/
+    projects/tabs/        Infos, Localisation, Images, Prompt
+    runs/                 lancement, suivi, annotation des analyses
+    settings/             compte, apparence, API, dataset & calibration
+    uploader/             dropzone et vignettes
+  utils/
+    storage.ts            projets & images (Supabase)
+    settings.ts           reglages, synchronisation localStorage <-> cloud
+    classifier.ts         score de defaut, top-K, disponibilite du modele
+    inference.ts          session ONNX, preprocessing, calibration
+    analyze-client.ts     appel de openai-proxy
+    pdf.ts / docx.ts      exports
+supabase/functions/       openai-proxy, geocode
+api/health.ts             controle de vie (Vercel)
+data/                     modele et dataset - non versionne (.gitignore)
+```
+
+---
+
+## Déploiement
+
+Push sur `main`, Vercel déploie automatiquement.
+
+Le dépôt est public. Sur le plan Hobby, un dépôt **privé** bloque les
+déploiements dont l'auteur du commit n'est pas rattaché au compte Vercel
+(« Deployment Blocked »). Si le dépôt repasse en privé, il faudra d'abord
+ajouter l'adresse e-mail de l'auteur des commits aux e-mails vérifiés du
+compte Vercel.
+
+Variables d'environnement côté Vercel : `SUPABASE_URL` et
+`SUPABASE_SERVICE_ROLE_KEY`, utilisées uniquement par `/api/health`. La clé
+OpenAI est un secret d'Edge Function Supabase, pas une variable Vercel.
+
+---
+
+## Mobile
+
+Projets Capacitor initialisés (`android/`, `ios/`). Le build web (`dist`) est
+servi dans une WebView. Xcode ou Android Studio requis pour tester sur device.
 
 ---
 
 ## Dépannage
 
-- Erreurs 500 sur `/api/projects`: le fallback `localStorage` prend le relais (l’app reste utilisable).
-- Analyse qui échoue: vérifier `OPENAI_API_KEY`.
-- Toasts qui restent visibles: les toasts de fin sont auto-dismiss après ~3,5 s; si un toast persiste, rafraîchir l’aperçu.
-- Suggestions de tags incohérentes: recalibrez le seuil et/ou laissez l’app apprendre de vos corrections; vérifiez aussi la cohérence des tags (casse/orthographe).
-- Problèmes d’images (taille): les images > 25 Mo sont ignorées (après tentative de compression).
+**Aucun pourcentage sur les vignettes.** Le modèle n'est pas joignable. Un
+message d'erreur explicite s'affiche désormais au lieu d'un faux
+« Classification terminée ». Vérifier le mode du modèle : en `idb`, il est
+absent de tout navigateur autre que celui où il a été importé.
+
+**Un réglage disparaît tout seul.** Bug corrigé : une écriture ratée vers
+Supabase était silencieuse, et la copie cloud périmée réécrasait le réglage
+local au chargement suivant. `saveSettings()` horodate maintenant chaque
+écriture, `loadSettingsFromCloud()` refuse d'écraser une version plus récente,
+et un échec d'enregistrement s'affiche à l'écran.
+
+**Les photos multi-défauts n'étaient pas analysées.** Corrigé, voir
+« Mono-étiquette » plus haut.
+
+**react-leaflet.** La version 5 installée réclame React 19 alors que le projet
+est en React 18. pnpm installe malgré l'avertissement ; à surveiller si la
+carte de l'onglet Localisation se comporte mal.
 
 ---
 
-## Scripts utiles
+## Documents
 
-- `npm run dev` — démarre le serveur de développement Vite.
-- `npm run build` — build de production (Vite).
-- `npm run preview` — sert le build localement.
-
----
-
-## Licence
-
-Usage interne / projet démonstration. Adapter selon votre contexte.
+- `cdc.md` — cahier des charges d'origine. Il décrit la v1 (stockage local,
+  clé API dans le navigateur, pas d'authentification) et **ne reflète plus
+  l'implémentation** : l'authentification, la persistance serveur et les
+  exports DOCX, listés hors périmètre v1, existent aujourd'hui.
+- `Workflow du projet.md` — fonctionnement bout-à-bout.

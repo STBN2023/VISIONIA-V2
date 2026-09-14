@@ -1,166 +1,246 @@
 # Workflow du projet
 
-Ce document décrit le fonctionnement bout‑à‑bout de l’application (frontend, API serverless sur Vercel, stockage, analyse LLM), ainsi que les prérequis d’environnement.
+Fonctionnement bout-à-bout de l'application : ce qui se passe, dans quel ordre,
+et où vivent les données à chaque étape.
 
-Liens utiles:
-- Cahier des charges (détaillé): `CDC.md`
-- Stack: React + TypeScript + Vite + Tailwind + shadcn/ui, Capacitor (Android/iOS), Vercel (front + API)
-
----
-
-## 1) Vue d’ensemble
-
-1. L’utilisateur gère des projets (création, liste, détails).
-2. Il ajoute des images au projet (drag & drop, compression client, tags).
-3. Il configure un prompt (ou applique un template) et lance une analyse.
-4. Le serveur appelle un LLM (OpenAI) sur les images, puis le résultat est stocké côté client (local) et affiché dans l’onglet “Runs”.
-5. En l’absence de base de données côté serveur, l’app utilise un fallback local (localStorage) pour les projets et les runs, afin de rester fonctionnelle.
+Voir aussi : [README.md](README.md) pour l'architecture et le démarrage,
+`cdc.md` pour le cahier des charges d'origine (qui ne reflète plus
+l'implémentation).
 
 ---
 
-## 2) Frontend: pages et flux
+## 1. Vue d'ensemble
 
-- Routes principales (src/App.tsx):
-  - `/` Index, présentation.
-  - `/projects` Liste et création de projets.
-  - `/projects/:id` Détail projet (Images / Prompt / Infos / Runs).
-  - `/prompts` Gestion de templates de prompt (localStorage).
-  - `/settings` Paramètres d’appel LLM (stockés localement).
+1. L'utilisateur s'authentifie (Supabase Auth).
+2. Il crée un projet, puis y ajoute des photos.
+3. Un classifieur ONNX local trie et tague les photos.
+4. Il choisit un prompt et lance une analyse.
+5. Une Edge Function appelle le LLM ; le résultat est stocké et affiché.
+6. Il exporte le compte rendu en PDF ou DOCX.
 
-- Header (src/components/layout/AppHeader.tsx): navigation + bouton “Nouveau projet”.
-
----
-
-## 3) Gestion des projets
-
-- Lecture/écriture via utilitaires (src/utils/storage.ts):
-  - Tente d’abord l’API (Vercel).
-  - Si l’API échoue (ex: pas de DB), bascule en localStorage (logs informatifs en console).
-- Création (src/pages/Projects.tsx):
-  - Ouvre un Dialog (ProjectFormDialog) et appelle `createProject`.
-  - En cas d’erreur 500 côté API, l’app crée le projet en localStorage (fallback).
-- Détail (src/pages/ProjectDetail.tsx):
-  - Charge le projet (API ou fallback).
-  - Tabs: Images, Prompt, Infos, Runs.
-
-Remarque: Sans Vercel Postgres configuré, vous verrez un 500 en console lorsque l’API est appelée; c’est normal et le fallback local prend le relais.
+Tout est persisté dans Supabase. Aucun repli localStorage pour les données
+métier — seuls les réglages ont une copie locale, et elle est synchronisée.
 
 ---
 
-## 4) Import et gestion d’images
+## 2. Authentification
 
-- Import (src/components/projects/tabs/ImagesTab.tsx):
-  - Formats acceptés: JPG/PNG/WebP, taille max 25 Mo/image.
-  - Drag & drop ou sélection fichier.
-- Compression automatique (src/utils/image-compress.ts):
-  - Redimensionnement max 2000px, encodage WebP (ou JPEG) qualité ~0.82.
-  - À l’import, on choisit la version la plus légère; si l’original > 25 Mo, on tente la version compressée.
-  - Images encore > 25 Mo après compression: ignorées.
-  - Bilan via toasts (ajoutées / compressées / ignorées).
-- Métadonnées internes:
-  - `name`, `size`, `type`, `dataUrl`, `createdAt`, `tag?`, `templateId?`.
-- Sauvegarde:
-  - PATCH `/api/projects/:id` (avec liste d’images) ou fallback localStorage.
+`src/pages/Login.tsx`, session gérée par Supabase Auth.
+
+Les policies RLS filtrent par `user_id` : chaque utilisateur ne voit que ses
+projets. C'est là que repose la sécurité, pas sur le secret de la clé publique
+embarquée dans le bundle.
+
+Détail d'implémentation : le code privilégie `getSession()` (lecture du cache)
+plutôt que `getUser()` (appel réseau) sur les chemins fréquents.
 
 ---
 
-## 5) Templates et prompt
+## 3. Projets
 
-- Templates (src/utils/prompts.ts, src/pages/Prompts.tsx):
-  - Stockés en localStorage (seed au premier lancement).
-  - Création, duplication, édition, suppression, “défaut”.
-  - Validation: chaque ligne ≤ 100 caractères.
-- Au niveau projet (src/components/projects/tabs/PromptTab.tsx):
-  - Sélection d’un template “projet” (stocké côté serveur si API OK, sinon local).
-  - Bouton “Appliquer au prompt” (copie le contenu du template dans le champ prompt).
-  - Le prompt utilisé pour l’analyse est le texte présent au moment du lancement du run.
+`src/utils/storage.ts` — lecture et écriture via le client Supabase.
 
----
+- `getProjectsList()` : liste allégée, ne charge pas les images (juste leur
+  nombre). C'est ce qui rend la page Projets rapide.
+- `getProjectById()` : projet complet avec ses `inspections`.
+- `createProject()`, `updateProject()`, `deleteProject()`.
 
-## 6) Lancement d’une analyse LLM
+Correspondance base ↔ application, assurée par `mapDbToProject()` :
 
-- Déclencheur (RunAnalysisDialog):
-  1) Crée un run en “running” côté client via `createPendingRun(...)` (src/utils/runs.ts).
-  2) Appelle l’API serverless: `POST /api/analyze` (src/utils/analyze-client.ts).
-  3) À la réponse:
-     - Succès: `completeRunWithServer(...)` met à jour le run (aggregate ou per_image).
-     - Échec: `failRun(...)` marque le run en “failed”.
-- Visualisation:
-  - RunsTab (src/components/runs/RunsTab.tsx) affiche la progression, poll simple toutes les 1s.
-  - Pour per_image: statut par image et texte retourné par le LLM.
-- Annulation / Relance:
-  - “Annuler” si run en `queued` ou `running` (client-side).
-  - “Relancer les échecs” (simulation locale pour les items échec si vous utilisez l’ancien mode simulé).
+| Base (`projects`) | Application |
+|---|---|
+| `name` | `title` |
+| `location` | `address` |
+| `description` | `type` |
+
+Les images sont dans la table `inspections`, une ligne par photo, reliée par
+`project_id`.
 
 ---
 
-## 7) API serverless sur Vercel
+## 4. Images
 
-- Projets:
-  - `GET /api/projects` → liste des projets.
-  - `POST /api/projects` → création d’un projet.
-  - `GET /api/projects/:id` → détail du projet + images.
-  - `PATCH /api/projects/:id` → mise à jour (champs + images).
-  - `DELETE /api/projects/:id` → suppression projet (+ images).
-  - Implémentation: `api/projects/index.ts` et `api/projects/[id].ts`
-    - Utilise `@vercel/postgres`.
-    - `ensureTables()` crée les tables si nécessaire:
-      - `projects(id, title, address, type, status, prompt, template_id, notes, created_at, updated_at)`
-      - `images(id, project_id, name, size, type, data_url, created_at, tag, template_id)`
-- Analyse LLM:
-  - `POST /api/analyze` (Edge runtime): appelle OpenAI Chat Completions avec gpt‑4o‑mini par défaut.
-  - Champs attendus: `mode`, `prompt`, `images[] (dataUrl)`, `model?`, `temperature?`, `max_tokens?`
-  - Variables d’environnement requises: `OPENAI_API_KEY`.
+`src/components/projects/tabs/ImagesTab.tsx`, `src/utils/image-compress.ts`.
+
+À l'import :
+
+1. Formats acceptés : JPG, PNG, WebP. 25 Mo maximum par image.
+2. Compression côté client : redimensionnement à 2000 px maximum, encodage
+   WebP (ou JPEG) en qualité ~0,82. La version la plus légère est conservée.
+3. Une image encore au-dessus de 25 Mo après compression est ignorée.
+4. Le fichier part dans le bucket `inspections` ; la ligne en base ne stocke
+   que son URL.
+
+`updateProject()` ne réenvoie que les images nouvelles : celles dont l'URL
+n'est plus une `data:` URL voient uniquement leurs métadonnées mises à jour.
 
 ---
 
-## 8) Environnements et variables
+## 5. Classification ONNX
 
-- Vercel Postgres (pour persistance serveur des projets/images):
-  - Vercel Dashboard → Storage → Add Postgres → lier au projet.
-  - Les variables `POSTGRES_URL` (et variantes) sont injectées automatiquement.
-- OpenAI (pour l’analyse):
-  - Définir `OPENAI_API_KEY` dans les variables d’environnement Vercel.
-- Sans ces variables:
-  - Projets/Images: fallback localStorage (fonctionnel, mais non persistant côté serveur).
-  - Analyse: `POST /api/analyze` renverra 500 si `OPENAI_API_KEY` manquant.
+`src/utils/inference.ts` (session et inférence), `src/utils/classifier.ts`
+(logique métier).
+
+### Chargement du modèle
+
+`getOrCreateSession()` met la session en cache par clé
+`source:value:backends`. Changer de modèle ou de backend invalide le cache.
+
+Les poids proviennent soit d'IndexedDB (`source: "idb"`), soit d'une URL
+(`source: "url"`). **Ce choix est structurant** : IndexedDB est cloisonné par
+navigateur et par origine, alors que le réglage qui le référence, lui, est
+synchronisé via `profiles.settings`. Un modèle importé sur `localhost` est donc
+absent du domaine déployé pendant que l'application se croit configurée.
+
+`getModelUnavailableReason()` existe pour ça : elle vérifie la présence réelle
+des poids avant de lancer un lot, et renvoie un message actionnable.
+
+### Inférence
+
+1. Préprocessing : redimensionnement à `inputSize` (224 par défaut),
+   normalisation ImageNet, tenseur `[1, 3, H, W]`.
+2. Backends essayés dans l'ordre : WebGPU, WebGL, WASM.
+3. Sortie : logits → **softmax** → vecteur `probs` de 7 valeurs sommant à 1.
+
+### Du vecteur au tag
+
+L'ordre des classes vient de `modelMeta.classesOrder` :
+
+| index | 0 | 1 | 2 | 3 | 4 | 5 | 6 |
+|---|---|---|---|---|---|---|---|
+| classe | algae | major_crack | minor_crack | peeling | plain | spalling | stain |
+
+`classMapping` traduit ensuite l'étiquette du modèle en tag métier
+(`major_crack` → « fissure majeure »).
+
+`defectScoreFrom(probs)` calcule **1 − P(plain)** : la probabilité qu'il se
+passe quelque chose, indépendamment de la classe. C'est ce score, et non le
+top-1, qui décide si une photo est suspecte — voir la section 7.
 
 ---
 
-## 9) Gestion des erreurs et comportement
+## 6. Prompts
 
-- Si `GET/POST/PATCH /api/projects` renvoie 500:
-  - Le front trace un avertissement et bascule automatiquement en localStorage.
-- Si `POST /api/analyze` renvoie une erreur (ex: clé manquante):
-  - Le run est marqué “failed” et l’erreur est affichée en toast.
-- Les toasts (src/utils/toast.ts, via sonner) informent des actions importantes:
-  - Création / suppression projet, ajout images, fin d’analyse, erreurs.
+`src/utils/prompts.ts`, `src/pages/Prompts.tsx`, table `prompt_templates`.
 
----
+Création, duplication, édition, suppression, marquage « par défaut ».
+Règle de qualité : chaque ligne doit tenir en 100 caractères, l'interface le
+signale.
 
-## 10) Mobile (Capacitor)
-
-- Le projet est prêt à être packagé via Capacitor (dossiers `android/` et `ios/`).
-- La web app (dist) est servie dans une WebView.
-- Les images étant compressées côté client, l’import reste fluide sur mobile.
+Au niveau d'un projet (`PromptTab`), on sélectionne un template puis on
+l'applique au champ prompt. Le texte réellement envoyé est celui présent dans
+le champ au moment du lancement.
 
 ---
 
-## 11) Conseils d’exploitation
+## 7. Analyse LLM
 
-- Pour une utilisation serveur complète:
-  - Activer Vercel Postgres et OpenAI (variables env).
-  - Vérifier la taille mémoire des fonctions si vous prévoyez de gros lots d’images (même compressées).
-- Pour une démo sans backend:
-  - Accepter les 500 dans la console pour `/api/projects` (fallback local).
-  - Lancer l’analyse uniquement si `OPENAI_API_KEY` est renseignée; sinon le run échouera.
+`src/components/runs/RunAnalysisDialog.tsx`, `src/utils/analyze-client.ts`.
+
+### Pré-filtrage optionnel
+
+Case « Analyser uniquement les images suspectes ». Chaque photo passe par le
+classifieur, et le vecteur `probs` complet est écrit dans
+`inspections.detection_results.onnx`.
+
+Le critère de rétention est `isSuspectFrom(probs)`, c'est-à-dire
+`P(défaut) ≥ seuil`.
+
+Pourquoi pas le top-1 : le softmax fait se concurrencer les classes. Une photo
+cumulant deux désordres répartit sa masse (par exemple 45 % / 40 %) et passe
+sous le seuil sur chaque classe prise isolément, alors qu'elle n'a que 15 % de
+chances d'être saine. Filtrer sur le top-1 écartait donc en priorité les photos
+les plus intéressantes du lot.
+
+### Exécution
+
+1. `createPendingRun()` crée le run en statut `running` (table `runs`).
+2. `analyzeLLM()` appelle l'Edge Function `openai-proxy`, qui détient la clé
+   OpenAI. Les images partent en `dataUrl`, limitées à 12 par appel.
+3. Deux modes : **agrégé** (un rapport global) ou **par image** (un résultat
+   par photo, dans `run_items`).
+4. Succès → `completeRunWithServer()`. Échec → `failRun()`, avec le détail
+   accessible depuis le badge « failed ».
+
+### Suivi
+
+`RunsTab` affiche la progression avec étapes et chronomètre, et interroge la
+base périodiquement. Les résultats sont dédupliqués par identifiant : une
+course entre le cache et le polling produisait auparavant des doublons.
 
 ---
 
-## 12) Résumé du cycle utilisateur
+## 8. Exports
 
-1) “Nouveau projet” → saisie → création (API ou local).
-2) Onglet “Images” → drag & drop → compression → ajout → taggage/ordre.
-3) Onglet “Prompt” → choix template (facultatif) → édition du prompt → “Générer le compte rendu”.
-4) Onglet “Runs” → suivre l’exécution → consulter résultats (global ou par image).
-5) Retour aux projets → ré-édition / nouvelles images / nouveaux runs.
+- **PDF** : `src/utils/pdf.ts`. En mode par image, la photo est intégrée à
+  chaque section (conversion WebP → JPEG si nécessaire).
+- **DOCX** : `src/utils/docx.ts`.
+
+---
+
+## 9. Réglages
+
+`src/utils/settings.ts`, clé localStorage `isoedre_settings_v1`, miroir dans
+`profiles.settings`.
+
+Contenu : apparence, préférences LLM, `modelRef`, `modelMeta`, `classMapping`,
+seuil d'inférence, rapport de calibration.
+
+### Arbitrage local ↔ cloud
+
+C'est le point délicat, et il a déjà causé une perte de données.
+
+- `saveSettings()` écrit en local, **horodate** l'écriture (`updatedAt`), puis
+  pousse vers Supabase en arrière-plan.
+- Un échec de cette écriture est **signalé à l'utilisateur** (message d'erreur,
+  limité à un toutes les 30 secondes).
+- `loadSettingsFromCloud()` compare les horodatages. Si la copie locale est
+  plus récente que celle du cloud, elle est **conservée** et repoussée, au lieu
+  d'être écrasée.
+
+Auparavant, une écriture ratée était silencieuse et la copie cloud périmée
+réécrasait le réglage au chargement suivant. C'est ainsi que
+`modelMeta.classesOrder` pouvait disparaître : les classes restaient affichées
+à l'écran (repli sur le manifeste du dataset) alors que le réglage n'existait
+plus, produisant un « Configuration incomplète » incompréhensible.
+
+Note : `getStoredUpdatedAt()` lit le JSON brut plutôt que le résultat de
+`getSettings()`, dont les valeurs par défaut incluent un `updatedAt` valant
+« maintenant » — s'en servir pour arbitrer ferait toujours gagner le local.
+
+---
+
+## 10. Calibration
+
+`src/components/settings/DatasetCalibrateCard.tsx`, `src/utils/inference.ts`.
+
+Sur un échantillon du dataset, l'application balaie une grille de seuils et
+recommande celui qui équilibre faux positifs et faux négatifs. Le résultat est
+stocké dans `calibrationReport` et alimente `inference.threshold`.
+
+Piège de cet écran : les boutons **Effacer** et la corbeille appellent
+`clearModelSelection()`, qui remet à zéro `modelRef` **et** `modelMeta`. On perd
+donc l'ordre des classes, pas seulement le modèle.
+
+---
+
+## 11. Corrections manuelles
+
+`src/utils/corrections.ts`, clé localStorage `corrections_stats`.
+
+Quand l'utilisateur corrige régulièrement un tag proposé vers un autre,
+l'application retient la préférence et la privilégie ensuite. Purement local,
+non synchronisé.
+
+---
+
+## 12. Cycle utilisateur résumé
+
+1. Se connecter.
+2. Créer un projet (titre, adresse, type).
+3. Importer les photos ; compression et contrôles automatiques.
+4. « Classer et taguer » : tags proposés par le modèle, ajustables à la main.
+5. Choisir un template de prompt, l'appliquer, l'ajuster.
+6. Lancer l'analyse, avec ou sans pré-filtrage des images suspectes.
+7. Suivre le run, consulter le résultat, ouvrir le log en cas d'échec.
+8. Exporter en PDF ou DOCX.
