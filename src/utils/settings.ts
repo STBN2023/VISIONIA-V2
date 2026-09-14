@@ -5,6 +5,27 @@ export type APIProvider = "openai" | "anthropic" | "google" | "azure";
 export type BackgroundMode = "image" | "color";
 /** Comment l'image de fond occupe l'écran. "custom" utilise backgroundScale. */
 export type BackgroundFit = "cover" | "contain" | "custom";
+
+/**
+ * Valeurs d'apparence transportées par l'événement "settings:updated".
+ *
+ * L'onglet Apparence émet ses valeurs à chaque modification, avant tout
+ * enregistrement, pour que le fond se mette à jour en direct. Sans ces valeurs
+ * l'écouteur relit simplement ce qui est persisté.
+ */
+export type AppearanceOverride = Partial<
+  Pick<
+    Settings,
+    | "backgroundMode"
+    | "backgroundImage"
+    | "backgroundColor"
+    | "backgroundDim"
+    | "backgroundFit"
+    | "backgroundScale"
+    | "themePreset"
+    | "brightness"
+  >
+>;
 export type ThemePreset = "violet" | "blue" | "neutral";
 
 export type DatasetRef = { datasetId: string; datasetName: string };

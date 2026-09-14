@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AppHeader } from "@/components/layout/AppHeader";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { showSuccess, showError } from "@/utils/toast";
-import { type APIProvider, type BackgroundMode, type BackgroundFit, type ThemePreset } from "@/utils/settings";
+import { type APIProvider, type BackgroundMode, type BackgroundFit, type ThemePreset, type AppearanceOverride } from "@/utils/settings";
 import { useSettings } from "@/contexts/SettingsContext";
 import { GlassShell } from "@/components/layout/GlassShell";
 import DatasetCalibrateCard from "@/components/settings/DatasetCalibrateCard";
@@ -51,6 +51,33 @@ const Settings = () => {
     setThemePreset((settings.themePreset as ThemePreset) ?? "violet");
     setBrightness(typeof settings.brightness === "number" ? settings.brightness : 100);
   }, [settings]);
+
+  // Aperçu en direct : GlassShell écoute "settings:updated" mais personne ne
+  // l'émettait, si bien que tout changement d'apparence exigeait un
+  // rechargement. On diffuse ici les valeurs en cours d'édition — avant
+  // enregistrement — pour que le fond suive le curseur.
+  useEffect(() => {
+    const detail: AppearanceOverride = {
+      backgroundMode,
+      backgroundImage,
+      backgroundColor,
+      backgroundDim,
+      backgroundFit,
+      backgroundScale,
+      themePreset,
+      brightness,
+    };
+    window.dispatchEvent(new CustomEvent("settings:updated", { detail }));
+  }, [
+    backgroundMode,
+    backgroundImage,
+    backgroundColor,
+    backgroundDim,
+    backgroundFit,
+    backgroundScale,
+    themePreset,
+    brightness,
+  ]);
 
   const handleSave = () => {
     // Note: We skip the size check here because AppearanceTab now handles upload to Supabase

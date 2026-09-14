@@ -1,6 +1,6 @@
 import React from "react";
 import { cn } from "@/lib/utils";
-import { getSettings, type BackgroundFit } from "@/utils/settings";
+import { getSettings, type BackgroundFit, type AppearanceOverride } from "@/utils/settings";
 
 type Props = {
   children: React.ReactNode;
@@ -36,8 +36,11 @@ export const GlassShell = ({ children, className }: Props) => {
   );
 
   React.useEffect(() => {
-    const onUpdated = () => {
-      const s = getSettings();
+    const onUpdated = (e: Event) => {
+      // L'onglet Apparence transmet ses valeurs en cours d'édition pour un
+      // aperçu immédiat ; sans elles, on relit ce qui est enregistré.
+      const detail = (e as CustomEvent<AppearanceOverride | undefined>).detail;
+      const s = { ...getSettings(), ...(detail ?? {}) };
       setMode((s.backgroundMode as "image" | "color") ?? "image");
       setBgUrl(s.backgroundImage || "/Fond.png");
       setBgColor(s.backgroundColor || "#0b1220");
