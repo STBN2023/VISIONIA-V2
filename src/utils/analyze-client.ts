@@ -422,6 +422,36 @@ function buildCombinedInstruction(userPrompt: string): string {
 export type ProgressCallback = (current: number, total: number, phase: string) => void;
 
 // Process items in parallel batches
+/**
+ * Convertit une URL d'image en data URL base64.
+ *
+ * Les photos vivent dans Supabase Storage, et leur URL était transmise telle
+ * quelle à OpenAI, à charge pour lui d'aller les télécharger. En mode agrégé
+ * chaque photo était ainsi récupérée deux fois — une pour le rapport global,
+ * une pour son analyse détaillée — soit une vingtaine de requêtes en rafale
+ * que la limitation de débit de Storage finissait par refuser. OpenAI rendait
+ * alors « Unable to download content from the provided URL » : l'étape 3
+ * échouait, tandis que le mode par image, moins gourmand, passait.
+ *
+ * En intégrant le contenu, OpenAI n'a plus rien à télécharger.
+ */
+async function toEmbeddedDataUrl(url: string): Promise<string> {
+  if (!url || url.startsWith("data:")) return url;
+
+  const resp = await fetch(url);
+  if (!resp.ok) {
+    throw new Error(`Image inaccessible (HTTP ${resp.status}). Vérifiez qu'elle existe toujours dans le stockage.`);
+  }
+  const blob = await resp.blob();
+
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("Lecture de l'image impossible."));
+    reader.readAsDataURL(blob);
+  });
+}
+
 async function parallelBatch<T, R>(
   items: T[],
   fn: (item: T, index: number) => Promise<R>,
@@ -461,15 +491,23 @@ export async function analyzeLLM(input: {
   const CONCURRENCY = 3; // max parallel API calls for per-image analysis
 
   try {
+    // Une seule récupération par photo, réutilisée par toutes les phases.
+    // Pas de rapport de progression ici : l'appelant branche sur le texte de la
+    // phase, et un libellé contenant « image » ferait avancer l'affichage à tort.
+    const images = await parallelBatch(
+      input.images,
+      async (img) => ({ ...img, dataUrl: await toEmbeddedDataUrl(img.dataUrl) }),
+      CONCURRENCY,
+    );
     if (input.mode === "aggregate") {
       // Phase 1: Rapport agrégé global (1 appel avec toutes les images)
       const t0 = performance.now();
-      input.onProgress?.(0, input.images.length + 1, "Génération du rapport global...");
+      input.onProgress?.(0, images.length + 1, "Génération du rapport global...");
       const aggregateText = await callOpenAI({
         model,
         temperature: userTemp,
         prompt: input.prompt,
-        images: input.images.map((i) => ({ dataUrl: i.dataUrl })),
+        images: images.map((i) => ({ dataUrl: i.dataUrl })),
         max_tokens: globalMaxTokens,
       });
       console.log(`[analyze] Rapport global: ${((performance.now() - t0) / 1000).toFixed(1)}s`);
@@ -480,7 +518,7 @@ export async function analyzeLLM(input: {
 
       const t1 = performance.now();
       const items = await parallelBatch(
-        input.images,
+        images,
         async (img, i) => {
           const tImg = performance.now();
           const raw = await callOpenAI({
@@ -493,7 +531,7 @@ export async function analyzeLLM(input: {
           console.log(`[analyze] Image ${i + 1}: ${((performance.now() - tImg) / 1000).toFixed(1)}s`);
 
           completed++;
-          input.onProgress?.(completed, input.images.length + 1, `Analyse image ${completed}/${input.images.length}...`);
+          input.onProgress?.(completed, images.length + 1, `Analyse image ${completed}/${images.length}...`);
 
           const parsed = extractFirstJsonObject(raw);
           if (parsed) {
@@ -506,7 +544,7 @@ export async function analyzeLLM(input: {
         },
         CONCURRENCY,
       );
-      console.log(`[analyze] Toutes images (×${input.images.length}): ${((performance.now() - t1) / 1000).toFixed(1)}s (parallélisme: ${CONCURRENCY})`);
+      console.log(`[analyze] Toutes images (×${images.length}): ${((performance.now() - t1) / 1000).toFixed(1)}s (parallélisme: ${CONCURRENCY})`);
 
       return { ok: true, mode: "aggregate", outputText: aggregateText, items };
     } else {
@@ -516,7 +554,7 @@ export async function analyzeLLM(input: {
 
       const t0 = performance.now();
       const items = await parallelBatch(
-        input.images,
+        images,
         async (img, i) => {
           const tImg = performance.now();
           const raw = await callOpenAI({
@@ -529,7 +567,7 @@ export async function analyzeLLM(input: {
           console.log(`[analyze] Image ${i + 1}: ${((performance.now() - tImg) / 1000).toFixed(1)}s`);
 
           completed++;
-          input.onProgress?.(completed, input.images.length, `Analyse image ${completed}/${input.images.length}...`);
+          input.onProgress?.(completed, images.length, `Analyse image ${completed}/${images.length}...`);
 
           const parsed = extractFirstJsonObject(raw);
           if (parsed) {
@@ -542,7 +580,7 @@ export async function analyzeLLM(input: {
         },
         CONCURRENCY,
       );
-      console.log(`[analyze] Toutes images (×${input.images.length}): ${((performance.now() - t0) / 1000).toFixed(1)}s (parallélisme: ${CONCURRENCY})`);
+      console.log(`[analyze] Toutes images (×${images.length}): ${((performance.now() - t0) / 1000).toFixed(1)}s (parallélisme: ${CONCURRENCY})`);
 
       return { ok: true, mode: "per_image", items };
     }
