@@ -94,8 +94,10 @@ export function getDefaultSettings(): Settings {
     model: "gpt-4o-mini",
     temperature: 0.2,
     maxTokens: 2000,
-    backgroundMode: "image",
-    backgroundImage: "/Fond.png",
+    // Aucune image n'est livrée avec l'application : le fond par défaut est une
+    // couleur unie. Chacun charge la sienne depuis Paramètres > Apparence.
+    backgroundMode: "color",
+    backgroundImage: undefined,
     backgroundColor: "#0b1220",
     backgroundDim: 20,
     backgroundFit: "cover",

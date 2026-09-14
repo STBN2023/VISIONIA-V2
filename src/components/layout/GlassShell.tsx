@@ -14,7 +14,7 @@ export const GlassShell = ({ children, className }: Props) => {
     initial.backgroundMode ?? "image",
   );
   const [bgUrl, setBgUrl] = React.useState<string>(
-    initial.backgroundImage || "/Fond.png",
+    initial.backgroundImage || "",
   );
   const [bgColor, setBgColor] = React.useState<string>(
     initial.backgroundColor || "#0b1220",
@@ -42,7 +42,7 @@ export const GlassShell = ({ children, className }: Props) => {
       const detail = (e as CustomEvent<AppearanceOverride | undefined>).detail;
       const s = { ...getSettings(), ...(detail ?? {}) };
       setMode((s.backgroundMode as "image" | "color") ?? "image");
-      setBgUrl(s.backgroundImage || "/Fond.png");
+      setBgUrl(s.backgroundImage || "");
       setBgColor(s.backgroundColor || "#0b1220");
       setDim(typeof s.backgroundDim === "number" ? s.backgroundDim : 20);
       setTheme((s.themePreset as any) || "blue");
