@@ -249,7 +249,7 @@ const StructuredAnalysisView = ({ text, imageLookup }: { text: string; imageLook
                       <div className="space-y-1.5 flex-1">
                         <div className="flex flex-wrap items-center gap-3">
                           <span className="text-[10px] font-mono bg-blue-100 px-2 py-0.5 rounded border border-blue-200 text-blue-700 font-bold">{asText(ano.id)}</span>
-                          <span className="text-[11px] text-gray-500 font-medium">IMAGE: {Array.isArray(ano.image_ref) ? ano.image_ref.join(", ") : ano.image_ref}</span>
+                          <span className="text-[11px] text-gray-500 font-medium">IMAGE: {asArray(ano.image_ref).map(asText).join(", ")}</span>
                           <span className="text-[11px] text-gray-400">•</span>
                           <span className="text-[11px] text-gray-500 font-medium">LOCALISATION: {asText(ano.localisation)}</span>
                         </div>
