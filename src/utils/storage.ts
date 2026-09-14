@@ -17,6 +17,8 @@ export type ProjectImage = {
   inferenceResult?: {
     label: string;
     score: number;
+    /** Vecteur de probabilités complet, indexé comme modelMeta.classesOrder. */
+    probs?: number[];
   };
 };
 
@@ -60,7 +62,8 @@ function mapDbToProject(dbProj: any): Project {
       tag: ins.status,
       inferenceResult: ins.detection_results?.onnx ? {
         label: ins.detection_results.onnx.label,
-        score: ins.detection_results.onnx.score
+        score: ins.detection_results.onnx.score,
+        probs: ins.detection_results.onnx.probs,
       } : undefined,
     })),
     tags: Array.isArray(dbProj.tags) ? dbProj.tags : [],
@@ -145,6 +148,7 @@ async function uploadAndRecordImage(projectId: string, image: ProjectImage): Pro
     detection_results.onnx = {
       label: image.inferenceResult.label,
       score: image.inferenceResult.score,
+      probs: image.inferenceResult.probs,
       timestamp: new Date().toISOString()
     };
   }
@@ -286,6 +290,7 @@ export async function updateProject(
           detection_results.onnx = {
             label: img.inferenceResult.label,
             score: img.inferenceResult.score,
+            probs: img.inferenceResult.probs,
             timestamp: new Date().toISOString()
           };
         }

@@ -62,7 +62,7 @@ const ImagesTab = ({
   const [isClassifying, setIsClassifying] = useState(false);
   
   // Local state for classification results to provide immediate feedback
-  const [localClassifications, setLocalClassifications] = useState<Record<string, { label: string, score: number }>>({});
+  const [localClassifications, setLocalClassifications] = useState<Record<string, { label: string, score: number, probs?: number[] }>>({});
 
   // Fusionner les tags manuels ET les labels IA détectés pour le filtre
   const allAvailableFilters = useMemo(() => {
@@ -187,7 +187,7 @@ const ImagesTab = ({
     // Copie de travail locale
     const processingImages = [...project.images];
     const newTags = new Set(project.tags);
-    const newResults: Record<string, { label: string, score: number }> = {};
+    const newResults: Record<string, { label: string, score: number, probs?: number[] }> = {};
     const failures: string[] = [];
     let firstErrorMsg = "";
 
@@ -200,7 +200,11 @@ const ImagesTab = ({
       try {
         // Calcul local immédiat
         const result = await classifyImageToTag(img.dataUrl);
-        const classification = { label: result.suggestedTag, score: result.topScore };
+        const classification = {
+          label: result.suggestedTag,
+          score: result.topScore,
+          probs: result.probs,
+        };
         
         // Mise à jour de la mémoire tampon
         newResults[img.id] = classification;
@@ -571,6 +575,7 @@ const ImagesTab = ({
               onSelectChange={toggleSelection}
               classificationLabel={localClassifications[img.id]?.label || img.inferenceResult?.label}
               classificationScore={localClassifications[img.id]?.score || img.inferenceResult?.score}
+              classificationProbs={localClassifications[img.id]?.probs || img.inferenceResult?.probs}
             />
           ))}
         </div>

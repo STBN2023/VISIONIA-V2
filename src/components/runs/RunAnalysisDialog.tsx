@@ -11,6 +11,7 @@ import { createPendingRun, completeRunWithServer, failRun, type RunMode } from "
 import { showError, showSuccess } from "@/utils/toast";
 import { useSettings } from "@/contexts/SettingsContext";
 import { classifyDataUrl } from "@/utils/inference";
+import { isSuspectFrom } from "@/utils/classifier";
 import { analyzeLLM, type AnalyzeErr } from "@/utils/analyze-client";
 import { supabase } from "@/integrations/supabase/client";
 import { Loader2, CheckCircle2, Circle, Clock } from "lucide-react";
@@ -137,7 +138,10 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
               .eq('id', im.id);
           }
 
-          if (topLabel !== "plain" && topScore >= threshold) {
+          // Le softmax répartit la masse entre classes concurrentes : filtrer sur
+          // le top-1 écarte les photos cumulant plusieurs désordres, qui sont
+          // précisément celles qui méritent l'analyse. On juge donc sur P(défaut).
+          if (isSuspectFrom(result.probs, threshold)) {
             suspects.push(im);
           }
         }
@@ -380,11 +384,13 @@ const RunAnalysisDialog = ({ projectId, prompt, images, disabled, onStarted, tri
                   className="data-[state=checked]:bg-white data-[state=checked]:text-black"
                 />
                 <Label htmlFor="onlySuspects" className="cursor-pointer text-white/90">
-                  Analyser uniquement les images suspectes (score ≥ seuil calibré)
+                  Analyser uniquement les images suspectes (P(défaut) ≥ seuil calibré)
                 </Label>
               </div>
               <p className="mt-2 text-xs text-white/70">
-                Utilise le modèle ONNX local pour filtrer (plain vs défaut) avant d'appeler le LLM.
+                Utilise le modèle ONNX local pour filtrer avant d'appeler le LLM. Le critère est la
+                probabilité que la photo ne soit pas saine, et non le score d'une classe précise :
+                une photo cumulant plusieurs désordres reste retenue.
               </p>
             </div>
 

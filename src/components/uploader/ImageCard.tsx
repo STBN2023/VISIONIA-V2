@@ -12,6 +12,8 @@ import type { PromptTemplate } from "@/utils/prompts";
 import { Checkbox } from "@/components/ui/checkbox";
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
+import { topClassesFrom, defectScoreFrom } from "@/utils/classifier";
+import { getSettings } from "@/utils/settings";
 
 type Props = {
   img: ProjectImage;
@@ -30,6 +32,8 @@ type Props = {
   // Infos de classification (optionnelles, non persistées)
   classificationScore?: number;
   classificationLabel?: string;
+  /** Vecteur de probabilités complet, pour les suggestions secondaires. */
+  classificationProbs?: number[];
 };
 
 const ImageCard = ({
@@ -48,6 +52,7 @@ const ImageCard = ({
   onSelectChange,
   classificationScore,
   classificationLabel,
+  classificationProbs,
 }: Props) => {
   const [openOptions, setOpenOptions] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -62,6 +67,18 @@ const ImageCard = ({
     onUpdateTag(img.id, label);
     setNewTag("");
   };
+
+  // Suggestions secondaires : le softmax répartit la masse entre classes
+  // concurrentes, donc une photo cumulant plusieurs désordres n'a pas de top-1
+  // franc. On montre les autres classes plausibles — sans les présenter comme
+  // des détections, un softmax ne distinguant pas « deux défauts » de « hésitation ».
+  const threshold = getSettings().inference?.threshold ?? 0.6;
+  const hasProbs = !!classificationProbs?.length;
+  const defectScore = hasProbs ? defectScoreFrom(classificationProbs!) : undefined;
+  const secondary = hasProbs
+    ? topClassesFrom(classificationProbs!).filter((c) => c.tag !== classificationLabel).slice(0, 2)
+    : [];
+  const lowConfidence = typeof defectScore === "number" && defectScore < threshold;
 
   const handleImageClick = () => {
     if (selectMode) {
@@ -100,11 +117,39 @@ const ImageCard = ({
 
           {/* Badge score de classification */}
           {typeof classificationScore === "number" ? (
-            <div className="absolute right-2 top-2 z-10">
-              <Badge variant="secondary" className="bg-black/60 text-white backdrop-blur-md">
+            <div className="absolute right-2 top-2 z-10 flex max-w-[85%] flex-col items-end gap-1">
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "text-white backdrop-blur-md",
+                  lowConfidence ? "bg-amber-600/75" : "bg-black/60",
+                )}
+                title={
+                  typeof defectScore === "number"
+                    ? `Probabilité de défaut : ${Math.round(defectScore * 100)}% (seuil ${Math.round(threshold * 100)}%)`
+                    : undefined
+                }
+              >
                 {Math.round(classificationScore * 100)}%
                 {classificationLabel ? ` • ${classificationLabel}` : ""}
               </Badge>
+
+              {secondary.length > 0 ? (
+                <div
+                  className="flex flex-wrap justify-end gap-1"
+                  title="Autres classes plausibles — suggestions à confirmer, pas des détections."
+                >
+                  {secondary.map((c) => (
+                    <Badge
+                      key={c.label}
+                      variant="secondary"
+                      className="bg-black/40 text-[10px] font-normal text-white/80 backdrop-blur-md"
+                    >
+                      {Math.round(c.score * 100)}% • {c.tag}
+                    </Badge>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
         </div>
