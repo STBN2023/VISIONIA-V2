@@ -1,5 +1,11 @@
 # Cahier des charges — ISOEDRE Vision IA (Synthèse)
 
+> **Document historique.** L'application s'appelle désormais **PIA VISION** et
+> n'est plus rattachée au GROUPE ISOEDRE. Ce cahier des charges décrit la v1
+> telle qu'imaginée au départ ; plusieurs points listés ici hors périmètre
+> existent aujourd'hui. Conservé tel quel pour l'historique — voir README.md
+> pour l'état réel.
+
 ## 1) Objet
 - Finalité: à partir de photos d’un bâtiment, produire un compte rendu technique structuré en 3 parties (Constat technique, Solutions correctives, Conformité réglementaire) afin d’aider à la rénovation énergétique.
 - Spécificité: l’analyse est pilotée par un prompt maître (modèle éditable), avec deux modes d’orchestration:

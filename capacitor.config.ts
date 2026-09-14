@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.example.tinyaxolotldart',
-  appName: 'ISOEDRE Vision IA',
+  appId: 'fr.pragmaia.piavision',
+  appName: 'PIA VISION',
   webDir: 'dist'
 };
 

@@ -1,4 +1,4 @@
-package com.example.tinyaxolotldart;
+package fr.pragmaia.piavision;
 
 import com.getcapacitor.BridgeActivity;
 

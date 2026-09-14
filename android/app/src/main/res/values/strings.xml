@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">ISOEDRE Vision IA</string>
-    <string name="title_activity_main">ISOEDRE Vision IA</string>
-    <string name="package_name">com.example.tinyaxolotldart</string>
-    <string name="custom_url_scheme">com.example.tinyaxolotldart</string>
+    <string name="app_name">PIA VISION</string>
+    <string name="title_activity_main">PIA VISION</string>
+    <string name="package_name">fr.pragmaia.piavision</string>
+    <string name="custom_url_scheme">fr.pragmaia.piavision</string>
 </resources>

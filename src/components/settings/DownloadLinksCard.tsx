@@ -3,7 +3,7 @@ import { Download } from "lucide-react";
 
 const links = [
   {
-    label: "Dataset VISIOEDRE (.zip)",
+    label: "Dataset PIA VISION (.zip)",
     url: "https://www.dropbox.com/scl/fi/t6ph2figcp2yiffwwmz6m/dataset_visio_ai.zip?rlkey=edsgvku4otcpuph4xyxtoo7ac&dl=0",
     hint: "Archive contenant les images d'entraînement (train / val / test)",
   },

@@ -1,4 +1,4 @@
-# ISOEDRE Vision IA (VISIONIA V2)
+# PIA VISION
 
 À partir de photos de bâtiment, produire un compte rendu technique structuré
 pour la rénovation énergétique. Un classifieur local trie les photos, un LLM
@@ -192,6 +192,12 @@ OpenAI est un secret d'Edge Function Supabase, pas une variable Vercel.
 Projets Capacitor initialisés (`android/`, `ios/`). Le build web (`dist`) est
 servi dans une WebView. Xcode ou Android Studio requis pour tester sur device.
 
+Identifiant d'application : `fr.pragmaia.piavision`, sur Android comme sur iOS.
+Il remplaçait `com.example.tinyaxolotldart`, valeur laissée par le gabarit de
+départ : le préfixe `com.example` est refusé par les stores. Le changer après
+publication reviendrait à créer une application distincte — c'est donc fait
+avant.
+
 ---
 
 ## Dépannage
@@ -218,8 +224,8 @@ carte de l'onglet Localisation se comporte mal.
 
 ## Documents
 
-- `cdc.md` — cahier des charges d'origine. Il décrit la v1 (stockage local,
-  clé API dans le navigateur, pas d'authentification) et **ne reflète plus
-  l'implémentation** : l'authentification, la persistance serveur et les
+- `cdc.md` — cahier des charges d'origine, rédigé quand le projet s'appelait
+  encore ISOEDRE Vision IA. Il décrit la v1 (stockage local, clé API dans le
+  navigateur, pas d'authentification) et **ne reflète plus l'implémentation** : l'authentification, la persistance serveur et les
   exports DOCX, listés hors périmètre v1, existent aujourd'hui.
 - `Workflow du projet.md` — fonctionnement bout-à-bout.

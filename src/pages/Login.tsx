@@ -37,7 +37,7 @@ export default function Login() {
                 <BrandLogo height={48} />
               </div>
             </div>
-            <CardTitle className="text-3xl font-black tracking-tight text-white uppercase italic">VISIOEDRE</CardTitle>
+            <CardTitle className="text-3xl font-black tracking-tight text-white uppercase italic">PIA VISION</CardTitle>
             <CardDescription className="text-white/60 font-medium">
               Audit Technique & Énergétique Intelligent
             </CardDescription>
