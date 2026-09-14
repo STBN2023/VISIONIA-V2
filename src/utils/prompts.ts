@@ -68,7 +68,11 @@ async function refreshCache() {
     // Merge with localStorage templates not yet in DB
     const localTemplates = readLocalAll();
     const dbIds = new Set(dbTemplates.map((t) => t.id));
-    const localOnly = localTemplates.filter((t) => !dbIds.has(t.id));
+    const dbNames = new Set(dbTemplates.map((t) => t.name));
+    // Dédupliquer aussi par nom : une migration antérieure a pu créer la ligne
+    // cloud avec un identifiant différent de la copie locale, auquel cas le
+    // même template apparaîtrait deux fois.
+    const localOnly = localTemplates.filter((t) => !dbIds.has(t.id) && !dbNames.has(t.name));
 
     _templatesCache = [...dbTemplates, ...localOnly].sort(
       (a, b) => Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name)
@@ -170,28 +174,49 @@ async function migrateLocalToCloud(userId: string) {
   const localTemplates = readLocalAll();
   if (localTemplates.length === 0) return;
 
-  for (const tpl of localTemplates) {
-    // Check if already exists in cloud
-    const { data: existing } = await supabase
-      .from("prompt_templates")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("name", tpl.name)
-      .limit(1);
+  // Un seul aller-retour pour savoir ce que contient déjà le cloud.
+  const { data: existingRows, error: readErr } = await supabase
+    .from("prompt_templates")
+    .select("id, name")
+    .eq("user_id", userId);
 
-    if (existing && existing.length > 0) continue;
-
-    await supabase.from("prompt_templates").insert({
-      user_id: userId,
-      name: tpl.name,
-      body: tpl.body,
-      is_default: tpl.isDefault || false,
-      version: tpl.version || 1,
-      created_at: tpl.createdAt,
-      updated_at: tpl.updatedAt,
-    });
+  if (readErr) {
+    console.error("Migration des templates : lecture du cloud impossible", readErr);
+    return; // ne rien supprimer tant qu'on ignore ce qu'il y a en face
   }
 
+  const cloudIds = new Set((existingRows ?? []).map((r) => r.id));
+  const cloudNames = new Set((existingRows ?? []).map((r) => r.name));
+
+  const toInsert = localTemplates.filter((t) => !cloudIds.has(t.id) && !cloudNames.has(t.name));
+
+  if (toInsert.length > 0) {
+    const { error: insertErr } = await supabase.from("prompt_templates").insert(
+      toInsert.map((t) => ({
+        // Conserver l'identifiant local. refreshCache() fusionne base et
+        // navigateur par id : laisser Postgres en générer un neuf créait deux
+        // entrées pour un même template, affichées en double indéfiniment.
+        id: t.id,
+        user_id: userId,
+        name: t.name,
+        body: t.body,
+        is_default: t.isDefault || false,
+        version: t.version || 1,
+        created_at: t.createdAt,
+        updated_at: t.updatedAt,
+      })),
+    );
+
+    if (insertErr) {
+      console.error("Migration des templates en échec", insertErr);
+      return; // la copie locale reste la seule trace : on la conserve
+    }
+  }
+
+  // Tout est en base. La copie navigateur n'a plus de raison d'être, et c'est
+  // elle qui produisait les doublons — les entrées dont le nom existait déjà
+  // en base étaient des migrations précédentes faites avec un autre id.
+  localStorage.removeItem(LOCAL_STORAGE_KEY);
   invalidateCache();
 }
 

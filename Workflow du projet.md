@@ -124,12 +124,33 @@ top-1, qui décide si une photo est suspecte — voir la section 7.
 `src/utils/prompts.ts`, `src/pages/Prompts.tsx`, table `prompt_templates`.
 
 Création, duplication, édition, suppression, marquage « par défaut ».
-Règle de qualité : chaque ligne doit tenir en 100 caractères, l'interface le
-signale.
+Le cahier des charges prévoit une règle « chaque ligne tient en 100
+caractères », signalée dans l'interface. Elle est **inactive** :
+`getPromptLineErrors()` retourne toujours un tableau vide
+(`src/utils/prompts.ts`). À réactiver ou à retirer, mais ne pas la supposer en
+vigueur.
 
 Au niveau d'un projet (`PromptTab`), on sélectionne un template puis on
 l'applique au champ prompt. Le texte réellement envoyé est celui présent dans
 le champ au moment du lancement.
+
+### Deux sources, une seule liste
+
+`refreshCache()` affiche la fusion de la table `prompt_templates` et d'une
+copie localStorage héritée (`prompt_templates`), **réconciliées par
+identifiant**. La copie locale n'est là que pour la migration des utilisateurs
+d'avant Supabase.
+
+Piège corrigé : `migrateLocalToCloud()` insérait les templates sans reprendre
+leur identifiant, Postgres en générait un neuf, et la fusion ne reconnaissait
+plus les deux copies comme un même objet — chaque template migré s'affichait en
+double, définitivement, la copie locale n'étant jamais effacée. Renommer la
+copie « base » d'un doublon en créait même une troisième, la migration
+comparant par nom.
+
+Désormais l'insertion conserve l'identifiant local, la copie navigateur est
+supprimée une fois la migration réussie (et seulement dans ce cas), et la
+fusion déduplique aussi par nom pour absorber les migrations déjà faites.
 
 ---
 
