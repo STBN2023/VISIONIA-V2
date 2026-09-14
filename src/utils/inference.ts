@@ -4,7 +4,7 @@ import { getDatasetManifest } from "@/utils/dataset";
 import { idbGet } from "@/utils/idb";
 
 // Stockage modèle dans IDB (défini dans dataset.ts)
-const MODEL_PREFIX = "dataset:model:";
+export const MODEL_PREFIX = "dataset:model:";
 
 type Backend = "webgpu" | "webgl" | "wasm";
 

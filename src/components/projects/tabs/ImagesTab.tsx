@@ -11,7 +11,7 @@ import type { ImageTag, Project, ProjectImage } from "@/utils/storage";
 import type { PromptTemplate } from "@/utils/prompts";
 import ImageCard from "@/components/uploader/ImageCard";
 import { showSuccess, showError } from "@/utils/toast";
-import { classifyImageToTag, isModelConfigured } from "@/utils/classifier";
+import { classifyImageToTag, getModelUnavailableReason } from "@/utils/classifier";
 import { recordCorrection } from "@/utils/corrections";
 import { updateProject } from "@/utils/storage";
 import { cn } from "@/lib/utils";
@@ -169,8 +169,16 @@ const ImagesTab = ({
   };
 
   const handleClassifyAll = async () => {
-    if (!isModelConfigured()) {
-      showError("Aucun modèle configuré. Allez dans Paramètres > Dataset pour charger un modèle.");
+    if (project.images.length === 0) {
+      showError("Aucune image à classer dans ce projet.");
+      return;
+    }
+
+    // Vérifie que les poids du modèle sont réellement présents, pas seulement
+    // référencés dans les réglages synchronisés depuis le cloud.
+    const unavailable = await getModelUnavailableReason();
+    if (unavailable) {
+      showError(unavailable);
       return;
     }
 
@@ -180,6 +188,8 @@ const ImagesTab = ({
     const processingImages = [...project.images];
     const newTags = new Set(project.tags);
     const newResults: Record<string, { label: string, score: number }> = {};
+    const failures: string[] = [];
+    let firstErrorMsg = "";
 
     // 1. PHASE DE CALCUL RAPIDE (Local / WebGPU)
     // On met à jour l'UI au fur et à mesure
@@ -210,9 +220,27 @@ const ImagesTab = ({
         
         // Mise à jour de l'affichage en temps réel (carte par carte)
         setLocalClassifications(prev => ({ ...prev, [img.id]: classification }));
-      } catch (e: any) {
+      } catch (e) {
         console.error("Erreur classification", img.name, e);
+        failures.push(img.name);
+        // Une panne de modèle (poids absents, backend indisponible) touche
+        // toutes les images de la même façon : inutile de réessayer N fois.
+        firstErrorMsg = firstErrorMsg || (e instanceof Error ? e.message : String(e));
+        break;
       }
+    }
+
+    const classifiedCount = Object.keys(newResults).length;
+
+    // Aucune image classée : rien à persister, et surtout pas de message de succès.
+    if (classifiedCount === 0) {
+      setIsClassifying(false);
+      showError(
+        firstErrorMsg
+          ? `Échec de la classification : ${firstErrorMsg}`
+          : "Échec de la classification : aucune image n'a pu être traitée."
+      );
+      return;
     }
 
     // 2. MISE A JOUR GLOBALE ET PERSISTANCE
@@ -228,7 +256,14 @@ const ImagesTab = ({
           onProjectChange(updatedProject);
         }
       }
-      showSuccess("Classification et taggage terminés");
+      if (failures.length > 0) {
+        showError(
+          `${classifiedCount} image(s) classée(s), puis interruption sur ${failures[0]} : ` +
+          `${firstErrorMsg || "erreur inconnue"}`
+        );
+      } else {
+        showSuccess(`Classification et taggage terminés (${classifiedCount} image(s))`);
+      }
     } catch (e) {
       console.error("Erreur sauvegarde projet", e);
       showError("Erreur lors de la sauvegarde des résultats");
