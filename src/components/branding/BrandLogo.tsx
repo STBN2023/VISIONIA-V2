@@ -15,13 +15,17 @@ const BrandLogo: React.FC<Props> = ({
   width,
   alt = "Logo",
   // Utilise par défaut le fichier présent dans /public
-  src: preferredSrc = "/logo-isoedre.png",
+  src: preferredSrc = "/logo.png",
 }) => {
   const candidates = React.useMemo(() => {
-    // Ordre de priorité: src fourni → logo-isoedre → favicon → placeholder
+    // Ordre de priorité: src fourni → logo → favicon → placeholder.
+    // Ce repli est silencieux : logo-isoedre.png n'était pas une image (du
+    // texte enregistré en .png) et le composant affichait le favicon à sa
+    // place sans que personne ne s'en aperçoive. D'où l'avertissement console
+    // ci-dessous, seul signal en cas de source manquante.
     const list = [
       preferredSrc,
-      "/logo-isoedre.png",
+      "/logo.png",
       "/favicon.ico",
       "/placeholder.svg",
     ].filter(Boolean);
