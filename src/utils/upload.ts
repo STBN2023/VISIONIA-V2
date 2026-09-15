@@ -12,8 +12,11 @@ export async function uploadFile(
   bucket: string,
   path: string
 ): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
+  // Session en cache plutôt que getUser(), qui interroge le serveur d'auth :
+  // appelé une fois par photo, il ajoutait un aller-retour réseau à chaque envoi.
+  // Le stockage revalide de toute façon le jeton côté serveur.
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) {
     throw new Error("Vous devez être connecté pour uploader des fichiers.");
   }
 
@@ -48,10 +51,10 @@ export async function uploadUserAsset(
   file: File | Blob,
   fileName: string
 ): Promise<string> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("User not authenticated");
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.user) throw new Error("User not authenticated");
 
   // Ensure unique path: userId/fileName
-  const path = `${user.id}/${fileName}`;
+  const path = `${session.user.id}/${fileName}`;
   return uploadFile(file, "assets", path);
 }

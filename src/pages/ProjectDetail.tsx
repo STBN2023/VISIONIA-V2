@@ -9,10 +9,10 @@ import InfoTab from "@/components/projects/tabs/InfoTab";
 import RunsTab from "@/components/runs/RunsTab";
 import LocationTab from "@/components/projects/tabs/LocationTab";
 import type { LatLng } from "@/components/projects/tabs/LocationTab";
-import { getProjectById, updateProject, type Project, type ProjectImage, fileToDataUrl, type ImageTag, type ProjectStatus } from "@/utils/storage";
+import { getProjectById, updateProject, addImagesToProject, type Project, type ProjectImage, fileToDataUrl, type ImageTag, type ProjectStatus } from "@/utils/storage";
 import { ensureSeedTemplates, getTemplates, getTemplateById, type PromptTemplate } from "@/utils/prompts";
 import { getRunsByProjectId, type Run } from "@/utils/runs";
-import { showError, showSuccess } from "@/utils/toast";
+import { showError, showSuccess, showLoading, updateLoading, resolveSuccess, resolveError, dismissToast } from "@/utils/toast";
 import { Button } from "@/components/ui/button";
 import { Link, useParams } from "react-router-dom";
 import { Card } from "@/components/ui/card";
@@ -198,103 +198,139 @@ const ProjectDetail = () => {
     let ignoredTooLarge = 0;
     let compressedCount = 0;
 
-    const newImages: ProjectImage[] = [];
-    const baseName = sanitizeToFileBase(project.title || "Sans titre");
-    const importDate = new Date();
-    const dateStr = formatDateDDMMYYYY(importDate);
-    const startIndex = (project.images?.length || 0) + 1;
+    // Sans retour visuel, 11 photos donnaient 5 à 10 secondes d'écran figé :
+    // assez pour croire à une panne et recharger la page en plein envoi.
+    const toastId = showLoading(`Préparation de ${filesArr.length} photo(s)…`);
+    try {
+      const newImages: ProjectImage[] = [];
+      const baseName = sanitizeToFileBase(project.title || "Sans titre");
+      const importDate = new Date();
+      const dateStr = formatDateDDMMYYYY(importDate);
+      const startIndex = (project.images?.length || 0) + 1;
 
-    for (let idx = 0; idx < filesArr.length; idx++) {
-      const f = filesArr[idx];
-      // Type accepté
-      if (!ALLOWED_TYPES.includes(f.type)) {
-        ignoredWrongType++;
-        continue;
-      }
+      for (let idx = 0; idx < filesArr.length; idx++) {
+        const f = filesArr[idx];
+        updateLoading(toastId, `Préparation ${idx + 1}/${filesArr.length}…`);
+        // Type accepté
+        if (!ALLOWED_TYPES.includes(f.type)) {
+          ignoredWrongType++;
+          continue;
+        }
 
-      // Compresse systématiquement
-      let outBlob: Blob;
-      try {
-        outBlob = await compressImageToBlob(f, {
-          maxWidth: 2000,
-          maxHeight: 2000,
-          quality: 0.82,
-          convertTo: "image/webp",
-        });
-      } catch {
-        outBlob = f;
-      }
+        // Compresse systématiquement
+        let outBlob: Blob;
+        try {
+          outBlob = await compressImageToBlob(f, {
+            maxWidth: 2000,
+            maxHeight: 2000,
+            quality: 0.82,
+            convertTo: "image/webp",
+          });
+        } catch {
+          outBlob = f;
+        }
 
-      let finalBlob = f as Blob;
-      let usedCompressed = false;
+        let finalBlob = f as Blob;
+        let usedCompressed = false;
 
-      if (f.size > MAX_IMAGE_SIZE) {
-        if (outBlob.size <= MAX_IMAGE_SIZE) {
-          finalBlob = outBlob;
-          usedCompressed = true;
+        if (f.size > MAX_IMAGE_SIZE) {
+          if (outBlob.size <= MAX_IMAGE_SIZE) {
+            finalBlob = outBlob;
+            usedCompressed = true;
+          } else {
+            ignoredTooLarge++;
+            continue;
+          }
         } else {
+          if (outBlob.size + 1024 < f.size) {
+            finalBlob = outBlob;
+            usedCompressed = true;
+          } else {
+            finalBlob = f;
+          }
+        }
+
+        if (finalBlob.size > MAX_IMAGE_SIZE) {
           ignoredTooLarge++;
           continue;
         }
-      } else {
-        if (outBlob.size + 1024 < f.size) {
-          finalBlob = outBlob;
-          usedCompressed = true;
+
+        if (usedCompressed) compressedCount++;
+
+        let dataUrl: string;
+        if (finalBlob === f) {
+          dataUrl = await fileToDataUrl(f);
         } else {
-          finalBlob = f;
+          dataUrl = await blobToDataUrl(finalBlob);
         }
+
+        const finalType = (finalBlob.type as string) || f.type || "image/webp";
+        const ext = extFromMime(finalType);
+        const increment = startIndex + idx;
+        const generatedName = `${baseName}_${dateStr}_${increment}${ext}`;
+
+        const img: ProjectImage = {
+          id: crypto.randomUUID(),
+          name: generatedName,
+          size: finalBlob.size,
+          type: finalType,
+          dataUrl,
+          // Horodatage décalé d'une milliseconde par photo : les envois partent en
+          // parallèle et l'affichage trie par date, l'ordre de sélection est donc
+          // porté par cette valeur plutôt que par l'ordre d'arrivée en base.
+          createdAt: new Date(importDate.getTime() + idx).toISOString(),
+        };
+        newImages.push(img);
       }
 
-      if (finalBlob.size > MAX_IMAGE_SIZE) {
-        ignoredTooLarge++;
-        continue;
+      if (newImages.length === 0) {
+        if (ignoredWrongType || ignoredTooLarge) {
+          const parts: string[] = [];
+          if (ignoredWrongType) parts.push(`${ignoredWrongType} format(s) non supporté(s)`);
+          if (ignoredTooLarge) parts.push(`${ignoredTooLarge} trop lourde(s) après compression`);
+          resolveError(toastId, `Aucune image ajoutée (${parts.join(", ")}).`);
+        } else {
+          dismissToast(toastId);
+        }
+        return;
       }
 
-      if (usedCompressed) compressedCount++;
+      updateLoading(toastId, `Envoi 0/${newImages.length}…`);
+      const { added, failed } = await addImagesToProject(project.id, newImages, (done, total) => {
+        updateLoading(toastId, `Envoi ${done}/${total}…`);
+      });
 
-      let dataUrl: string;
-      if (finalBlob === f) {
-        dataUrl = await fileToDataUrl(f);
+      // Relire la base plutôt que fusionner en mémoire : l'affichage reflète alors
+      // exactement ce qui a été enregistré, envois partiels compris.
+      const refreshed = await getProjectById(project.id);
+      if (refreshed) setProject(refreshed);
+
+      const ignoredMsg =
+        ignoredWrongType || ignoredTooLarge
+          ? ` • ignorées: ${ignoredWrongType} format(s), ${ignoredTooLarge} trop lourde(s)`
+          : "";
+      const compressedMsg = compressedCount ? ` • compressées: ${compressedCount}` : "";
+
+      if (failed.length === 0) {
+        resolveSuccess(toastId, `${added} image(s) ajoutée(s)${compressedMsg}${ignoredMsg}`);
       } else {
-        dataUrl = await blobToDataUrl(finalBlob);
+        const detail = failed
+          .slice(0, 3)
+          .map((f) => `${f.name} — ${f.message}`)
+          .join(" ; ");
+        const more = failed.length > 3 ? ` (et ${failed.length - 3} autre(s))` : "";
+        resolveError(
+          toastId,
+          `${added} image(s) ajoutée(s), ${failed.length} refusée(s) : ${detail}${more}`,
+        );
       }
-
-      const finalType = (finalBlob.type as string) || f.type || "image/webp";
-      const ext = extFromMime(finalType);
-      const increment = startIndex + idx;
-      const generatedName = `${baseName}_${dateStr}_${increment}${ext}`;
-
-      const img: ProjectImage = {
-        id: crypto.randomUUID(),
-        name: generatedName,
-        size: finalBlob.size,
-        type: finalType,
-        dataUrl,
-        createdAt: new Date().toISOString(),
-      };
-      newImages.push(img);
+    } catch (e) {
+      // Filet pour ce qui échappe au traitement photo par photo (compression,
+      // relecture) : l'utilisateur doit toujours savoir que l'import s'est arrêté.
+      console.error("[handleFiles] Import interrompu", e);
+      const msg = e instanceof Error ? e.message : String(e);
+      resolveError(toastId, `Import interrompu : ${msg}`);
     }
-
-    if (newImages.length === 0) {
-      if (ignoredWrongType || ignoredTooLarge) {
-        const parts: string[] = [];
-        if (ignoredWrongType) parts.push(`${ignoredWrongType} format(s) non supporté(s)`);
-        if (ignoredTooLarge) parts.push(`${ignoredTooLarge} trop lourde(s) après compression`);
-        showError(`Aucune image ajoutée (${parts.join(", ")}).`);
-      }
-      return;
-    }
-
-    const updated = await updateProject(project.id, { images: [...project.images, ...newImages] })!;
-    setProject(updated);
-
-    const added = newImages.length;
-    const ignoredMsg =
-      ignoredWrongType || ignoredTooLarge
-        ? ` • ignorées: ${ignoredWrongType} format(s), ${ignoredTooLarge} trop lourde(s)`
-        : "";
-    const compressedMsg = compressedCount ? ` • compressées: ${compressedCount}` : "";
-    showSuccess(`${added} image(s) ajoutée(s)${compressedMsg}${ignoredMsg}`);
   };
 
   const handleDeleteImage = async (imgId: string) => {

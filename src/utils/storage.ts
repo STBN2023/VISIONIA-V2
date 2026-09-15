@@ -1,5 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { uploadFile } from "@/utils/upload";
+import { parallelBatch } from "@/utils/concurrency";
 
 export type ImageTag = string;
 
@@ -39,6 +40,23 @@ export type Project = {
   longitude?: number | null;
 };
 
+/** Horodatage numérique ; une date absente ou illisible passe en premier. */
+function timeOf(iso?: string): number {
+  const t = iso ? Date.parse(iso) : NaN;
+  return Number.isNaN(t) ? 0 : t;
+}
+
+/**
+ * Message lisible pour n'importe quelle erreur. Les erreurs Supabase sont des
+ * objets et non des instances d'Error : `e instanceof Error` les afficherait
+ * sous la forme « [object Object] ».
+ */
+function errorMessage(e: unknown): string {
+  if (e instanceof Error) return e.message;
+  if (e && typeof e === "object" && "message" in e) return String((e as { message: unknown }).message);
+  return String(e);
+}
+
 // Map database project to frontend Project
 function mapDbToProject(dbProj: any): Project {
   return {
@@ -65,7 +83,12 @@ function mapDbToProject(dbProj: any): Project {
         score: ins.detection_results.onnx.score,
         probs: ins.detection_results.onnx.probs,
       } : undefined,
-    })),
+    }))
+      // Les inspections sont relues sans ORDER BY, et chaque updateProject()
+      // réécrit toutes les lignes : Postgres ne garantit alors aucun ordre.
+      // Trier par date de création rend l'affichage stable, y compris pour des
+      // photos envoyées en parallèle qui n'arrivent pas dans l'ordre choisi.
+      .sort((a: ProjectImage, b: ProjectImage) => timeOf(a.createdAt) - timeOf(b.createdAt)),
     tags: Array.isArray(dbProj.tags) ? dbProj.tags : [],
     latitude: dbProj.latitude ?? null,
     longitude: dbProj.longitude ?? null,
@@ -234,6 +257,61 @@ export async function createProject(input: {
 
   if (error) throw error;
   return mapDbToProject({ ...data, inspections: [] });
+}
+
+export type ImageUploadFailure = { name: string; message: string };
+
+/** Envois simultanés : assez pour gagner du temps, sans rafale vers Storage. */
+const UPLOAD_CONCURRENCY = 4;
+
+/**
+ * Ajoute des images à un projet, chacune pour son compte.
+ *
+ * Passer par updateProject() pour un import posait trois problèmes. Les
+ * photos partaient une par une. La première erreur interrompait la boucle et
+ * abandonnait les suivantes. Et cette erreur n'était interceptée nulle part :
+ * rien ne s'affichait, l'application semblait figée. En prime, chaque import
+ * réécrivait toutes les photos déjà présentes.
+ *
+ * Ici chaque image est envoyée et enregistrée indépendamment, en parallèle.
+ * Les échecs sont retournés au lieu d'être levés, et seules les nouvelles
+ * images sont touchées.
+ */
+export async function addImagesToProject(
+  projectId: string,
+  images: ProjectImage[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<{ added: number; failed: ImageUploadFailure[] }> {
+  let done = 0;
+
+  const results = await parallelBatch(
+    images,
+    async (img): Promise<ImageUploadFailure | null> => {
+      try {
+        await uploadAndRecordImage(projectId, img);
+        return null;
+      } catch (e) {
+        console.error("[addImagesToProject] Échec pour", img.name, e);
+        return { name: img.name, message: errorMessage(e) };
+      } finally {
+        done++;
+        onProgress?.(done, images.length);
+      }
+    },
+    UPLOAD_CONCURRENCY,
+  );
+
+  const failed = results.filter((r): r is ImageUploadFailure => r !== null);
+
+  // Conserver le projet en tête de liste, comme le faisait updateProject().
+  if (failed.length < images.length) {
+    await supabase
+      .from('projects')
+      .update({ updated_at: new Date().toISOString() })
+      .eq('id', projectId);
+  }
+
+  return { added: images.length - failed.length, failed };
 }
 
 export async function updateProject(

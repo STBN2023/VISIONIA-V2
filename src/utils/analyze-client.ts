@@ -2,6 +2,7 @@ import type { ProjectImage } from "@/utils/storage";
 import type { RunMode } from "@/utils/runs";
 import type { Box } from "@/utils/runs";
 import { getSettings } from "@/utils/settings";
+import { parallelBatch } from "@/utils/concurrency";
 import { colorFor, guessType } from "@/utils/anomaly-colors";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -450,26 +451,6 @@ async function toEmbeddedDataUrl(url: string): Promise<string> {
     reader.onerror = () => reject(new Error("Lecture de l'image impossible."));
     reader.readAsDataURL(blob);
   });
-}
-
-async function parallelBatch<T, R>(
-  items: T[],
-  fn: (item: T, index: number) => Promise<R>,
-  concurrency: number,
-): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let nextIndex = 0;
-
-  async function worker() {
-    while (nextIndex < items.length) {
-      const i = nextIndex++;
-      results[i] = await fn(items[i], i);
-    }
-  }
-
-  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
-  await Promise.all(workers);
-  return results;
 }
 
 export async function analyzeLLM(input: {
